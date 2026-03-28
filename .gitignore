@@ -1,0 +1,23 @@
+# Secrets
+.env
+.env.local
+backend/.env
+*.pem
+
+# Flutter/Dart (when app folder exists)
+**/build/
+**/.dart_tool/
+**/.packages
+**/pubspec.lock.bak
+**/Generated.xcconfig
+**/flutter_export_environment.sh
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# OS
+Thumbs.db
+.DS_Store

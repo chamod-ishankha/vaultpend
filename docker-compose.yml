@@ -1,0 +1,18 @@
+# VaultSpend API in Docker — PostgreSQL runs on your own server.
+# Set DATABASE_URL in `.env` (see `.env.example`). Never commit `.env`.
+#
+# From the API container, use your server's LAN IP (e.g. 192.168.1.8), not
+# `localhost` (that would be the container itself).
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "${API_PORT:-8080}:8080"
+    environment:
+      HTTP_ADDR: :8080
+      GIN_MODE: release
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
+      JWT_SECRET: ${JWT_SECRET:-dev-change-me-use-32chars-minimum-secret-key}
+      JWT_EXPIRY_HOURS: ${JWT_EXPIRY_HOURS:-24}
