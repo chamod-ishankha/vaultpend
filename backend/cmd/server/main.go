@@ -12,6 +12,7 @@ import (
 	"vaultspend/internal/auth"
 	"vaultspend/internal/config"
 	"vaultspend/internal/db"
+	"vaultspend/internal/finance"
 	"vaultspend/internal/middleware"
 
 	"github.com/gin-contrib/cors"
@@ -44,6 +45,7 @@ func main() {
 		JWTSecret: cfg.JWTSecret,
 		JWTExpiry: cfg.JWTExpiry,
 	}
+	fh := &finance.Handlers{Pool: pool}
 
 	r := gin.New()
 	r.Use(gin.Logger())
@@ -64,15 +66,26 @@ func main() {
 	{
 		v1.POST("/auth/register", h.Register)
 		v1.POST("/auth/login", h.Login)
-		v1.GET("/sync/status", func(c *gin.Context) {
-			c.JSON(http.StatusNotImplemented, gin.H{
-				"message": "sync API not implemented yet",
-			})
-		})
 
 		authed := v1.Group("")
 		authed.Use(middleware.BearerJWT(cfg.JWTSecret))
 		authed.GET("/me", h.Me)
+		authed.GET("/sync/status", fh.SyncStatus)
+
+		authed.GET("/categories", fh.ListCategories)
+		authed.POST("/categories", fh.CreateCategory)
+		authed.PATCH("/categories/:id", fh.UpdateCategory)
+		authed.DELETE("/categories/:id", fh.DeleteCategory)
+
+		authed.GET("/expenses", fh.ListExpenses)
+		authed.POST("/expenses", fh.CreateExpense)
+		authed.PATCH("/expenses/:id", fh.UpdateExpense)
+		authed.DELETE("/expenses/:id", fh.DeleteExpense)
+
+		authed.GET("/subscriptions", fh.ListSubscriptions)
+		authed.POST("/subscriptions", fh.CreateSubscription)
+		authed.PATCH("/subscriptions/:id", fh.UpdateSubscription)
+		authed.DELETE("/subscriptions/:id", fh.DeleteSubscription)
 	}
 
 	srv := &http.Server{

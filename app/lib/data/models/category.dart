@@ -9,6 +9,9 @@ class Category {
   @Index()
   String userId = '';
 
+  @Index()
+  String? remoteId;
+
   late String name;
 
   String? iconKey;

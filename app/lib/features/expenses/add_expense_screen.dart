@@ -85,9 +85,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     final raw = _amountCtrl.text.trim().replaceAll(',', '.');
     final amount = double.tryParse(raw);
     if (amount == null || amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a valid amount')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Enter a valid amount')));
       return;
     }
     final repo = ref.read(expenseRepositoryProvider);
@@ -117,8 +117,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         error: (e, _) => Center(child: Text('$e')),
         data: (cats) {
           final ids = cats.map((c) => c.id).toSet();
-          final stale =
-              _categoryId != null && !ids.contains(_categoryId);
+          final stale = _categoryId != null && !ids.contains(_categoryId);
           // Dropdown requires value to match exactly one item this frame.
           final int? selectedId;
           if (_categoryId != null && ids.contains(_categoryId)) {
@@ -126,8 +125,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           } else if (stale) {
             selectedId = cats.isNotEmpty ? cats.first.id : null;
           } else {
-            selectedId =
-                _categoryId == null && cats.isNotEmpty ? cats.first.id : null;
+            selectedId = _categoryId == null && cats.isNotEmpty
+                ? cats.first.id
+                : null;
           }
 
           if (stale) {
@@ -144,7 +144,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             children: [
               TextField(
                 controller: _amountCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'[\d.,]')),
                 ],
@@ -156,7 +158,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                value: _currency,
+                initialValue: _currency,
                 decoration: const InputDecoration(
                   labelText: 'Currency',
                   border: OutlineInputBorder(),
@@ -168,7 +170,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<int?>(
-                value: selectedId,
+                initialValue: selectedId,
                 decoration: const InputDecoration(
                   labelText: 'Category',
                   border: OutlineInputBorder(),
@@ -190,7 +192,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                 onTap: _pickTime,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
-                  side: BorderSide(color: Theme.of(context).colorScheme.outline),
+                  side: BorderSide(
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
                 ),
               ),
               const SizedBox(height: 8),

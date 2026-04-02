@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../auth/auth_providers.dart';
 import '../categories/manage_categories_screen.dart';
@@ -43,10 +44,7 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
                   ),
                 ),
               ),
-              ListTile(
-                title: Text(email),
-                subtitle: const Text('Signed in'),
-              ),
+              ListTile(title: Text(email), subtitle: const Text('Signed in')),
               ListTile(
                 leading: const Icon(Icons.category_outlined),
                 title: const Text('Categories'),
@@ -57,6 +55,15 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
                       builder: (_) => const ManageCategoriesScreen(),
                     ),
                   );
+                },
+              ),
+              const Divider(height: 1),
+              const _SyncStatusTile(),
+              ListTile(
+                leading: const Icon(Icons.sync),
+                title: const Text('Refresh sync status'),
+                onTap: () {
+                  ref.invalidate(syncStatusProvider);
                 },
               ),
               ListTile(
@@ -99,6 +106,58 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _SyncStatusTile extends ConsumerWidget {
+  const _SyncStatusTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(syncStatusProvider);
+    final dateFmt = DateFormat.yMMMd().add_jm();
+
+    return async.when(
+      loading: () => const ListTile(
+        leading: Icon(Icons.cloud_sync_outlined),
+        title: Text('Sync status'),
+        subtitle: Text('Loading…'),
+      ),
+      error: (e, _) => ListTile(
+        leading: const Icon(Icons.cloud_off_outlined),
+        title: const Text('Sync status'),
+        subtitle: Text('Unavailable: $e'),
+      ),
+      data: (s) {
+        String line(String label, int count, DateTime? last) {
+          final lastText = last == null
+              ? 'never'
+              : dateFmt.format(last.toLocal());
+          return '$label: $count (last: $lastText)';
+        }
+
+        return ListTile(
+          leading: const Icon(Icons.cloud_done_outlined),
+          title: const Text('Sync status'),
+          subtitle: Text(
+            [
+              line(
+                'Categories',
+                s.categories.count,
+                s.categories.lastUpdatedAt,
+              ),
+              line('Expenses', s.expenses.count, s.expenses.lastUpdatedAt),
+              line(
+                'Subscriptions',
+                s.subscriptions.count,
+                s.subscriptions.lastUpdatedAt,
+              ),
+            ].join('\n'),
+          ),
+          isThreeLine: true,
+        );
+      },
     );
   }
 }

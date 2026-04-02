@@ -9,6 +9,9 @@ class Subscription {
   @Index()
   String userId = '';
 
+  @Index()
+  String? remoteId;
+
   late String name;
 
   late double amount;

@@ -20,7 +20,12 @@ final categoryRepositoryProvider = Provider<CategoryRepository>((ref) {
   if (uid == null) {
     throw StateError('categoryRepositoryProvider requires signed-in user');
   }
-  return CategoryRepository(ref.watch(isarProvider), uid);
+  return CategoryRepository(
+    ref.watch(isarProvider),
+    uid,
+    api: ref.watch(vaultSpendApiProvider),
+    accessToken: ref.watch(currentAccessTokenProvider),
+  );
 });
 
 final expenseRepositoryProvider = Provider<ExpenseRepository>((ref) {
@@ -28,7 +33,12 @@ final expenseRepositoryProvider = Provider<ExpenseRepository>((ref) {
   if (uid == null) {
     throw StateError('expenseRepositoryProvider requires signed-in user');
   }
-  return ExpenseRepository(ref.watch(isarProvider), uid);
+  return ExpenseRepository(
+    ref.watch(isarProvider),
+    uid,
+    api: ref.watch(vaultSpendApiProvider),
+    accessToken: ref.watch(currentAccessTokenProvider),
+  );
 });
 
 final subscriptionRepositoryProvider = Provider<SubscriptionRepository>((ref) {
@@ -36,11 +46,17 @@ final subscriptionRepositoryProvider = Provider<SubscriptionRepository>((ref) {
   if (uid == null) {
     throw StateError('subscriptionRepositoryProvider requires signed-in user');
   }
-  return SubscriptionRepository(ref.watch(isarProvider), uid);
+  return SubscriptionRepository(
+    ref.watch(isarProvider),
+    uid,
+    api: ref.watch(vaultSpendApiProvider),
+    accessToken: ref.watch(currentAccessTokenProvider),
+  );
 });
 
-final categoryListProvider =
-    FutureProvider.autoDispose<List<Category>>((ref) async {
+final categoryListProvider = FutureProvider.autoDispose<List<Category>>((
+  ref,
+) async {
   return ref.watch(categoryRepositoryProvider).getAll();
 });
 

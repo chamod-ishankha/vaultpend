@@ -36,8 +36,12 @@ class FxReferenceStrip extends ConsumerWidget {
         return _bar(context, scheme, line, isError: snap.isStale);
       },
       loading: () => _bar(context, scheme, 'FX: loading reference rates…'),
-      error: (err, _) =>
-          _bar(context, scheme, 'FX: unavailable — pull to refresh', isError: true),
+      error: (err, _) => _bar(
+        context,
+        scheme,
+        'FX: unavailable — pull to refresh',
+        isError: true,
+      ),
     );
   }
 
@@ -48,7 +52,7 @@ class FxReferenceStrip extends ConsumerWidget {
     bool isError = false,
   }) {
     return Material(
-      color: scheme.surfaceContainerHighest.withOpacity(0.6),
+      color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(
@@ -63,9 +67,9 @@ class FxReferenceStrip extends ConsumerWidget {
               child: Text(
                 text,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: isError ? scheme.error : scheme.onSurfaceVariant,
-                      height: 1.25,
-                    ),
+                  color: isError ? scheme.error : scheme.onSurfaceVariant,
+                  height: 1.25,
+                ),
               ),
             ),
           ],

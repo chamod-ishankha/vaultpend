@@ -59,11 +59,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       });
       return;
     }
-    await ref.read(authControllerProvider.notifier).signUp(
-          email: email,
-          password: p1,
-          preferredCurrency: _currency,
-        );
+    await ref
+        .read(authControllerProvider.notifier)
+        .signUp(email: email, password: p1, preferredCurrency: _currency);
     final state = ref.read(authControllerProvider);
     if (!mounted) return;
     if (state.hasError) {
@@ -136,7 +134,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              value: _currency,
+              initialValue: _currency,
               decoration: const InputDecoration(
                 labelText: 'Preferred currency',
                 border: OutlineInputBorder(),
@@ -144,7 +142,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               items: _currencies
                   .map((c) => DropdownMenuItem(value: c, child: Text(c)))
                   .toList(),
-              onChanged: busy ? null : (v) => setState(() => _currency = v ?? 'USD'),
+              onChanged: busy
+                  ? null
+                  : (v) => setState(() => _currency = v ?? 'USD'),
             ),
             const SizedBox(height: 24),
             FilledButton(

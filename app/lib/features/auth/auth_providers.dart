@@ -17,6 +17,18 @@ final currentUserIdProvider = Provider<String?>((ref) {
   return ref.watch(authControllerProvider).value?.user.id;
 });
 
+final currentAccessTokenProvider = Provider<String?>((ref) {
+  return ref.watch(authControllerProvider).value?.accessToken;
+});
+
+final syncStatusProvider = FutureProvider.autoDispose<SyncStatus>((ref) async {
+  final token = ref.watch(currentAccessTokenProvider);
+  if (token == null || token.isEmpty) {
+    throw StateError('syncStatusProvider requires signed-in session');
+  }
+  return ref.watch(vaultSpendApiProvider).syncStatus(token);
+});
+
 class AuthNotifier extends AsyncNotifier<AuthSession?> {
   @override
   Future<AuthSession?> build() async {
@@ -42,10 +54,7 @@ class AuthNotifier extends AsyncNotifier<AuthSession?> {
       final storage = ref.read(tokenStorageProvider);
       final result = await api.login(email, password);
       await storage.writeAccessToken(result.accessToken);
-      return AuthSession(
-        accessToken: result.accessToken,
-        user: result.user,
-      );
+      return AuthSession(accessToken: result.accessToken, user: result.user);
     });
   }
 
@@ -63,10 +72,7 @@ class AuthNotifier extends AsyncNotifier<AuthSession?> {
         preferredCurrency: preferredCurrency,
       );
       await storage.writeAccessToken(result.accessToken);
-      return AuthSession(
-        accessToken: result.accessToken,
-        user: result.user,
-      );
+      return AuthSession(accessToken: result.accessToken, user: result.user);
     });
   }
 

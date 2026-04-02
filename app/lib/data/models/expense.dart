@@ -9,6 +9,9 @@ class Expense {
   @Index()
   String userId = '';
 
+  @Index()
+  String? remoteId;
+
   int? categoryId;
 
   late double amount;

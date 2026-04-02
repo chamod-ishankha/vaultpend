@@ -85,17 +85,17 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
   Future<void> _save() async {
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a name')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Enter a name')));
       return;
     }
     final raw = _amountCtrl.text.trim().replaceAll(',', '.');
     final amount = double.tryParse(raw);
     if (amount == null || amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a valid amount')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Enter a valid amount')));
       return;
     }
     final repo = ref.read(subscriptionRepositoryProvider);
@@ -118,7 +118,9 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          widget.subscription != null ? 'Edit subscription' : 'Add subscription',
+          widget.subscription != null
+              ? 'Edit subscription'
+              : 'Add subscription',
         ),
       ),
       body: ListView(
@@ -147,7 +149,7 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
           ),
           const SizedBox(height: 16),
           DropdownButtonFormField<String>(
-            value: _currency,
+            initialValue: _currency,
             decoration: const InputDecoration(
               labelText: 'Currency',
               border: OutlineInputBorder(),
@@ -159,7 +161,7 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
           ),
           const SizedBox(height: 16),
           DropdownButtonFormField<String>(
-            value: _cycle,
+            initialValue: _cycle,
             decoration: const InputDecoration(
               labelText: 'Billing cycle',
               border: OutlineInputBorder(),
