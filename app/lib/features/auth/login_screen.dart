@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:vaultspend/core/api/vaultspend_api.dart';
+import 'package:vaultspend/core/firebase/firebase_bootstrap.dart';
 
 import 'auth_providers.dart';
 import 'register_screen.dart';
@@ -19,12 +19,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _email = TextEditingController();
   final _password = TextEditingController();
   String? _localError;
+  String? _statusMessage;
   bool _submitting = false;
 
   @override
   void initState() {
     super.initState();
     _localError = widget.initialError;
+    _statusMessage = isFirebaseReady
+        ? 'Cloud sync is available when you sign in.'
+        : 'Firebase is not configured yet. Guest mode is still available.';
   }
 
   @override
@@ -37,6 +41,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _submit() async {
     setState(() {
       _localError = null;
+      _statusMessage = null;
       _submitting = true;
     });
     final email = _email.text.trim();
@@ -54,7 +59,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     next.whenOrNull(
       error: (e, _) {
         setState(() {
-          _localError = e is ApiException ? e.message : e.toString();
+          _localError = e.toString();
         });
       },
     );
@@ -73,16 +78,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             const SizedBox(height: 32),
             Text(
               'VaultSpend',
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
             Text(
-              'Sign in to sync when you are online.',
+              'Sign in to sync your data with Firebase.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 32),
             if (_localError != null)
@@ -97,6 +102,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       _localError!,
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.onErrorContainer,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            if (_statusMessage != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Material(
+                  color: Theme.of(context).colorScheme.secondaryContainer,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(
+                      _statusMessage!,
+                      style: TextStyle(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSecondaryContainer,
                       ),
                     ),
                   ),
@@ -148,12 +172,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     },
               child: const Text('Create account'),
             ),
+            TextButton.icon(
+              onPressed: null,
+              icon: Icon(
+                isFirebaseReady ? Icons.cloud_done_outlined : Icons.cloud_off,
+              ),
+              label: Text(
+                isFirebaseReady
+                    ? 'Firebase configured'
+                    : 'Firebase not configured',
+              ),
+            ),
+            TextButton.icon(
+              onPressed: busy
+                  ? null
+                  : () async {
+                      await ref
+                          .read(guestModeControllerProvider.notifier)
+                          .enterGuestMode();
+                    },
+              icon: const Icon(Icons.person_outline),
+              label: const Text('Continue as guest (local only)'),
+            ),
             const SizedBox(height: 24),
             Text(
-              'Expenses and subscriptions work offline on this device. Sign in when your VaultSpend server is running on your network.',
+              'Expenses and subscriptions work offline on this device. Sign in to enable Firebase sync across devices.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.outline,
-                  ),
+                color: Theme.of(context).colorScheme.outline,
+              ),
             ),
           ],
         ),

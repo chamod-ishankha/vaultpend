@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar_community/isar.dart';
 import 'package:path_provider/path_provider.dart';
@@ -15,42 +16,51 @@ final isarProvider = Provider<Isar>((ref) {
   throw StateError('isarProvider must be overridden in main()');
 });
 
+final firestoreProvider = Provider<FirebaseFirestore>((ref) {
+  return FirebaseFirestore.instance;
+});
+
 final categoryRepositoryProvider = Provider<CategoryRepository>((ref) {
   final uid = ref.watch(currentUserIdProvider);
+  final signedIn = ref.watch(authControllerProvider).value != null;
   if (uid == null) {
-    throw StateError('categoryRepositoryProvider requires signed-in user');
+    throw StateError('categoryRepositoryProvider requires active user scope');
   }
   return CategoryRepository(
     ref.watch(isarProvider),
     uid,
-    api: ref.watch(vaultSpendApiProvider),
-    accessToken: ref.watch(currentAccessTokenProvider),
+    firestore: ref.watch(firestoreProvider),
+    cloudSyncEnabled: signedIn,
   );
 });
 
 final expenseRepositoryProvider = Provider<ExpenseRepository>((ref) {
   final uid = ref.watch(currentUserIdProvider);
+  final signedIn = ref.watch(authControllerProvider).value != null;
   if (uid == null) {
-    throw StateError('expenseRepositoryProvider requires signed-in user');
+    throw StateError('expenseRepositoryProvider requires active user scope');
   }
   return ExpenseRepository(
     ref.watch(isarProvider),
     uid,
-    api: ref.watch(vaultSpendApiProvider),
-    accessToken: ref.watch(currentAccessTokenProvider),
+    firestore: ref.watch(firestoreProvider),
+    cloudSyncEnabled: signedIn,
   );
 });
 
 final subscriptionRepositoryProvider = Provider<SubscriptionRepository>((ref) {
   final uid = ref.watch(currentUserIdProvider);
+  final signedIn = ref.watch(authControllerProvider).value != null;
   if (uid == null) {
-    throw StateError('subscriptionRepositoryProvider requires signed-in user');
+    throw StateError(
+      'subscriptionRepositoryProvider requires active user scope',
+    );
   }
   return SubscriptionRepository(
     ref.watch(isarProvider),
     uid,
-    api: ref.watch(vaultSpendApiProvider),
-    accessToken: ref.watch(currentAccessTokenProvider),
+    firestore: ref.watch(firestoreProvider),
+    cloudSyncEnabled: signedIn,
   );
 });
 

@@ -1,7 +1,6 @@
 # Secrets
 .env
 .env.local
-backend/.env
 *.pem
 
 # Flutter/Dart (when app folder exists)

@@ -1,20 +1,48 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:isar_community/isar.dart';
 
-import '../../core/api/vaultspend_api.dart';
 import '../models/category.dart';
 
 import '../models/expense.dart';
 
 class ExpenseRepository {
-  ExpenseRepository(this._isar, this._userId, {this.api, this.accessToken});
+  ExpenseRepository(
+    this._isar,
+    this._userId, {
+    this.firestore,
+    this.cloudSyncEnabled = false,
+  });
 
   final Isar _isar;
   final String _userId;
-  final VaultSpendApi? api;
-  final String? accessToken;
+  final FirebaseFirestore? firestore;
+  final bool cloudSyncEnabled;
 
-  bool get _canSync =>
-      api != null && accessToken != null && accessToken!.isNotEmpty;
+  bool get _canSync => firestore != null && cloudSyncEnabled;
+
+  CollectionReference<Map<String, dynamic>> get _remoteCollection {
+    return firestore!.collection('users').doc(_userId).collection('expenses');
+  }
+
+  CollectionReference<Map<String, dynamic>> get _remoteCategories {
+    return firestore!.collection('users').doc(_userId).collection('categories');
+  }
+
+  DateTime _coerceDate(Object? value, {required DateTime fallback}) {
+    if (value is Timestamp) {
+      return value.toDate();
+    }
+    if (value is DateTime) {
+      return value;
+    }
+    if (value is String) {
+      final parsed = DateTime.tryParse(value);
+      if (parsed != null) {
+        return parsed;
+      }
+    }
+    return fallback;
+  }
 
   Future<List<Expense>> getAll() async {
     await _pullFromRemoteIfAvailable();
@@ -28,7 +56,7 @@ class ExpenseRepository {
   Future<void> _pullFromRemoteIfAvailable() async {
     if (!_canSync) return;
     try {
-      final remoteItems = await api!.listExpenses(accessToken!);
+      final remoteItems = await _remoteCollection.get();
       final local = await _isar.expenses
           .filter()
           .userIdEqualTo(_userId)
@@ -50,20 +78,26 @@ class ExpenseRepository {
 
       final seenRemoteIds = <String>{};
       final upserts = <Expense>[];
-      for (final remote in remoteItems) {
-        seenRemoteIds.add(remote.id);
-        final existing = localByRemoteId[remote.id];
+      for (final doc in remoteItems.docs) {
+        final remoteId = doc.id;
+        final data = doc.data();
+        seenRemoteIds.add(remoteId);
+        final existing = localByRemoteId[remoteId];
         final target = existing ?? Expense()
           ..userId = _userId;
-        target.remoteId = remote.id;
-        target.amount = remote.amount;
-        target.currency = remote.currency;
-        target.occurredAt = remote.occurredAt.toLocal();
-        target.note = remote.note;
-        target.isRecurring = remote.isRecurring;
-        target.categoryId = remote.categoryId == null
+        target.remoteId = remoteId;
+        target.amount = (data['amount'] as num?)?.toDouble() ?? 0;
+        target.currency = (data['currency'] as String?) ?? 'USD';
+        target.occurredAt = _coerceDate(
+          data['occurred_at'],
+          fallback: existing?.occurredAt ?? DateTime.now(),
+        ).toLocal();
+        target.note = data['note'] as String?;
+        target.isRecurring = data['is_recurring'] as bool? ?? false;
+        final remoteCategoryId = data['category_remote_id'] as String?;
+        target.categoryId = remoteCategoryId == null
             ? null
-            : localCategoryByRemoteId[remote.categoryId!]?.id;
+            : localCategoryByRemoteId[remoteCategoryId]?.id;
         upserts.add(target);
       }
 
@@ -106,12 +140,12 @@ class ExpenseRepository {
         final category = await _isar.categorys.get(localCategoryId);
         if (category != null && category.userId == _userId) {
           if (category.remoteId == null || category.remoteId!.isEmpty) {
-            final remoteCategory = await api!.createCategory(
-              accessToken!,
-              name: category.name,
-              iconKey: category.iconKey,
-              color: category.color,
-            );
+            final remoteCategory = await _remoteCategories.add({
+              'name': category.name,
+              'icon_key': category.iconKey,
+              'color': category.color,
+              'updated_at': FieldValue.serverTimestamp(),
+            });
             category.remoteId = remoteCategory.id;
             await _isar.writeTxn(() => _isar.categorys.put(category));
           }
@@ -120,33 +154,24 @@ class ExpenseRepository {
       }
 
       final remoteId = e.remoteId;
-      final remote = (remoteId == null || remoteId.isEmpty)
-          ? await api!.createExpense(
-              accessToken!,
-              categoryId: remoteCategoryId,
-              amount: e.amount,
-              currency: e.currency,
-              occurredAt: e.occurredAt,
-              note: e.note,
-              isRecurring: e.isRecurring,
-            )
-          : await api!.updateExpense(
-              accessToken!,
-              remoteId,
-              categoryId: remoteCategoryId,
-              amount: e.amount,
-              currency: e.currency,
-              occurredAt: e.occurredAt,
-              note: e.note,
-              isRecurring: e.isRecurring,
-            );
+      final payload = <String, dynamic>{
+        'category_remote_id': remoteCategoryId,
+        'amount': e.amount,
+        'currency': e.currency,
+        'occurred_at': Timestamp.fromDate(e.occurredAt.toUtc()),
+        'note': e.note,
+        'is_recurring': e.isRecurring,
+        'updated_at': FieldValue.serverTimestamp(),
+      };
 
-      e.remoteId = remote.id;
-      e.amount = remote.amount;
-      e.currency = remote.currency;
-      e.occurredAt = remote.occurredAt.toLocal();
-      e.note = remote.note;
-      e.isRecurring = remote.isRecurring;
+      if (remoteId == null || remoteId.isEmpty) {
+        final remote = await _remoteCollection.add(payload);
+        e.remoteId = remote.id;
+      } else {
+        await _remoteCollection
+            .doc(remoteId)
+            .set(payload, SetOptions(merge: true));
+      }
       await _isar.writeTxn(() => _isar.expenses.put(e));
     } catch (_) {
       // Local-first: sync can retry on next refresh/action.
@@ -164,7 +189,7 @@ class ExpenseRepository {
 
     if (!_canSync || remoteId == null || remoteId.isEmpty) return;
     try {
-      await api!.deleteExpense(accessToken!, remoteId);
+      await _remoteCollection.doc(remoteId).delete();
     } catch (_) {
       // Local-first: keep local deletion even if remote is unavailable.
     }

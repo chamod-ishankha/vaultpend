@@ -1,20 +1,24 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-const _kAccessToken = 'vaultspend_access_token';
+const _kGuestMode = 'vaultspend_guest_mode';
 
 class TokenStorage {
   TokenStorage({FlutterSecureStorage? storage})
-      : _s = storage ??
-            const FlutterSecureStorage(
-              aOptions: AndroidOptions(encryptedSharedPreferences: true),
-            );
+    : _s =
+          storage ??
+          const FlutterSecureStorage(
+            aOptions: AndroidOptions(encryptedSharedPreferences: true),
+          );
 
   final FlutterSecureStorage _s;
 
-  Future<String?> readAccessToken() => _s.read(key: _kAccessToken);
+  Future<bool> readGuestMode() async {
+    final value = await _s.read(key: _kGuestMode);
+    return value == 'true';
+  }
 
-  Future<void> writeAccessToken(String token) =>
-      _s.write(key: _kAccessToken, value: token);
+  Future<void> writeGuestMode(bool enabled) =>
+      _s.write(key: _kGuestMode, value: enabled ? 'true' : 'false');
 
-  Future<void> deleteAccessToken() => _s.delete(key: _kAccessToken);
+  Future<void> clearGuestMode() => _s.delete(key: _kGuestMode);
 }

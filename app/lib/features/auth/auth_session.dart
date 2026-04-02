@@ -1,11 +1,17 @@
-import 'package:vaultspend/core/api/vaultspend_api.dart';
-
-class AuthSession {
-  AuthSession({
-    required this.accessToken,
-    required this.user,
+class AuthUser {
+  AuthUser({
+    required this.id,
+    required this.email,
+    required this.preferredCurrency,
   });
 
-  final String accessToken;
-  final UserProfile user;
+  final String id;
+  final String email;
+  final String preferredCurrency;
+}
+
+class AuthSession {
+  AuthSession({required this.user});
+
+  final AuthUser user;
 }

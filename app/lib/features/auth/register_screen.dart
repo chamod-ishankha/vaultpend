@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:vaultspend/core/api/vaultspend_api.dart';
-
 import 'auth_providers.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
@@ -67,7 +65,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     if (state.hasError) {
       final e = state.error;
       setState(() {
-        _localError = e is ApiException ? e.message : e.toString();
+        _localError = e.toString();
         _submitting = false;
       });
       return;

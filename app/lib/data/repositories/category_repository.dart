@@ -1,19 +1,26 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:isar_community/isar.dart';
-
-import '../../core/api/vaultspend_api.dart';
 
 import '../models/category.dart';
 
 class CategoryRepository {
-  CategoryRepository(this._isar, this._userId, {this.api, this.accessToken});
+  CategoryRepository(
+    this._isar,
+    this._userId, {
+    this.firestore,
+    this.cloudSyncEnabled = false,
+  });
 
   final Isar _isar;
   final String _userId;
-  final VaultSpendApi? api;
-  final String? accessToken;
+  final FirebaseFirestore? firestore;
+  final bool cloudSyncEnabled;
 
-  bool get _canSync =>
-      api != null && accessToken != null && accessToken!.isNotEmpty;
+  bool get _canSync => firestore != null && cloudSyncEnabled;
+
+  CollectionReference<Map<String, dynamic>> get _remoteCollection {
+    return firestore!.collection('users').doc(_userId).collection('categories');
+  }
 
   Future<List<Category>> getAll() async {
     await _pullFromRemoteIfAvailable();
@@ -28,7 +35,7 @@ class CategoryRepository {
   Future<void> _pullFromRemoteIfAvailable() async {
     if (!_canSync) return;
     try {
-      final remote = await api!.listCategories(accessToken!);
+      final remote = await _remoteCollection.get();
       final local = await _isar.categorys
           .filter()
           .userIdEqualTo(_userId)
@@ -42,15 +49,19 @@ class CategoryRepository {
 
       final seenRemoteIds = <String>{};
       final upserts = <Category>[];
-      for (final item in remote) {
-        seenRemoteIds.add(item.id);
-        final existing = byRemoteId[item.id];
+      for (final doc in remote.docs) {
+        final id = doc.id;
+        final data = doc.data();
+        seenRemoteIds.add(id);
+        final existing = byRemoteId[id];
         final target = existing ?? Category()
           ..userId = _userId;
-        target.remoteId = item.id;
-        target.name = item.name;
-        target.iconKey = item.iconKey;
-        target.color = item.color;
+        target.remoteId = id;
+        target.name = (data['name'] as String?)?.trim().isNotEmpty == true
+            ? (data['name'] as String)
+            : 'Unnamed';
+        target.iconKey = data['icon_key'] as String?;
+        target.color = data['color'] as String?;
         upserts.add(target);
       }
 
@@ -97,19 +108,14 @@ class CategoryRepository {
     if (!_canSync) return;
     for (final item in defaults) {
       try {
-        final remote = await api!.createCategory(
-          accessToken!,
-          name: item.name,
-          iconKey: item.iconKey,
-          color: item.color,
-        );
+        final remote = await _remoteCollection.add({
+          'name': item.name,
+          'icon_key': item.iconKey,
+          'color': item.color,
+          'updated_at': FieldValue.serverTimestamp(),
+        });
         item.remoteId = remote.id;
         await _isar.writeTxn(() => _isar.categorys.put(item));
-      } on ApiException catch (e) {
-        if (e.statusCode == 409) {
-          await _pullFromRemoteIfAvailable();
-          break;
-        }
       } catch (_) {}
     }
   }
@@ -145,29 +151,23 @@ class CategoryRepository {
 
     try {
       final remoteId = c.remoteId;
-      final remote = (remoteId == null || remoteId.isEmpty)
-          ? await api!.createCategory(
-              accessToken!,
-              name: c.name,
-              iconKey: c.iconKey,
-              color: c.color,
-            )
-          : await api!.updateCategory(
-              accessToken!,
-              remoteId,
-              name: c.name,
-              iconKey: c.iconKey,
-              color: c.color,
-            );
-      c.remoteId = remote.id;
-      c.name = remote.name;
-      c.iconKey = remote.iconKey;
-      c.color = remote.color;
-      await _isar.writeTxn(() => _isar.categorys.put(c));
-    } on ApiException catch (e) {
-      if (e.statusCode == 409) {
-        await _pullFromRemoteIfAvailable();
+      if (remoteId == null || remoteId.isEmpty) {
+        final doc = await _remoteCollection.add({
+          'name': c.name,
+          'icon_key': c.iconKey,
+          'color': c.color,
+          'updated_at': FieldValue.serverTimestamp(),
+        });
+        c.remoteId = doc.id;
+      } else {
+        await _remoteCollection.doc(remoteId).set({
+          'name': c.name,
+          'icon_key': c.iconKey,
+          'color': c.color,
+          'updated_at': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
       }
+      await _isar.writeTxn(() => _isar.categorys.put(c));
     } catch (_) {}
 
     return localId;
@@ -182,7 +182,7 @@ class CategoryRepository {
 
     if (!_canSync || remoteId == null || remoteId.isEmpty) return;
     try {
-      await api!.deleteCategory(accessToken!, remoteId);
+      await _remoteCollection.doc(remoteId).delete();
     } catch (_) {
       // Local-first: keep local deletion even if remote is unavailable.
     }
