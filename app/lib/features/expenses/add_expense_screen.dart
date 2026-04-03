@@ -94,6 +94,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     final existing = widget.expense;
     final e = Expense()
       ..id = existing?.id ?? Isar.autoIncrement
+      ..remoteId = existing?.remoteId
       ..amount = amount
       ..currency = _currency
       ..occurredAt = _when

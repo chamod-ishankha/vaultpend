@@ -16,9 +16,9 @@ class AuthLoadingScreen extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Image.asset(
-              'assets/branding/app_icon.png',
-              width: 96,
-              height: 96,
+              'assets/branding/logo.png',
+              width: 240,
+              fit: BoxFit.contain,
               filterQuality: FilterQuality.high,
             ),
             const SizedBox(height: 24),
@@ -26,9 +26,9 @@ class AuthLoadingScreen extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               'Loading…',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
             ),
           ],
         ),

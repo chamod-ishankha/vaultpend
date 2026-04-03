@@ -62,10 +62,7 @@ class _SplashScreenState extends State<SplashScreen>
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              _bg,
-              Color(0xFF12121A),
-            ],
+            colors: [_bg, Color(0xFF12121A)],
           ),
         ),
         child: SafeArea(
@@ -76,25 +73,25 @@ class _SplashScreenState extends State<SplashScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Image.asset(
-                    'assets/branding/app_icon.png',
-                    width: 120,
-                    height: 120,
+                    'assets/branding/splash.png',
+                    width: 280,
+                    fit: BoxFit.contain,
                     filterQuality: FilterQuality.high,
                   ),
                   const SizedBox(height: 24),
                   Text(
                     'VaultSpend',
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.5,
-                        ),
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'Privacy-first spending',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),

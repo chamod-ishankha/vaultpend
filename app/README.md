@@ -1,17 +1,50 @@
-# vaultspend
+# VaultSpend (Flutter App)
 
-A new Flutter project.
+VaultSpend is an offline-first personal finance app with optional Firebase sync.
 
-## Getting Started
+## Stack
 
-This project is a starting point for a Flutter application.
+- Flutter + Riverpod
+- Isar (local-first persistence)
+- Firebase Auth (email/password)
+- Cloud Firestore (`users/{uid}/categories|expenses|subscriptions`)
 
-A few resources to get you started if this is your first Flutter project:
+## Local Development
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+From the `app/` directory:
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```bash
+flutter pub get
+flutter analyze
+flutter test
+flutter run
+```
+
+## Firebase Deploy Checklist
+
+1. Confirm Firebase project alias is correct in `.firebaserc`.
+2. Verify Firestore configuration in `firebase.json`:
+	- `firestore.rules` points to `firestore.rules`
+	- `firestore.indexes` points to `firestore.indexes.json`
+3. Ensure generated Flutter config exists at `lib/firebase_options.dart`.
+4. Review current rules and indexes before deploy:
+	- `firebase firestore:rules:get`
+	- `firebase firestore:indexes`
+5. Deploy rules and indexes:
+
+```bash
+firebase deploy --only firestore:rules,firestore:indexes
+```
+
+6. Validate in Firebase Console:
+	- Rules are active for the expected project.
+	- Index build status is complete (if new indexes were added).
+7. Run app smoke checks after deploy:
+	- Sign in and verify category sync.
+	- Create/edit/delete an expense and confirm no duplicate document is created.
+	- Create/edit/delete a subscription and verify updates persist across refresh.
+
+## Notes
+
+- Guest mode remains available when signed out; cloud sync is disabled in that mode.
+- Security rules enforce owner-only access and schema/type validation for synced entities.

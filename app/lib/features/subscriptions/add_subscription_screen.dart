@@ -102,6 +102,7 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
     final existing = widget.subscription;
     final s = Subscription()
       ..id = existing?.id ?? Isar.autoIncrement
+      ..remoteId = existing?.remoteId
       ..name = name
       ..amount = amount
       ..currency = _currency

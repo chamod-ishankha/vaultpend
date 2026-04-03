@@ -1,0 +1,138 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isCurrency(value) {
+      return value is string && ['LKR', 'USD', 'EUR'].hasAny([value]);
+    }
+
+    function isCycle(value) {
+      return value is string && ['monthly', 'annual', 'custom'].hasAny([value]);
+    }
+
+    function isNullableString(value) {
+      return value == null || value is string;
+    }
+
+    function isNullableTimestamp(value) {
+      return value == null || value is timestamp;
+    }
+
+    function hasServerUpdatedAt() {
+      return request.resource.data.updated_at is timestamp
+        && request.resource.data.updated_at == request.time;
+    }
+
+    function isValidCategoryDoc() {
+      return request.resource.data.keys().hasOnly([
+          'name',
+          'icon_key',
+          'color',
+          'updated_at',
+        ])
+        && request.resource.data.keys().hasAll(['name', 'updated_at'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && isNullableString(request.resource.data.icon_key)
+        && isNullableString(request.resource.data.color)
+        && hasServerUpdatedAt();
+    }
+
+    function isValidExpenseDoc() {
+      return request.resource.data.keys().hasOnly([
+          'category_remote_id',
+          'amount',
+          'currency',
+          'occurred_at',
+          'note',
+          'is_recurring',
+          'updated_at',
+        ])
+        && request.resource.data.keys().hasAll([
+          'amount',
+          'currency',
+          'occurred_at',
+          'is_recurring',
+          'updated_at',
+        ])
+        && isNullableString(request.resource.data.category_remote_id)
+        && request.resource.data.amount is number
+        && request.resource.data.amount > 0
+        && isCurrency(request.resource.data.currency)
+        && request.resource.data.occurred_at is timestamp
+        && isNullableString(request.resource.data.note)
+        && request.resource.data.is_recurring is bool
+        && hasServerUpdatedAt();
+    }
+
+    function isValidSubscriptionDoc() {
+      return request.resource.data.keys().hasOnly([
+          'name',
+          'amount',
+          'currency',
+          'cycle',
+          'next_billing_date',
+          'is_trial',
+          'trial_ends_at',
+          'updated_at',
+        ])
+        && request.resource.data.keys().hasAll([
+          'name',
+          'amount',
+          'currency',
+          'cycle',
+          'next_billing_date',
+          'is_trial',
+          'updated_at',
+        ])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.amount is number
+        && request.resource.data.amount > 0
+        && isCurrency(request.resource.data.currency)
+        && isCycle(request.resource.data.cycle)
+        && request.resource.data.next_billing_date is timestamp
+        && request.resource.data.is_trial is bool
+        && isNullableTimestamp(request.resource.data.trial_ends_at)
+        && (
+          request.resource.data.is_trial
+          || request.resource.data.trial_ends_at == null
+        )
+        && hasServerUpdatedAt();
+    }
+
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+      allow write: if false;
+
+      match /categories/{categoryId} {
+        allow read: if isOwner(uid);
+        allow create, update: if isOwner(uid) && isValidCategoryDoc();
+        allow delete: if isOwner(uid);
+      }
+
+      match /expenses/{expenseId} {
+        allow read: if isOwner(uid);
+        allow create, update: if isOwner(uid) && isValidExpenseDoc();
+        allow delete: if isOwner(uid);
+      }
+
+      match /subscriptions/{subscriptionId} {
+        allow read: if isOwner(uid);
+        allow create, update: if isOwner(uid) && isValidSubscriptionDoc();
+        allow delete: if isOwner(uid);
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

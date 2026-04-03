@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "635353279046",
+    "project_id": "vaultspend-d55cb",
+    "storage_bucket": "vaultspend-d55cb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:635353279046:android:06f7014e314be12a0bf847",
+        "android_client_info": {
+          "package_name": "com.vaultspend.vaultspend"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCEfU5LcSv11VybXBj63xgleYg_ZnIodIY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
