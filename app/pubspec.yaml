@@ -45,8 +45,6 @@ dependencies:
   firebase_core: ^3.14.0
   firebase_auth: ^5.6.0
   cloud_firestore: ^5.6.9
-  firebase_storage: ^12.4.7
-  firebase_messaging: ^15.2.8
   csv: ^6.0.0
   share_plus: ^11.0.0
   pdf: ^3.10.0
@@ -115,15 +113,12 @@ flutter_launcher_icons:
   remove_alpha_ios: true
   adaptive_icon_foreground: assets/branding/app_icon.png
   adaptive_icon_background: "#0B0B0F"
-  web:
-    generate: true
 
 flutter_native_splash:
   color: "#0B0B0F"
   image: assets/branding/app_icon.png
   android: true
   ios: true
-  web: true
   android_12:
     color: "#0B0B0F"
     image: assets/branding/app_icon.png

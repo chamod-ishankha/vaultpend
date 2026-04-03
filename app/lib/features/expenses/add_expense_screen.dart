@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar_community/isar.dart';
 
 import '../../core/providers.dart';
+import '../../core/widgets/responsive_layout.dart';
 import '../../data/models/category.dart';
 import '../../data/models/expense.dart';
 
@@ -140,87 +141,90 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             });
           }
 
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              TextField(
-                controller: _amountCtrl,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
+          return ResponsiveBody(
+            maxWidth: 760,
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                TextField(
+                  controller: _amountCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[\d.,]')),
+                  ],
+                  decoration: const InputDecoration(
+                    labelText: 'Amount',
+                    border: OutlineInputBorder(),
+                  ),
+                  autofocus: widget.expense == null,
                 ),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[\d.,]')),
-                ],
-                decoration: const InputDecoration(
-                  labelText: 'Amount',
-                  border: OutlineInputBorder(),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  initialValue: _currency,
+                  decoration: const InputDecoration(
+                    labelText: 'Currency',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: _currencies
+                      .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                      .toList(),
+                  onChanged: (v) => setState(() => _currency = v ?? 'USD'),
                 ),
-                autofocus: widget.expense == null,
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                initialValue: _currency,
-                decoration: const InputDecoration(
-                  labelText: 'Currency',
-                  border: OutlineInputBorder(),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<int?>(
+                  initialValue: selectedId,
+                  decoration: const InputDecoration(
+                    labelText: 'Category',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: cats
+                      .map(
+                        (c) => DropdownMenuItem<int?>(
+                          value: c.id,
+                          child: Text(c.name),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) => setState(() => _categoryId = v),
                 ),
-                items: _currencies
-                    .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                    .toList(),
-                onChanged: (v) => setState(() => _currency = v ?? 'USD'),
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<int?>(
-                initialValue: selectedId,
-                decoration: const InputDecoration(
-                  labelText: 'Category',
-                  border: OutlineInputBorder(),
-                ),
-                items: cats
-                    .map(
-                      (c) => DropdownMenuItem<int?>(
-                        value: c.id,
-                        child: Text(c.name),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (v) => setState(() => _categoryId = v),
-              ),
-              const SizedBox(height: 16),
-              ListTile(
-                title: const Text('Date & time'),
-                subtitle: Text(_when.toLocal().toString()),
-                onTap: _pickTime,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: BorderSide(
-                    color: Theme.of(context).colorScheme.outline,
+                const SizedBox(height: 16),
+                ListTile(
+                  title: const Text('Date & time'),
+                  subtitle: Text(_when.toLocal().toString()),
+                  onTap: _pickTime,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    side: BorderSide(
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              SwitchListTile(
-                title: const Text('Recurring'),
-                value: _recurring,
-                onChanged: (v) => setState(() => _recurring = v),
-              ),
-              TextField(
-                controller: _noteCtrl,
-                maxLines: 2,
-                decoration: const InputDecoration(
-                  labelText: 'Note (optional)',
-                  border: OutlineInputBorder(),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  title: const Text('Recurring'),
+                  value: _recurring,
+                  onChanged: (v) => setState(() => _recurring = v),
                 ),
-              ),
-              const SizedBox(height: 24),
-              FilledButton(
-                onPressed: _save,
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Text('Save'),
+                TextField(
+                  controller: _noteCtrl,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Note (optional)',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 24),
+                FilledButton(
+                  onPressed: _save,
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Text('Save'),
+                  ),
+                ),
+              ],
+            ),
           );
         },
       ),

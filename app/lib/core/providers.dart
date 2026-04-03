@@ -71,10 +71,10 @@ final categoryListProvider = FutureProvider.autoDispose<List<Category>>((
 });
 
 Future<Isar> openIsar() async {
-  final dir = await getApplicationDocumentsDirectory();
+  final directory = (await getApplicationDocumentsDirectory()).path;
   return Isar.open(
     [CategorySchema, ExpenseSchema, SubscriptionSchema],
-    directory: dir.path,
+    directory: directory,
     name: 'vaultspend',
   );
 }

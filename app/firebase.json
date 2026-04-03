@@ -13,8 +13,7 @@
                     "projectId": "vaultspend-d55cb",
                     "configurations": {
                         "android": "1:635353279046:android:06f7014e314be12a0bf847",
-                        "ios": "1:635353279046:ios:c0fd1f08c190c7d90bf847",
-                        "web": "1:635353279046:web:492c174f99195b580bf847"
+                        "ios": "1:635353279046:ios:c0fd1f08c190c7d90bf847"
                     }
                 }
             }

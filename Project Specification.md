@@ -1,15 +1,15 @@
 # Project Specification: VaultSpend
 
-**Version:** 1.4.2  
+**Version:** 1.4.5  
 **Status:** In progress  
 **Last updated:** 2026-04-03  
-**Target platforms:** Android, iOS, Web  
+**Target platforms:** Android, iOS  
 
 ---
 
 ## 1. Executive Summary
 
-**VaultSpend** is a privacy-centric, cross-platform financial management app for daily expenses and recurring subscriptions. Built with **Flutter**, it aims for fast entry on mobile and clear analytics on the web, with **offline-first** local storage, a guest/local-only mode, and optional **encrypted cloud sync** when the user signs in.
+**VaultSpend** is a privacy-centric, cross-platform financial management app for daily expenses and recurring subscriptions. Built with **Flutter**, it aims for fast entry on mobile with **offline-first** local storage, a guest/local-only mode, and optional **encrypted cloud sync** when the user signs in.
 
 ---
 
@@ -31,7 +31,7 @@
 
 ### 2.3 Data and synchronization
 
-- **Cross-platform parity:** Same logical data model on mobile and web with a fixed conflict strategy: **last-write-wins using Firestore `updated_at` server timestamps**, plus deterministic tie-break by document id when timestamps are equal.
+- **Cross-platform parity:** Same logical data model on Android and iOS with a fixed conflict strategy: **last-write-wins using Firestore `updated_at` server timestamps**, plus deterministic tie-break by document id when timestamps are equal.
 - **Export:** Monthly and annual reports as **PDF** and **CSV**.
 - **Secure backup:** Encrypted backups for account recovery (aligned with §7).
 - **Guest mode:** The app must be usable without an account using only local storage; sync features remain disabled until the user signs in.
@@ -48,7 +48,7 @@
 
 | Component | Technology | Rationale |
 | :--- | :--- | :--- |
-| **Frontend** | Flutter | Single codebase for mobile and web. |
+| **Frontend** | Flutter | Single codebase for Android and iOS. |
 | **State management** | Riverpod | Testable providers and scalable dependency graph. |
 | **Local database** | **isar_community** (Isar v3 fork) | Maintained fork compatible with current Dart/Flutter; run `dart run build_runner build` after model changes. |
 | **Cloud backend** | Firebase (Firestore + Firebase SDKs) | Managed backend for auth, sync storage, and platform integration. |
@@ -62,7 +62,6 @@
 ### 3.2 Push and local notifications
 
 - **Mobile:** Firebase Cloud Messaging (FCM) or equivalent for push; local notifications for reminders when push is unavailable.
-- **Web:** Browser notification API where permitted; may be limited vs mobile—document UX fallback (e.g. in-app banner on next open).
 
 ### 3.3 PDF / CSV
 
@@ -96,7 +95,7 @@ Indexes and full sync payload shapes belong in the API/database design doc.
 
 1. **Adaptive layouts**
    - **Mobile:** Bottom navigation, large touch targets, minimal steps for add-expense flow.
-   - **Web / desktop:** Navigation rail or sidebar, wider tables and filters, keyboard-friendly entry where possible.
+   - **Tablet:** Expanded spacing and wider list/form layouts where useful.
 2. **Visual feedback:** Charts (e.g. spending by category, trend over time) using Flutter charting or `CustomPainter` where custom visuals are needed.
 3. **Dark mode first:** Default to a high-contrast dark theme; light theme as secondary.
 4. **Brand consistency:** Use the VaultSpend logo asset in key identity surfaces (login, splash transition, sidebar header) instead of repeating plain text branding.
@@ -165,13 +164,15 @@ Indexes and full sync payload shapes belong in the API/database design doc.
 - [x] Subscription screen CSV export action implemented (share-ready file generation from local data).
 - [x] PDF export services implemented for Expenses and Subscriptions with formatted tables, summaries, and burn-rate estimates.
 - [x] Unified export menus (CSV and PDF) wired into both Expense and Subscription screens.
-- [ ] Continue Phase 3 features (web deployment, analytics dashboards, additional reporting).
+- [x] Web target and all web-specific runtime/configuration paths removed; project scope is now Android/iOS-only.
+- [x] Isar generated schemas regenerated for native consistency after platform cleanup.
+- [ ] Continue Phase 3 features (analytics dashboards and additional reporting).
 
-### Phase 3: Web and analytics
+### Phase 3: Analytics and reporting
 
-- Flutter web build and deployment pipeline.
+- Mobile analytics and reporting enhancements.
 - Analytics views (e.g. pie charts, trend lines).
-- [x] Insights screen now includes range filters, top key metrics strip, spend trend bars, month-over-month spend comparison with directional indicators, currency split, category distribution, largest subscriptions, recent activity, subscription currency split, subscription burn summaries, and subscription cycle mix.
+- [x] Insights screen now includes range filters, top key metrics strip, spend trend bars, month-over-month spend comparison with directional indicators, currency split, category distribution, largest subscriptions, recent activity, subscription currency split, subscription burn summaries, subscription cycle mix, recurring expense snapshots, and next-30-day billing forecast by currency.
 - PDF and CSV export (per §3.3).
 
 ### Phase 4: Intelligence and automation
@@ -185,7 +186,6 @@ Indexes and full sync payload shapes belong in the API/database design doc.
 
 | Topic | Options | Note |
 | :--- | :--- | :--- |
-| Web push | FCM web vs in-app only | Depends on hosting and browser support. |
 | PDF generation | Client vs server | Depends on template complexity. |
 
 ---

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar_community/isar.dart';
 
 import '../../core/providers.dart';
+import '../../core/widgets/responsive_layout.dart';
 import '../../data/models/subscription.dart';
 
 class AddSubscriptionScreen extends ConsumerStatefulWidget {
@@ -124,98 +125,107 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
               : 'Add subscription',
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          TextField(
-            controller: _nameCtrl,
-            textCapitalization: TextCapitalization.words,
-            decoration: const InputDecoration(
-              labelText: 'Name',
-              border: OutlineInputBorder(),
-            ),
-            autofocus: widget.subscription == null,
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _amountCtrl,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'[\d.,]')),
-            ],
-            decoration: const InputDecoration(
-              labelText: 'Amount per cycle',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 16),
-          DropdownButtonFormField<String>(
-            initialValue: _currency,
-            decoration: const InputDecoration(
-              labelText: 'Currency',
-              border: OutlineInputBorder(),
-            ),
-            items: _currencies
-                .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                .toList(),
-            onChanged: (v) => setState(() => _currency = v ?? 'USD'),
-          ),
-          const SizedBox(height: 16),
-          DropdownButtonFormField<String>(
-            initialValue: _cycle,
-            decoration: const InputDecoration(
-              labelText: 'Billing cycle',
-              border: OutlineInputBorder(),
-            ),
-            items: _cycles
-                .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                .toList(),
-            onChanged: (v) => setState(() => _cycle = v ?? 'monthly'),
-          ),
-          const SizedBox(height: 16),
-          ListTile(
-            title: const Text('Next billing date'),
-            subtitle: Text(_nextBilling.toLocal().toString().split(' ').first),
-            onTap: _pickNextBilling,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-              side: BorderSide(color: Theme.of(context).colorScheme.outline),
-            ),
-          ),
-          const SizedBox(height: 8),
-          SwitchListTile(
-            title: const Text('Trial'),
-            value: _trial,
-            onChanged: (v) => setState(() {
-              _trial = v;
-              if (!v) _trialEnds = null;
-            }),
-          ),
-          if (_trial) ...[
-            ListTile(
-              title: const Text('Trial ends'),
-              subtitle: Text(
-                _trialEnds == null
-                    ? 'Not set'
-                    : _trialEnds!.toLocal().toString().split(' ').first,
+      body: ResponsiveBody(
+        maxWidth: 760,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            TextField(
+              controller: _nameCtrl,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Name',
+                border: OutlineInputBorder(),
               ),
-              onTap: _pickTrialEnd,
+              autofocus: widget.subscription == null,
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _amountCtrl,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[\d.,]')),
+              ],
+              decoration: const InputDecoration(
+                labelText: 'Amount per cycle',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              initialValue: _currency,
+              decoration: const InputDecoration(
+                labelText: 'Currency',
+                border: OutlineInputBorder(),
+              ),
+              items: _currencies
+                  .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                  .toList(),
+              onChanged: (v) => setState(() => _currency = v ?? 'USD'),
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              initialValue: _cycle,
+              decoration: const InputDecoration(
+                labelText: 'Billing cycle',
+                border: OutlineInputBorder(),
+              ),
+              items: _cycles
+                  .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                  .toList(),
+              onChanged: (v) => setState(() => _cycle = v ?? 'monthly'),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              title: const Text('Next billing date'),
+              subtitle: Text(
+                _nextBilling.toLocal().toString().split(' ').first,
+              ),
+              onTap: _pickNextBilling,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
                 side: BorderSide(color: Theme.of(context).colorScheme.outline),
               ),
             ),
             const SizedBox(height: 8),
-          ],
-          const SizedBox(height: 16),
-          FilledButton(
-            onPressed: _save,
-            child: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Text('Save'),
+            SwitchListTile(
+              title: const Text('Trial'),
+              value: _trial,
+              onChanged: (v) => setState(() {
+                _trial = v;
+                if (!v) _trialEnds = null;
+              }),
             ),
-          ),
-        ],
+            if (_trial) ...[
+              ListTile(
+                title: const Text('Trial ends'),
+                subtitle: Text(
+                  _trialEnds == null
+                      ? 'Not set'
+                      : _trialEnds!.toLocal().toString().split(' ').first,
+                ),
+                onTap: _pickTrialEnd,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  side: BorderSide(
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: _save,
+              child: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Text('Save'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

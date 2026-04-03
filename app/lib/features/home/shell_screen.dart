@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/providers.dart';
+import '../../core/widgets/responsive_layout.dart';
 import '../auth/auth_providers.dart';
 import '../auth/sync_status.dart';
 import '../categories/manage_categories_screen.dart';
@@ -48,6 +49,7 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = isDesktopWidth(MediaQuery.sizeOf(context).width);
     final authSession = ref.watch(authControllerProvider).value;
     final isGuest = ref.watch(isGuestModeProvider);
     final signedIn = authSession != null;
@@ -55,135 +57,236 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
     final email = signedIn ? authSession.user.email : 'Guest mode';
     final subtitle = signedIn ? 'Signed in' : 'Local-only (sync disabled)';
 
+    final screenChild = _index == 0
+        ? ExpenseListScreen(
+            key: const ValueKey(0),
+            onOpenDrawer: isDesktop ? null : _openDrawer,
+          )
+        : _index == 1
+        ? SubscriptionListScreen(
+            key: const ValueKey(1),
+            onOpenDrawer: isDesktop ? null : _openDrawer,
+          )
+        : InsightsScreen(
+            key: const ValueKey(2),
+            onOpenDrawer: isDesktop ? null : _openDrawer,
+          );
+
     return Scaffold(
       key: _shellKey,
-      drawer: Drawer(
-        child: SafeArea(
-          child: ListView(
-            padding: EdgeInsets.zero,
-            children: [
-              DrawerHeader(
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                ),
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Image.asset(
-                      'assets/branding/logo.png',
-                      fit: BoxFit.contain,
+      drawer: isDesktop
+          ? null
+          : Drawer(
+              child: SafeArea(
+                child: ListView(
+                  padding: EdgeInsets.zero,
+                  children: [
+                    DrawerHeader(
+                      decoration: BoxDecoration(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.surfaceContainerHighest,
+                      ),
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: Image.asset(
+                            'assets/branding/logo.png',
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ),
                     ),
+                    ListTile(title: Text(email), subtitle: Text(subtitle)),
+                    if (signedIn)
+                      ListTile(
+                        leading: const Icon(Icons.cloud_sync_outlined),
+                        title: const Text('Account sync'),
+                        subtitle: Text(
+                          _syncing
+                              ? 'Syncing now…'
+                              : 'Local data synced with account',
+                        ),
+                      ),
+                    ListTile(
+                      leading: const Icon(Icons.category_outlined),
+                      title: const Text('Categories'),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(context).push<void>(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const ManageCategoriesScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    const Divider(height: 1),
+                    if (signedIn) ...[
+                      const _SyncStatusTile(),
+                      ListTile(
+                        leading: const Icon(Icons.sync),
+                        title: Text(_syncing ? 'Syncing…' : 'Sync now'),
+                        subtitle: const Text(
+                          'Pull remote changes into this device',
+                        ),
+                        onTap: _syncing ? null : _syncNow,
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.logout),
+                        title: const Text('Sign out'),
+                        onTap: () async {
+                          Navigator.of(context).pop();
+                          await ref
+                              .read(authControllerProvider.notifier)
+                              .signOut();
+                        },
+                      ),
+                    ] else if (isGuest) ...[
+                      ListTile(
+                        leading: const Icon(Icons.login),
+                        title: const Text('Sign in or create account'),
+                        subtitle: const Text('Enable sync across devices'),
+                        onTap: () async {
+                          Navigator.of(context).pop();
+                          await ref
+                              .read(guestModeControllerProvider.notifier)
+                              .exitGuestMode();
+                        },
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+      body: Row(
+        children: [
+          if (isDesktop)
+            NavigationRail(
+              selectedIndex: _index,
+              onDestinationSelected: (i) => setState(() => _index = i),
+              labelType: NavigationRailLabelType.all,
+              leading: Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: SizedBox(
+                  width: 72,
+                  height: 72,
+                  child: Image.asset(
+                    'assets/branding/app_icon.png',
+                    fit: BoxFit.contain,
                   ),
                 ),
               ),
-              ListTile(title: Text(email), subtitle: Text(subtitle)),
-              if (signedIn)
-                ListTile(
-                  leading: const Icon(Icons.cloud_sync_outlined),
-                  title: const Text('Account sync'),
-                  subtitle: Text(
-                    _syncing
-                        ? 'Syncing now…'
-                        : 'Local data synced with account',
-                  ),
-                ),
-              ListTile(
-                leading: const Icon(Icons.category_outlined),
-                title: const Text('Categories'),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  Navigator.of(context).push<void>(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const ManageCategoriesScreen(),
+              trailing: Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    IconButton(
+                      tooltip: 'Categories',
+                      onPressed: () {
+                        Navigator.of(context).push<void>(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const ManageCategoriesScreen(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.category_outlined),
                     ),
-                  );
-                },
+                    if (signedIn)
+                      IconButton(
+                        tooltip: _syncing ? 'Syncing...' : 'Sync now',
+                        onPressed: _syncing ? null : _syncNow,
+                        icon: const Icon(Icons.sync),
+                      ),
+                    if (isGuest)
+                      IconButton(
+                        tooltip: 'Guest mode',
+                        onPressed: null,
+                        icon: const Icon(Icons.person_outline),
+                      ),
+                    const SizedBox(height: 8),
+                    IconButton(
+                      tooltip: signedIn
+                          ? 'Sign out'
+                          : 'Sign in or create account',
+                      onPressed: () async {
+                        if (signedIn) {
+                          await ref
+                              .read(authControllerProvider.notifier)
+                              .signOut();
+                        } else if (isGuest) {
+                          await ref
+                              .read(guestModeControllerProvider.notifier)
+                              .exitGuestMode();
+                        }
+                      },
+                      icon: Icon(signedIn ? Icons.logout : Icons.login),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                ),
               ),
-              const Divider(height: 1),
-              if (signedIn) ...[
-                const _SyncStatusTile(),
-                ListTile(
-                  leading: const Icon(Icons.sync),
-                  title: Text(_syncing ? 'Syncing…' : 'Sync now'),
-                  subtitle: const Text('Pull remote changes into this device'),
-                  onTap: _syncing ? null : _syncNow,
+              destinations: const [
+                NavigationRailDestination(
+                  icon: Icon(Icons.receipt_long_outlined),
+                  selectedIcon: Icon(Icons.receipt_long),
+                  label: Text('Expenses'),
                 ),
-                ListTile(
-                  leading: const Icon(Icons.logout),
-                  title: const Text('Sign out'),
-                  onTap: () async {
-                    Navigator.of(context).pop();
-                    await ref.read(authControllerProvider.notifier).signOut();
-                  },
+                NavigationRailDestination(
+                  icon: Icon(Icons.subscriptions_outlined),
+                  selectedIcon: Icon(Icons.subscriptions),
+                  label: Text('Subscriptions'),
                 ),
-              ] else if (isGuest) ...[
-                ListTile(
-                  leading: const Icon(Icons.login),
-                  title: const Text('Sign in or create account'),
-                  subtitle: const Text('Enable sync across devices'),
-                  onTap: () async {
-                    Navigator.of(context).pop();
-                    await ref
-                        .read(guestModeControllerProvider.notifier)
-                        .exitGuestMode();
-                  },
+                NavigationRailDestination(
+                  icon: Icon(Icons.insights_outlined),
+                  selectedIcon: Icon(Icons.insights),
+                  label: Text('Insights'),
                 ),
               ],
-            ],
-          ),
-        ),
-      ),
-      body: Column(
-        children: [
-          _ShellStatusBanner(
-            signedIn: signedIn,
-            isGuest: isGuest,
-            syncing: _syncing,
-            cloudSubtitle: _cloudSubtitle(syncStatusAsync),
-            onSyncNow: signedIn && !_syncing ? _syncNow : null,
-          ),
+            ),
           Expanded(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              child: _index == 0
-                  ? ExpenseListScreen(
-                      key: const ValueKey(0),
-                      onOpenDrawer: _openDrawer,
-                    )
-                  : _index == 1
-                  ? SubscriptionListScreen(
-                      key: const ValueKey(1),
-                      onOpenDrawer: _openDrawer,
-                    )
-                  : InsightsScreen(
-                      key: const ValueKey(2),
-                      onOpenDrawer: _openDrawer,
-                    ),
+            child: Column(
+              children: [
+                _ShellStatusBanner(
+                  signedIn: signedIn,
+                  isGuest: isGuest,
+                  syncing: _syncing,
+                  cloudSubtitle: _cloudSubtitle(syncStatusAsync),
+                  onSyncNow: signedIn && !_syncing ? _syncNow : null,
+                ),
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    child: screenChild,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.receipt_long_outlined),
-            selectedIcon: Icon(Icons.receipt_long),
-            label: 'Expenses',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.subscriptions_outlined),
-            selectedIcon: Icon(Icons.subscriptions),
-            label: 'Subscriptions',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.insights_outlined),
-            selectedIcon: Icon(Icons.insights),
-            label: 'Insights',
-          ),
-        ],
-      ),
+      bottomNavigationBar: isDesktop
+          ? null
+          : NavigationBar(
+              selectedIndex: _index,
+              onDestinationSelected: (i) => setState(() => _index = i),
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.receipt_long_outlined),
+                  selectedIcon: Icon(Icons.receipt_long),
+                  label: 'Expenses',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.subscriptions_outlined),
+                  selectedIcon: Icon(Icons.subscriptions),
+                  label: 'Subscriptions',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.insights_outlined),
+                  selectedIcon: Icon(Icons.insights),
+                  label: 'Insights',
+                ),
+              ],
+            ),
     );
   }
 
