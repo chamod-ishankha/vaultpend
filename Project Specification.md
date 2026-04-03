@@ -1,7 +1,7 @@
 # Project Specification: VaultSpend
 
-**Version:** 1.4.1  
-**Status:** Draft  
+**Version:** 1.4.2  
+**Status:** In progress  
 **Last updated:** 2026-04-03  
 **Target platforms:** Android, iOS, Web  
 
@@ -31,7 +31,7 @@
 
 ### 2.3 Data and synchronization
 
-- **Cross-platform parity:** Same logical data model on mobile and web; conflict resolution defined with the sync API (last-write-wins with audit fields or server timestamps—finalize in backend design).
+- **Cross-platform parity:** Same logical data model on mobile and web with a fixed conflict strategy: **last-write-wins using Firestore `updated_at` server timestamps**, plus deterministic tie-break by document id when timestamps are equal.
 - **Export:** Monthly and annual reports as **PDF** and **CSV**.
 - **Secure backup:** Encrypted backups for account recovery (aligned with §7).
 - **Guest mode:** The app must be usable without an account using only local storage; sync features remain disabled until the user signs in.
@@ -77,7 +77,7 @@
 
 - **Client:** Flutter app with Isar (local) + Riverpod.
 - **Cloud services:** Firebase Auth + Cloud Firestore.
-- **Sync:** Authenticated client syncs Firestore documents with server timestamps; client remains local-first with reconciliation on refresh.
+- **Sync:** Authenticated client syncs Firestore documents with server timestamps; client remains local-first with reconciliation on refresh using LWW resolution (`updated_at` precedence).
 
 ### 4.2 Key entities (conceptual)
 
@@ -99,6 +99,7 @@ Indexes and full sync payload shapes belong in the API/database design doc.
    - **Web / desktop:** Navigation rail or sidebar, wider tables and filters, keyboard-friendly entry where possible.
 2. **Visual feedback:** Charts (e.g. spending by category, trend over time) using Flutter charting or `CustomPainter` where custom visuals are needed.
 3. **Dark mode first:** Default to a high-contrast dark theme; light theme as secondary.
+4. **Brand consistency:** Use the VaultSpend logo asset in key identity surfaces (login, splash transition, sidebar header) instead of repeating plain text branding.
 
 **Accessibility:** Respect platform font scaling; sufficient contrast; semantic labels for screen readers on primary flows (add expense, list, subscriptions).
 
@@ -128,7 +129,7 @@ Indexes and full sync payload shapes belong in the API/database design doc.
 | Phase | Backend status |
 | :--- | :--- |
 | **Phase 1** | **Done (client).** Local Isar MVP; optional polish complete. |
-| **Phase 2** | **In progress:** Firebase Auth + Firestore sync wiring, with guest/local-only mode preserved when signed out. |
+| **Phase 2** | **In progress:** Firebase Auth + Firestore sync operational, guest/local-only mode preserved, and UX polish ongoing. |
 
 **Firestore layout (Phase 2+):**
 
@@ -151,10 +152,26 @@ Indexes and full sync payload shapes belong in the API/database design doc.
 - **Data:** Firestore-backed sync for categories, expenses, and subscriptions.
 - **Flutter:** guest/local-only mode, sign-in/out flow, and local-first repositories with cloud sync when signed in.
 
+#### Phase 2 implementation snapshot (2026-04-03)
+
+- [x] Firebase bootstrap + email/password authentication flow integrated in Flutter.
+- [x] Firestore user-scoped collections (`users/{uid}/categories|expenses|subscriptions`) wired into repository sync paths.
+- [x] Guest/local-only mode preserved when signed out.
+- [x] User-facing auth copy standardized to **Cloud sync** wording.
+- [x] Branding pipeline updated and applied (launcher icon, logo, splash assets + key in-app logo placements).
+- [x] Shell banner now surfaces live Cloud sync context, including latest known Cloud update timestamp.
+- [x] Conflict policy documented as LWW via Firestore `updated_at` server timestamps (deterministic tie-break on id).
+- [x] Expense screen CSV export action implemented (share-ready file generation from local data).
+- [x] Subscription screen CSV export action implemented (share-ready file generation from local data).
+- [x] PDF export services implemented for Expenses and Subscriptions with formatted tables, summaries, and burn-rate estimates.
+- [x] Unified export menus (CSV and PDF) wired into both Expense and Subscription screens.
+- [ ] Continue Phase 3 features (web deployment, analytics dashboards, additional reporting).
+
 ### Phase 3: Web and analytics
 
 - Flutter web build and deployment pipeline.
 - Analytics views (e.g. pie charts, trend lines).
+- [x] Insights screen now includes range filters, top key metrics strip, spend trend bars, month-over-month spend comparison with directional indicators, currency split, category distribution, largest subscriptions, recent activity, subscription currency split, subscription burn summaries, and subscription cycle mix.
 - PDF and CSV export (per §3.3).
 
 ### Phase 4: Intelligence and automation
@@ -168,7 +185,6 @@ Indexes and full sync payload shapes belong in the API/database design doc.
 
 | Topic | Options | Note |
 | :--- | :--- | :--- |
-| Sync conflict strategy | LWW vs merge-by-field | Must be fixed before multi-device rollout. |
 | Web push | FCM web vs in-app only | Depends on hosting and browser support. |
 | PDF generation | Client vs server | Depends on template complexity. |
 

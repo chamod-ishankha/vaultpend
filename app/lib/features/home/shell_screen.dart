@@ -4,9 +4,11 @@ import 'package:intl/intl.dart';
 
 import '../../core/providers.dart';
 import '../auth/auth_providers.dart';
+import '../auth/sync_status.dart';
 import '../categories/manage_categories_screen.dart';
 import '../expenses/expense_list_screen.dart';
 import '../expenses/expense_providers.dart';
+import '../insights/insights_screen.dart';
 import '../subscriptions/subscription_list_screen.dart';
 import '../subscriptions/subscription_providers.dart';
 
@@ -49,6 +51,7 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
     final authSession = ref.watch(authControllerProvider).value;
     final isGuest = ref.watch(isGuestModeProvider);
     final signedIn = authSession != null;
+    final syncStatusAsync = signedIn ? ref.watch(syncStatusProvider) : null;
     final email = signedIn ? authSession.user.email : 'Guest mode';
     final subtitle = signedIn ? 'Signed in' : 'Local-only (sync disabled)';
 
@@ -63,11 +66,13 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 ),
-                child: Align(
-                  alignment: Alignment.bottomLeft,
-                  child: Text(
-                    'VaultSpend',
-                    style: Theme.of(context).textTheme.titleLarge,
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Image.asset(
+                      'assets/branding/logo.png',
+                      fit: BoxFit.contain,
+                    ),
                   ),
                 ),
               ),
@@ -134,6 +139,7 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
             signedIn: signedIn,
             isGuest: isGuest,
             syncing: _syncing,
+            cloudSubtitle: _cloudSubtitle(syncStatusAsync),
             onSyncNow: signedIn && !_syncing ? _syncNow : null,
           ),
           Expanded(
@@ -144,8 +150,13 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
                       key: const ValueKey(0),
                       onOpenDrawer: _openDrawer,
                     )
-                  : SubscriptionListScreen(
+                  : _index == 1
+                  ? SubscriptionListScreen(
                       key: const ValueKey(1),
+                      onOpenDrawer: _openDrawer,
+                    )
+                  : InsightsScreen(
+                      key: const ValueKey(2),
                       onOpenDrawer: _openDrawer,
                     ),
             ),
@@ -166,8 +177,35 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
             selectedIcon: Icon(Icons.subscriptions),
             label: 'Subscriptions',
           ),
+          NavigationDestination(
+            icon: Icon(Icons.insights_outlined),
+            selectedIcon: Icon(Icons.insights),
+            label: 'Insights',
+          ),
         ],
       ),
+    );
+  }
+
+  String? _cloudSubtitle(AsyncValue<SyncStatus>? syncStatusAsync) {
+    if (syncStatusAsync == null) {
+      return null;
+    }
+
+    final dateFmt = DateFormat.yMMMd().add_jm();
+    return syncStatusAsync.when(
+      loading: () => 'Checking Cloud sync status…',
+      error: (_, _) => 'Cloud status unavailable right now.',
+      data: (status) {
+        if (status.totalCount == 0) {
+          return 'Connected to Cloud. No synced records yet.';
+        }
+        final latest = status.latestUpdatedAt;
+        if (latest == null) {
+          return 'Connected to Cloud. Waiting for first sync timestamp.';
+        }
+        return 'Last Cloud update: ${dateFmt.format(latest.toLocal())}';
+      },
     );
   }
 }
@@ -177,12 +215,14 @@ class _ShellStatusBanner extends StatelessWidget {
     required this.signedIn,
     required this.isGuest,
     required this.syncing,
+    required this.cloudSubtitle,
     required this.onSyncNow,
   });
 
   final bool signedIn;
   final bool isGuest;
   final bool syncing;
+  final String? cloudSubtitle;
   final VoidCallback? onSyncNow;
 
   @override
@@ -203,7 +243,7 @@ class _ShellStatusBanner extends StatelessWidget {
       title = syncing ? 'Syncing account data' : 'Account sync active';
       subtitle = syncing
           ? 'Pulling remote changes into this device.'
-          : 'Local data can sync with your VaultSpend account.';
+          : (cloudSubtitle ?? 'Local data can sync with your Cloud account.');
       actionLabel = syncing ? null : 'Sync now';
     } else if (isGuest) {
       icon = Icons.person_outline;

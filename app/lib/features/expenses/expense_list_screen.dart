@@ -1,9 +1,16 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 
-import '../../core/fx/fx_providers.dart';
+import '../../core/export/expense_csv_export_service.dart';
 import '../../core/providers.dart';
+import '../../core/export/expense_pdf_export_service.dart';
+import '../../core/fx/fx_providers.dart';
+import '../../core/logging/app_logging.dart';
 import '../../core/widgets/fx_reference_strip.dart';
 import '../../data/models/category.dart';
 import '../../data/models/expense.dart';
@@ -14,6 +21,8 @@ class ExpenseListScreen extends ConsumerWidget {
   const ExpenseListScreen({super.key, this.onOpenDrawer});
 
   final VoidCallback? onOpenDrawer;
+  static const _csvExportService = ExpenseCsvExportService();
+  static const _pdfExportService = ExpensePdfExportService();
 
   Future<void> _onRefresh(WidgetRef ref) async {
     ref.invalidate(expenseListProvider);
@@ -24,6 +33,126 @@ class ExpenseListScreen extends ConsumerWidget {
     ]);
   }
 
+  Future<void> _exportExpensesCsv(BuildContext context, WidgetRef ref) async {
+    final logger = ref.read(appLoggerProvider);
+    logger.info('expense_csv_export_started');
+    try {
+      final expenses = await ref.read(expenseListProvider.future);
+      if (expenses.isEmpty) {
+        logger.info('expense_csv_export_skipped_no_data');
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No expenses to export yet.')),
+        );
+        return;
+      }
+
+      final categoryRepository = ref.read(categoryRepositoryProvider);
+      final categoryNames = <int, String>{};
+      final categoryIds = expenses
+          .map((expense) => expense.categoryId)
+          .whereType<int>()
+          .toSet();
+      for (final categoryId in categoryIds) {
+        final category = await categoryRepository.getById(categoryId);
+        if (category != null) {
+          categoryNames[categoryId] = category.name;
+        }
+      }
+
+      final csv = _csvExportService.buildCsv(
+        expenses: expenses,
+        categoryNames: categoryNames,
+      );
+
+      final stamp = DateFormat('yyyy-MM-dd_HH-mm').format(DateTime.now());
+      final filename = 'vaultspend_expenses_$stamp.csv';
+      final bytes = Uint8List.fromList(utf8.encode(csv));
+
+      await SharePlus.instance.share(
+        ShareParams(
+          subject: 'VaultSpend expenses export',
+          text: 'VaultSpend expenses CSV export',
+          files: [XFile.fromData(bytes, mimeType: 'text/csv', name: filename)],
+        ),
+      );
+
+      logger.info('expense_csv_export_succeeded');
+
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('CSV export prepared: $filename')));
+    } catch (error, stack) {
+      logger.warning('expense_csv_export_failed', error, stack);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('CSV export failed: $error')));
+    }
+  }
+
+  Future<void> _exportExpensesPdf(BuildContext context, WidgetRef ref) async {
+    final logger = ref.read(appLoggerProvider);
+    logger.info('expense_pdf_export_started');
+    try {
+      final expenses = await ref.read(expenseListProvider.future);
+      if (expenses.isEmpty) {
+        logger.info('expense_pdf_export_skipped_no_data');
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No expenses to export yet.')),
+        );
+        return;
+      }
+
+      final categoryRepository = ref.read(categoryRepositoryProvider);
+      final categoryNames = <int, String>{};
+      final categoryIds = expenses
+          .map((expense) => expense.categoryId)
+          .whereType<int>()
+          .toSet();
+      for (final categoryId in categoryIds) {
+        final category = await categoryRepository.getById(categoryId);
+        if (category != null) {
+          categoryNames[categoryId] = category.name;
+        }
+      }
+
+      final pdfDoc = await _pdfExportService.buildPdf(
+        expenses: expenses,
+        categoryNames: categoryNames,
+      );
+
+      final stamp = DateFormat('yyyy-MM-dd_HH-mm').format(DateTime.now());
+      final filename = 'vaultspend_expenses_$stamp.pdf';
+      final bytes = await pdfDoc.save();
+
+      await SharePlus.instance.share(
+        ShareParams(
+          subject: 'VaultSpend expenses report',
+          text: 'VaultSpend expenses PDF report',
+          files: [
+            XFile.fromData(bytes, mimeType: 'application/pdf', name: filename),
+          ],
+        ),
+      );
+
+      logger.info('expense_pdf_export_succeeded');
+
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('PDF export prepared: $filename')));
+    } catch (error, stack) {
+      logger.warning('expense_pdf_export_failed', error, stack);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('PDF export failed: $error')));
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(expenseListProvider);
@@ -32,12 +161,44 @@ class ExpenseListScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         leading: onOpenDrawer != null
-            ? IconButton(
-                icon: const Icon(Icons.menu),
-                onPressed: onOpenDrawer,
-              )
+            ? IconButton(icon: const Icon(Icons.menu), onPressed: onOpenDrawer)
             : null,
         title: const Text('Expenses'),
+        actions: [
+          PopupMenuButton<String>(
+            tooltip: 'Export',
+            icon: const Icon(Icons.download_outlined),
+            onSelected: (value) {
+              if (value == 'csv') {
+                _exportExpensesCsv(context, ref);
+              } else if (value == 'pdf') {
+                _exportExpensesPdf(context, ref);
+              }
+            },
+            itemBuilder: (BuildContext context) => [
+              const PopupMenuItem<String>(
+                value: 'csv',
+                child: Row(
+                  children: [
+                    Icon(Icons.table_chart, size: 18),
+                    SizedBox(width: 8),
+                    Text('Export as CSV'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem<String>(
+                value: 'pdf',
+                child: Row(
+                  children: [
+                    Icon(Icons.picture_as_pdf, size: 18),
+                    SizedBox(width: 8),
+                    Text('Export as PDF'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -59,10 +220,11 @@ class ExpenseListScreen extends ConsumerWidget {
                           child: Text(
                             'No expenses yet.\nTap + to add one.\nPull down to refresh.',
                             textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
+                            style: Theme.of(context).textTheme.bodyLarge
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
                                 ),
                           ),
                         ),

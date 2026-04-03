@@ -15,4 +15,18 @@ class SyncStatus {
   final SyncStatusSection categories;
   final SyncStatusSection expenses;
   final SyncStatusSection subscriptions;
+
+  int get totalCount =>
+      categories.count + expenses.count + subscriptions.count;
+
+  DateTime? get latestUpdatedAt {
+    DateTime? latest;
+    for (final section in [categories, expenses, subscriptions]) {
+      final value = section.lastUpdatedAt;
+      if (value != null && (latest == null || value.isAfter(latest))) {
+        latest = value;
+      }
+    }
+    return latest;
+  }
 }

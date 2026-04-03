@@ -28,7 +28,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     _localError = widget.initialError;
     _statusMessage = isFirebaseReady
         ? 'Cloud sync is available when you sign in.'
-        : 'Firebase is not configured yet. Guest mode is still available.';
+        : 'Cloud sync is not configured yet. Guest mode is still available.';
   }
 
   @override
@@ -75,16 +75,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            const SizedBox(height: 32),
-            Text(
-              'VaultSpend',
-              style: Theme.of(
-                context,
-              ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w600),
+            const SizedBox(height: 24),
+            Align(
+              alignment: Alignment.center,
+              child: Image.asset(
+                'assets/branding/logo.png',
+                height: 150,
+                fit: BoxFit.contain,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
-              'Sign in to sync your data with Firebase.',
+              'Sign in to sync your data with Cloud.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -173,17 +175,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               child: const Text('Create account'),
             ),
             TextButton.icon(
-              onPressed: null,
-              icon: Icon(
-                isFirebaseReady ? Icons.cloud_done_outlined : Icons.cloud_off,
-              ),
-              label: Text(
-                isFirebaseReady
-                    ? 'Firebase configured'
-                    : 'Firebase not configured',
-              ),
-            ),
-            TextButton.icon(
               onPressed: busy
                   ? null
                   : () async {
@@ -196,7 +187,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
             const SizedBox(height: 24),
             Text(
-              'Expenses and subscriptions work offline on this device. Sign in to enable Firebase sync across devices.',
+              'Expenses and subscriptions work offline on this device. Sign in to enable Cloud sync across devices.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Theme.of(context).colorScheme.outline,
               ),

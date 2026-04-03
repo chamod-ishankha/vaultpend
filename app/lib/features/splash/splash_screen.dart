@@ -79,12 +79,10 @@ class _SplashScreenState extends State<SplashScreen>
                     filterQuality: FilterQuality.high,
                   ),
                   const SizedBox(height: 24),
-                  Text(
-                    'VaultSpend',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5,
-                    ),
+                  Image.asset(
+                    'assets/branding/logo.png',
+                    height: 44,
+                    fit: BoxFit.contain,
                   ),
                   const SizedBox(height: 8),
                   Text(
