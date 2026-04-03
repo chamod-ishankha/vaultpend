@@ -1,6 +1,6 @@
 # Project Specification: VaultSpend
 
-**Version:** 1.4.13  
+**Version:** 1.4.14  
 **Status:** In progress  
 **Last updated:** 2026-04-04  
 **Target platforms:** Android, iOS  
@@ -178,6 +178,11 @@ Indexes and full sync payload shapes belong in the API/database design doc.
 - [x] Mock trend mode removed; Insights trend now always reflects live filtered data with currency-scoped plotting.
 - [x] Renewal timing buckets added in Insights upcoming billing summary for due-in-24h and due-in-48h monitoring.
 - [x] Local subscription renewal reminders implemented and auto-synced (24h and 48h before billing) via scheduled mobile notifications.
+- [x] Reminder orchestration moved to app-level lifecycle sync (launch, resume, and periodic in-app checks) so notification triggering is not tied to opening the Subscriptions screen.
+- [x] Subscriptions screen reminder-side effects removed; page navigation no longer re-triggers reminder notifications by itself.
+- [x] Global reminder sync now includes recurring expenses (monthly occurrence model from the saved recurring expense timestamp) with 24h/48h reminder windows.
+- [x] Catch-up reminder behavior hardened for missed windows: when app opens within a 48h or 24h window, immediate local notifications are emitted for due reminder buckets.
+- [x] User-visible date/time formatting standardized across app surfaces and notification copy to `MMM d, yyyy h:mm a`.
 
 ### Phase 4: Intelligence and automation
 
