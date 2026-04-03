@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:isar_community/isar.dart';
 
 import '../../core/providers.dart';
@@ -29,6 +30,7 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
 
   static const _currencies = ['LKR', 'USD', 'EUR'];
   static const _cycles = ['monthly', 'annual', 'custom'];
+  static final _dateTimeFmt = DateFormat('MMM d, yyyy h:mm a');
 
   @override
   void initState() {
@@ -66,9 +68,14 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
-    if (d == null || !context.mounted) return;
+    if (d == null || !mounted) return;
+    final t = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_nextBilling),
+    );
+    if (t == null || !mounted) return;
     setState(() {
-      _nextBilling = DateTime(d.year, d.month, d.day, 12);
+      _nextBilling = DateTime(d.year, d.month, d.day, t.hour, t.minute);
     });
   }
 
@@ -79,8 +86,16 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
-    if (d == null || !context.mounted) return;
-    setState(() => _trialEnds = DateTime(d.year, d.month, d.day, 12));
+    if (d == null || !mounted) return;
+    final existing = _trialEnds ?? DateTime.now();
+    final t = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(existing),
+    );
+    if (t == null || !mounted) return;
+    setState(
+      () => _trialEnds = DateTime(d.year, d.month, d.day, t.hour, t.minute),
+    );
   }
 
   Future<void> _save() async {
@@ -179,10 +194,8 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
             ),
             const SizedBox(height: 16),
             ListTile(
-              title: const Text('Next billing date'),
-              subtitle: Text(
-                _nextBilling.toLocal().toString().split(' ').first,
-              ),
+              title: const Text('Next billing date & time'),
+              subtitle: Text(_dateTimeFmt.format(_nextBilling.toLocal())),
               onTap: _pickNextBilling,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -200,11 +213,11 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
             ),
             if (_trial) ...[
               ListTile(
-                title: const Text('Trial ends'),
+                title: const Text('Trial ends at'),
                 subtitle: Text(
                   _trialEnds == null
                       ? 'Not set'
-                      : _trialEnds!.toLocal().toString().split(' ').first,
+                      : _dateTimeFmt.format(_trialEnds!.toLocal()),
                 ),
                 onTap: _pickTrialEnd,
                 shape: RoundedRectangleBorder(

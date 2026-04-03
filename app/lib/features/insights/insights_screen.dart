@@ -1,10 +1,20 @@
+import 'dart:convert';
+import 'dart:math' as math;
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../core/providers.dart';
+import '../../core/export/insights_csv_export_service.dart';
+import '../../core/export/insights_pdf_export_service.dart';
+import '../../core/logging/app_logging.dart';
+import '../../core/widgets/responsive_layout.dart';
 import '../../data/models/expense.dart';
 import '../../data/models/subscription.dart';
+import '../subscriptions/add_subscription_screen.dart';
 import '../expenses/expense_providers.dart';
 import '../subscriptions/subscription_providers.dart';
 
@@ -25,6 +35,104 @@ class InsightsScreen extends ConsumerWidget {
   const InsightsScreen({super.key, this.onOpenDrawer});
 
   final VoidCallback? onOpenDrawer;
+  static const _csvExportService = InsightsCsvExportService();
+  static const _pdfExportService = InsightsPdfExportService();
+
+  Future<void> _exportInsightsCsv(BuildContext context, WidgetRef ref) async {
+    final logger = ref.read(appLoggerProvider);
+    logger.info('insights_csv_export_started');
+    try {
+      final data = await ref.read(insightsDataProvider.future);
+      if (data.expenses.isEmpty && data.subscriptions.isEmpty) {
+        logger.info('insights_csv_export_skipped_no_data');
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No insights data to export yet.')),
+        );
+        return;
+      }
+
+      final csv = _csvExportService.buildCsv(
+        rangeTitle: 'All Time',
+        expenses: data.expenses,
+        subscriptions: data.subscriptions,
+        categoryNames: data.categoryNames,
+      );
+      final stamp = DateFormat('yyyy-MM-dd_HH-mm').format(DateTime.now());
+      final filename = 'vaultspend_insights_$stamp.csv';
+      final bytes = Uint8List.fromList(utf8.encode(csv));
+
+      await SharePlus.instance.share(
+        ShareParams(
+          subject: 'VaultSpend insights export',
+          text: 'VaultSpend insights CSV export',
+          files: [XFile.fromData(bytes, mimeType: 'text/csv', name: filename)],
+        ),
+      );
+
+      logger.info('insights_csv_export_succeeded');
+
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('CSV export prepared: $filename')));
+    } catch (error, stack) {
+      logger.warning('insights_csv_export_failed', error, stack);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('CSV export failed: $error')));
+    }
+  }
+
+  Future<void> _exportInsightsPdf(BuildContext context, WidgetRef ref) async {
+    final logger = ref.read(appLoggerProvider);
+    logger.info('insights_pdf_export_started');
+    try {
+      final data = await ref.read(insightsDataProvider.future);
+      if (data.expenses.isEmpty && data.subscriptions.isEmpty) {
+        logger.info('insights_pdf_export_skipped_no_data');
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No insights data to export yet.')),
+        );
+        return;
+      }
+
+      final pdfDoc = await _pdfExportService.buildPdf(
+        rangeTitle: 'All Time',
+        expenses: data.expenses,
+        subscriptions: data.subscriptions,
+        categoryNames: data.categoryNames,
+      );
+      final stamp = DateFormat('yyyy-MM-dd_HH-mm').format(DateTime.now());
+      final filename = 'vaultspend_insights_$stamp.pdf';
+      final bytes = await pdfDoc.save();
+
+      await SharePlus.instance.share(
+        ShareParams(
+          subject: 'VaultSpend insights report',
+          text: 'VaultSpend insights PDF report',
+          files: [
+            XFile.fromData(bytes, mimeType: 'application/pdf', name: filename),
+          ],
+        ),
+      );
+
+      logger.info('insights_pdf_export_succeeded');
+
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('PDF export prepared: $filename')));
+    } catch (error, stack) {
+      logger.warning('insights_pdf_export_failed', error, stack);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('PDF export failed: $error')));
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -36,17 +144,65 @@ class InsightsScreen extends ConsumerWidget {
             ? IconButton(icon: const Icon(Icons.menu), onPressed: onOpenDrawer)
             : null,
         title: const Text('Insights'),
+        actions: [
+          PopupMenuButton<String>(
+            tooltip: 'Export report',
+            icon: const Icon(Icons.download_outlined),
+            onSelected: (value) {
+              if (value == 'csv') {
+                _exportInsightsCsv(context, ref);
+              } else if (value == 'pdf') {
+                _exportInsightsPdf(context, ref);
+              }
+            },
+            itemBuilder: (BuildContext context) => const [
+              PopupMenuItem<String>(
+                value: 'csv',
+                child: Row(
+                  children: [
+                    Icon(Icons.table_chart, size: 18),
+                    SizedBox(width: 8),
+                    Text('Export as CSV'),
+                  ],
+                ),
+              ),
+              PopupMenuItem<String>(
+                value: 'pdf',
+                child: Row(
+                  children: [
+                    Icon(Icons.picture_as_pdf, size: 18),
+                    SizedBox(width: 8),
+                    Text('Export as PDF'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
-      body: async.when(
-        data: (data) => _InsightsContent(data: data),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('$error')),
+      body: ResponsiveBody(
+        child: async.when(
+          data: (data) => _InsightsContent(data: data),
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, _) => Center(child: Text('$error')),
+        ),
       ),
     );
   }
 }
 
 enum _InsightsRange { sevenDays, thirtyDays, ninetyDays, all }
+
+enum _BillingWindow { sevenDays, thirtyDays, sixtyDays }
+
+const _insightPalette = [
+  Color(0xFF00A6FB),
+  Color(0xFFFF006E),
+  Color(0xFFFB5607),
+  Color(0xFF8338EC),
+  Color(0xFF3A86FF),
+  Color(0xFF06D6A0),
+];
 
 class _InsightsData {
   _InsightsData({
@@ -71,17 +227,18 @@ class _InsightsContent extends StatelessWidget {
   }
 }
 
-class _InsightsDashboard extends StatefulWidget {
+class _InsightsDashboard extends ConsumerStatefulWidget {
   const _InsightsDashboard({required this.data});
 
   final _InsightsData data;
 
   @override
-  State<_InsightsDashboard> createState() => _InsightsDashboardState();
+  ConsumerState<_InsightsDashboard> createState() => _InsightsDashboardState();
 }
 
-class _InsightsDashboardState extends State<_InsightsDashboard> {
+class _InsightsDashboardState extends ConsumerState<_InsightsDashboard> {
   _InsightsRange _range = _InsightsRange.thirtyDays;
+  _BillingWindow _billingWindow = _BillingWindow.thirtyDays;
 
   @override
   Widget build(BuildContext context) {
@@ -151,9 +308,36 @@ class _InsightsDashboardState extends State<_InsightsDashboard> {
       ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
     final recentSubscriptions = widget.data.subscriptions.toList()
       ..sort((a, b) => b.nextBillingDate.compareTo(a.nextBillingDate));
+    final recurringExpenses = filteredExpenses.where((e) => e.isRecurring);
+    final recurringByCurrency = <String, double>{};
+    for (final expense in recurringExpenses) {
+      recurringByCurrency.update(
+        expense.currency,
+        (v) => v + expense.amount,
+        ifAbsent: () => expense.amount,
+      );
+    }
+
+    final upcomingBillings = _upcomingBillings(
+      widget.data.subscriptions,
+      _billingWindowDuration(_billingWindow),
+    );
+    final upcomingByCurrency = <String, double>{};
+    for (final subscription in upcomingBillings) {
+      upcomingByCurrency.update(
+        subscription.currency,
+        (v) => v + subscription.amount,
+        ifAbsent: () => subscription.amount,
+      );
+    }
+    final upcomingTrialCount = upcomingBillings.where((s) => s.isTrial).length;
 
     final numberFmt = NumberFormat('#,##0.00');
-    final trendPoints = _buildTrendPoints(filteredExpenses);
+    final trendCurrency = _dominantCurrency(filteredExpenses);
+    final trendPoints = _buildTrendPoints(
+      filteredExpenses,
+      currency: trendCurrency,
+    );
     final peakTrendValue = trendPoints.isEmpty
         ? 0.0
         : trendPoints.map((e) => e.amount).reduce((a, b) => a > b ? a : b);
@@ -161,6 +345,106 @@ class _InsightsDashboardState extends State<_InsightsDashboard> {
     final increasingCurrencies = monthComparison.rows
         .where((row) => row.delta > 0)
         .length;
+
+    final detailCards = <Widget>[
+      _InfoCard(
+        title: _rangeTitle(),
+        lines: [
+          'Expenses logged: ${filteredExpenses.length}',
+          if (expenseByCurrency.isEmpty)
+            'No expense totals yet'
+          else
+            ...expenseByCurrency.entries.map(
+              (e) => 'Spent (${e.key}): ${numberFmt.format(e.value)}',
+            ),
+        ],
+      ),
+      _CurrencyBreakdownCard(
+        title: 'Expense Currency Split',
+        entries: expenseCurrencyEntries,
+        numberFmt: numberFmt,
+      ),
+      _CategoryDistributionCard(
+        title: 'Category Distribution',
+        entries: categoryEntries,
+        numberFmt: numberFmt,
+      ),
+      _InfoCard(
+        title: 'Subscriptions',
+        lines: [
+          'Active subscriptions: ${widget.data.subscriptions.length}',
+          if (monthlyBurnByCurrency.isEmpty)
+            'No subscription totals yet'
+          else
+            ...monthlyBurnByCurrency.entries.map(
+              (e) =>
+                  'Est. monthly burn (${e.key}): ${numberFmt.format(e.value)}',
+            ),
+        ],
+      ),
+      _InfoCard(
+        title: 'Recurring Expenses',
+        lines: [
+          'Recurring entries in ${_rangeTitle().toLowerCase()}: ${recurringExpenses.length}',
+          if (recurringByCurrency.isEmpty)
+            'No recurring expense totals yet'
+          else
+            ...recurringByCurrency.entries.map(
+              (e) => 'Recurring spend (${e.key}): ${numberFmt.format(e.value)}',
+            ),
+        ],
+      ),
+      _UpcomingBillingCard(
+        subscriptions: upcomingBillings,
+        totalsByCurrency: upcomingByCurrency,
+        trialCount: upcomingTrialCount,
+        window: _billingWindow,
+        onWindowChanged: (window) => setState(() => _billingWindow = window),
+        onSubscriptionTap: (subscription) async {
+          await Navigator.of(context).push<void>(
+            MaterialPageRoute(
+              builder: (_) => AddSubscriptionScreen(subscription: subscription),
+            ),
+          );
+          ref.invalidate(insightsDataProvider);
+        },
+        numberFmt: numberFmt,
+      ),
+      _CurrencyBreakdownCard(
+        title: 'Subscription Currency Split',
+        entries: subscriptionCurrencyEntries,
+        numberFmt: numberFmt,
+      ),
+      _InfoCard(
+        title: 'Subscription Cycle Mix',
+        lines: cycleEntries.isEmpty
+            ? const ['No subscription cycle data yet']
+            : cycleEntries
+                  .map(
+                    (entry) =>
+                        '${entry.key}: ${entry.value.count} items, est. monthly burn ${numberFmt.format(entry.value.monthlyBurn)}',
+                  )
+                  .toList(),
+      ),
+      _LargeSubscriptionsCard(
+        subscriptions: largestSubscriptions,
+        numberFmt: numberFmt,
+      ),
+      _RecentActivityCard(
+        recentExpenses: recentExpenses,
+        recentSubscriptions: recentSubscriptions,
+        numberFmt: numberFmt,
+      ),
+      _InfoCard(
+        title: 'Top Categories (This Month)',
+        lines: topCategories.isEmpty
+            ? const ['No category spend yet']
+            : topCategories
+                  .take(5)
+                  .map((e) => '${e.key}: ${numberFmt.format(e.value)}')
+                  .toList(),
+      ),
+    ];
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -189,100 +473,31 @@ class _InsightsDashboardState extends State<_InsightsDashboard> {
           title: _rangeTitle(),
           points: trendPoints,
           peakValue: peakTrendValue,
+          valueSuffix: trendCurrency,
           numberFmt: numberFmt,
         ),
         const SizedBox(height: 12),
         _MonthOverMonthCard(comparison: monthComparison, numberFmt: numberFmt),
         const SizedBox(height: 12),
-        _InfoCard(
-          title: _rangeTitle(),
-          lines: [
-            'Expenses logged: ${filteredExpenses.length}',
-            if (expenseByCurrency.isEmpty)
-              'No expense totals yet'
-            else
-              ...expenseByCurrency.entries.map(
-                (e) => 'Spent (${e.key}): ${numberFmt.format(e.value)}',
-              ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        _CurrencyBreakdownCard(
-          title: 'Expense Currency Split',
-          entries: expenseCurrencyEntries,
-          numberFmt: numberFmt,
-        ),
-        const SizedBox(height: 12),
-        _CategoryDistributionCard(
-          title: 'Category Distribution',
-          entries: categoryEntries,
-          numberFmt: numberFmt,
-        ),
-        const SizedBox(height: 12),
-        _InfoCard(
-          title: 'Subscriptions',
-          lines: [
-            'Active subscriptions: ${widget.data.subscriptions.length}',
-            if (monthlyBurnByCurrency.isEmpty)
-              'No subscription totals yet'
-            else
-              ...monthlyBurnByCurrency.entries.map(
-                (e) =>
-                    'Est. monthly burn (${e.key}): ${numberFmt.format(e.value)}',
-              ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        _CurrencyBreakdownCard(
-          title: 'Subscription Currency Split',
-          entries: subscriptionCurrencyEntries,
-          numberFmt: numberFmt,
-        ),
-        const SizedBox(height: 12),
-        _InfoCard(
-          title: 'Subscription Cycle Mix',
-          lines: cycleEntries.isEmpty
-              ? const ['No subscription cycle data yet']
-              : cycleEntries
-                    .map(
-                      (entry) =>
-                          '${entry.key}: ${entry.value.count} items, est. monthly burn ${numberFmt.format(entry.value.monthlyBurn)}',
-                    )
-                    .toList(),
-        ),
-        const SizedBox(height: 12),
-        _LargeSubscriptionsCard(
-          subscriptions: largestSubscriptions,
-          numberFmt: numberFmt,
-        ),
-        const SizedBox(height: 12),
-        _RecentActivityCard(
-          recentExpenses: recentExpenses,
-          recentSubscriptions: recentSubscriptions,
-          numberFmt: numberFmt,
-        ),
-        const SizedBox(height: 12),
-        _InfoCard(
-          title: 'Top Categories (This Month)',
-          lines: topCategories.isEmpty
-              ? const ['No category spend yet']
-              : topCategories
-                    .take(5)
-                    .map((e) => '${e.key}: ${numberFmt.format(e.value)}')
-                    .toList(),
-        ),
+        ..._withSpacing(detailCards),
       ],
     );
   }
 
+  List<Widget> _withSpacing(List<Widget> widgets) {
+    final out = <Widget>[];
+    for (var i = 0; i < widgets.length; i++) {
+      out.add(widgets[i]);
+      if (i != widgets.length - 1) {
+        out.add(const SizedBox(height: 12));
+      }
+    }
+    return out;
+  }
+
   List<Expense> _filteredExpenses(List<Expense> expenses) {
     final now = DateTime.now();
-    final start = switch (_range) {
-      _InsightsRange.sevenDays => DateTime(now.year, now.month, now.day - 6),
-      _InsightsRange.thirtyDays => DateTime(now.year, now.month, now.day - 29),
-      _InsightsRange.ninetyDays => DateTime(now.year, now.month, now.day - 89),
-      _InsightsRange.all => DateTime.fromMillisecondsSinceEpoch(0),
-    };
+    final start = _rangeStart(now);
     return expenses.where((e) => !e.occurredAt.isBefore(start)).toList();
   }
 
@@ -316,13 +531,45 @@ class _InsightsDashboardState extends State<_InsightsDashboard> {
     return cycle.isEmpty ? 'Other' : cycle;
   }
 
-  List<_TrendPoint> _buildTrendPoints(List<Expense> expenses) {
+  List<Subscription> _upcomingBillings(
+    List<Subscription> subscriptions,
+    Duration window,
+  ) {
+    final now = DateTime.now();
+    final end = now.add(window);
+    final result = subscriptions.where((subscription) {
+      final billing = subscription.nextBillingDate;
+      return !billing.isBefore(now) && !billing.isAfter(end);
+    }).toList();
+    result.sort((a, b) => a.nextBillingDate.compareTo(b.nextBillingDate));
+    return result;
+  }
+
+  Duration _billingWindowDuration(_BillingWindow window) {
+    return switch (window) {
+      _BillingWindow.sevenDays => const Duration(days: 7),
+      _BillingWindow.thirtyDays => const Duration(days: 30),
+      _BillingWindow.sixtyDays => const Duration(days: 60),
+    };
+  }
+
+  List<_TrendPoint> _buildTrendPoints(
+    List<Expense> expenses, {
+    String? currency,
+  }) {
     if (expenses.isEmpty) {
       return const [];
     }
 
+    final scoped = currency == null
+        ? expenses
+        : expenses.where((expense) => expense.currency == currency).toList();
+    if (scoped.isEmpty) {
+      return const [];
+    }
+
     final byDay = <DateTime, double>{};
-    for (final expense in expenses) {
+    for (final expense in scoped) {
       final day = DateTime(
         expense.occurredAt.year,
         expense.occurredAt.month,
@@ -335,8 +582,49 @@ class _InsightsDashboardState extends State<_InsightsDashboard> {
       );
     }
 
-    final days = byDay.keys.toList()..sort();
-    return [for (final day in days) _TrendPoint(day, byDay[day] ?? 0)];
+    final now = DateTime.now();
+    final sortedDays = byDay.keys.toList()..sort();
+    final start = _range == _InsightsRange.all
+        ? sortedDays.first
+        : _rangeStart(now);
+    final end = _range == _InsightsRange.all
+        ? sortedDays.last
+        : DateTime(now.year, now.month, now.day);
+
+    final points = <_TrendPoint>[];
+    var cursor = DateTime(start.year, start.month, start.day);
+    final endDay = DateTime(end.year, end.month, end.day);
+    while (!cursor.isAfter(endDay)) {
+      points.add(_TrendPoint(cursor, byDay[cursor] ?? 0));
+      cursor = cursor.add(const Duration(days: 1));
+    }
+    return points;
+  }
+
+  String? _dominantCurrency(List<Expense> expenses) {
+    if (expenses.isEmpty) {
+      return null;
+    }
+    final totals = <String, double>{};
+    for (final expense in expenses) {
+      totals.update(
+        expense.currency,
+        (value) => value + expense.amount,
+        ifAbsent: () => expense.amount,
+      );
+    }
+    final entries = totals.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return entries.first.key;
+  }
+
+  DateTime _rangeStart(DateTime now) {
+    return switch (_range) {
+      _InsightsRange.sevenDays => DateTime(now.year, now.month, now.day - 6),
+      _InsightsRange.thirtyDays => DateTime(now.year, now.month, now.day - 29),
+      _InsightsRange.ninetyDays => DateTime(now.year, now.month, now.day - 89),
+      _InsightsRange.all => DateTime.fromMillisecondsSinceEpoch(0),
+    };
   }
 
   _MonthComparison _buildMonthComparison(List<Expense> expenses) {
@@ -492,12 +780,14 @@ class _TrendChartCard extends StatelessWidget {
     required this.title,
     required this.points,
     required this.peakValue,
+    required this.valueSuffix,
     required this.numberFmt,
   });
 
   final String title;
   final List<_TrendPoint> points;
   final double peakValue;
+  final String? valueSuffix;
   final NumberFormat numberFmt;
 
   @override
@@ -517,53 +807,148 @@ class _TrendChartCard extends StatelessWidget {
             const SizedBox(height: 16),
             if (points.isEmpty)
               const Text('No expense data in this range yet')
-            else
+            else ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Peak: ${numberFmt.format(peakValue)}${valueSuffix == null ? '' : ' $valueSuffix'}',
+                    style: Theme.of(context).textTheme.labelMedium,
+                  ),
+                  Text(
+                    'Days: ${points.length}',
+                    style: Theme.of(context).textTheme.labelMedium,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
               SizedBox(
-                height: 180,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    for (final point in points) ...[
-                      Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            Text(
-                              numberFmt.format(point.amount),
-                              style: Theme.of(context).textTheme.labelSmall,
-                            ),
-                            const SizedBox(height: 6),
-                            Container(
-                              height: 120,
-                              alignment: Alignment.bottomCenter,
-                              child: Container(
-                                width: 18,
-                                height: peakValue == 0
-                                    ? 0
-                                    : 120 * (point.amount / peakValue),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.primary,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              DateFormat.MMMd().format(point.day),
-                              style: Theme.of(context).textTheme.labelSmall,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                    ],
-                  ],
+                width: double.infinity,
+                height: 190,
+                child: CustomPaint(
+                  painter: _TrendLineChartPainter(
+                    points: points,
+                    maxValue: peakValue,
+                    lineColor: _insightPalette.first,
+                    fillColor: _insightPalette.first.withValues(alpha: 0.16),
+                    gridColor: Theme.of(context).colorScheme.outlineVariant,
+                  ),
                 ),
               ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    DateFormat('MMM d, yyyy h:mm a').format(points.first.day),
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+                  Text(
+                    DateFormat('MMM d, yyyy h:mm a').format(points.last.day),
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
     );
+  }
+}
+
+class _TrendLineChartPainter extends CustomPainter {
+  _TrendLineChartPainter({
+    required this.points,
+    required this.maxValue,
+    required this.lineColor,
+    required this.fillColor,
+    required this.gridColor,
+  });
+
+  final List<_TrendPoint> points;
+  final double maxValue;
+  final Color lineColor;
+  final Color fillColor;
+  final Color gridColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (points.isEmpty || maxValue <= 0) {
+      return;
+    }
+
+    const horizontalPadding = 8.0;
+    const verticalPadding = 8.0;
+    final chartRect = Rect.fromLTWH(
+      horizontalPadding,
+      verticalPadding,
+      size.width - horizontalPadding * 2,
+      size.height - verticalPadding * 2,
+    );
+    if (chartRect.width <= 0 || chartRect.height <= 0) {
+      return;
+    }
+
+    final gridPaint = Paint()
+      ..color = gridColor.withValues(alpha: 0.45)
+      ..strokeWidth = 1;
+    for (var i = 0; i <= 4; i++) {
+      final y = chartRect.top + (chartRect.height * i / 4);
+      canvas.drawLine(
+        Offset(chartRect.left, y),
+        Offset(chartRect.right, y),
+        gridPaint,
+      );
+    }
+
+    final pointOffsets = <Offset>[];
+    for (var i = 0; i < points.length; i++) {
+      final x = points.length == 1
+          ? chartRect.center.dx
+          : chartRect.left + (chartRect.width * i / (points.length - 1));
+      final normalized = points[i].amount / maxValue;
+      final y = chartRect.bottom - (normalized * chartRect.height);
+      pointOffsets.add(Offset(x, y));
+    }
+
+    final linePath = Path()
+      ..moveTo(pointOffsets.first.dx, pointOffsets.first.dy);
+    for (var i = 1; i < pointOffsets.length; i++) {
+      linePath.lineTo(pointOffsets[i].dx, pointOffsets[i].dy);
+    }
+
+    final fillPath = Path.from(linePath)
+      ..lineTo(pointOffsets.last.dx, chartRect.bottom)
+      ..lineTo(pointOffsets.first.dx, chartRect.bottom)
+      ..close();
+
+    final fillPaint = Paint()..color = fillColor;
+    canvas.drawPath(fillPath, fillPaint);
+
+    final linePaint = Paint()
+      ..color = lineColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    canvas.drawPath(linePath, linePaint);
+
+    if (pointOffsets.length <= 16) {
+      final pointPaint = Paint()..color = lineColor;
+      for (final offset in pointOffsets) {
+        canvas.drawCircle(offset, 3.5, pointPaint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _TrendLineChartPainter oldDelegate) {
+    return oldDelegate.points != points ||
+        oldDelegate.maxValue != maxValue ||
+        oldDelegate.lineColor != lineColor ||
+        oldDelegate.fillColor != fillColor ||
+        oldDelegate.gridColor != gridColor;
   }
 }
 
@@ -574,13 +959,30 @@ class _KeyMetricsStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        for (final metric in metrics)
-          _MetricTile(label: metric.label, value: metric.value),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const spacing = 8.0;
+        const maxColumns = 4;
+        const minTileWidth = 148.0;
+        final maxWidth = constraints.maxWidth;
+        final estimatedColumns = (maxWidth / (minTileWidth + spacing))
+            .floor()
+            .clamp(1, maxColumns);
+        final columns = estimatedColumns.toInt();
+        final tileWidth = (maxWidth - (spacing * (columns - 1))) / columns;
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: [
+            for (final metric in metrics)
+              SizedBox(
+                width: tileWidth,
+                child: _MetricTile(label: metric.label, value: metric.value),
+              ),
+          ],
+        );
+      },
     );
   }
 }
@@ -593,30 +995,26 @@ class _MetricTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = (MediaQuery.sizeOf(context).width - 48) / 2;
-    return SizedBox(
-      width: width,
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                value,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              value,
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -725,6 +1123,8 @@ class _CategoryDistributionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final peak = entries.isEmpty ? 0.0 : entries.first.value;
+    final topEntries = entries.take(6).toList();
+    final total = topEntries.fold<double>(0, (sum, entry) => sum + entry.value);
 
     return Card(
       child: Padding(
@@ -738,52 +1138,165 @@ class _CategoryDistributionCard extends StatelessWidget {
                 context,
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 32),
             if (entries.isEmpty)
               const Text('No category spend yet')
-            else
-              ...entries
-                  .take(6)
-                  .map(
-                    (entry) => Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
+            else ...[
+              Center(
+                child: SizedBox(
+                  width: 168,
+                  height: 168,
+                  child: CustomPaint(
+                    painter: _DonutChartPainter(
+                      values: [for (final entry in topEntries) entry.value],
+                      colors: [
+                        for (var i = 0; i < topEntries.length; i++)
+                          _insightPalette[i % _insightPalette.length],
+                      ],
+                      trackColor: Theme.of(
+                        context,
+                      ).colorScheme.surfaceContainerHighest,
+                    ),
+                    child: Center(
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  entry.key,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodyMedium
-                                      ?.copyWith(fontWeight: FontWeight.w600),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(numberFmt.format(entry.value)),
-                            ],
+                          Text(
+                            'Total',
+                            style: Theme.of(context).textTheme.labelLarge,
                           ),
-                          const SizedBox(height: 6),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(999),
-                            child: LinearProgressIndicator(
-                              minHeight: 8,
-                              value: peak == 0 ? 0 : entry.value / peak,
-                              backgroundColor: Theme.of(
-                                context,
-                              ).colorScheme.surfaceContainerHighest,
-                            ),
+                          Text(
+                            numberFmt.format(total),
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w700),
                           ),
                         ],
                       ),
                     ),
                   ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              ...topEntries.asMap().entries.map((mapped) {
+                final index = mapped.key;
+                final entry = mapped.value;
+                final color = _insightPalette[index % _insightPalette.length];
+                final pct = total == 0 ? 0 : (entry.value / total) * 100;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 12,
+                            height: 12,
+                            decoration: BoxDecoration(
+                              color: color,
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              entry.key,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text('${pct.toStringAsFixed(1)}%'),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(999),
+                              child: LinearProgressIndicator(
+                                minHeight: 8,
+                                value: peak == 0 ? 0 : entry.value / peak,
+                                backgroundColor: Theme.of(
+                                  context,
+                                ).colorScheme.surfaceContainerHighest,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  color,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(numberFmt.format(entry.value)),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
           ],
         ),
       ),
     );
+  }
+}
+
+class _DonutChartPainter extends CustomPainter {
+  _DonutChartPainter({
+    required this.values,
+    required this.colors,
+    required this.trackColor,
+  });
+
+  final List<double> values;
+  final List<Color> colors;
+  final Color trackColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.isEmpty) {
+      return;
+    }
+    final total = values.fold<double>(0, (sum, value) => sum + value);
+    if (total <= 0) {
+      return;
+    }
+
+    final strokeWidth = size.shortestSide * 0.2;
+    final rect = Offset.zero & size;
+
+    final trackPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.butt
+      ..color = trackColor;
+    canvas.drawArc(rect, 0, math.pi * 2, false, trackPaint);
+
+    var startAngle = -math.pi / 2;
+    const gap = 0.03;
+
+    for (var i = 0; i < values.length; i++) {
+      final rawSweep = (values[i] / total) * math.pi * 2;
+      final sweepAngle = rawSweep > gap ? rawSweep - gap : rawSweep;
+      final paint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..strokeCap = StrokeCap.butt
+        ..color = colors[i % colors.length];
+      canvas.drawArc(rect, startAngle, sweepAngle, false, paint);
+      startAngle += rawSweep;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DonutChartPainter oldDelegate) {
+    return oldDelegate.values != values ||
+        oldDelegate.colors != colors ||
+        oldDelegate.trackColor != trackColor;
   }
 }
 
@@ -818,8 +1331,12 @@ class _CurrencyBreakdownCard extends StatelessWidget {
             if (entries.isEmpty)
               const Text('No expense currency data yet')
             else
-              ...entries.map(
-                (entry) => Padding(
+              ...entries.asMap().entries.map((mapped) {
+                final index = mapped.key;
+                final entry = mapped.value;
+                final color = _insightPalette[index % _insightPalette.length];
+
+                return Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -827,10 +1344,23 @@ class _CurrencyBreakdownCard extends StatelessWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            entry.key,
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(fontWeight: FontWeight.w600),
+                          Row(
+                            children: [
+                              Container(
+                                width: 10,
+                                height: 10,
+                                decoration: BoxDecoration(
+                                  color: color,
+                                  borderRadius: BorderRadius.circular(99),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                entry.key,
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(fontWeight: FontWeight.w600),
+                              ),
+                            ],
                           ),
                           Text(numberFmt.format(entry.value)),
                         ],
@@ -844,12 +1374,13 @@ class _CurrencyBreakdownCard extends StatelessWidget {
                           backgroundColor: Theme.of(
                             context,
                           ).colorScheme.surfaceContainerHighest,
+                          valueColor: AlwaysStoppedAnimation<Color>(color),
                         ),
                       ),
                     ],
                   ),
-                ),
-              ),
+                );
+              }),
           ],
         ),
       ),
@@ -911,7 +1442,7 @@ class _LargeSubscriptionsCard extends StatelessWidget {
                           ),
                           const SizedBox(width: 12),
                           Text(
-                            'Next ${DateFormat.MMMd().format(subscription.nextBillingDate)}',
+                            'Next ${DateFormat('MMM d, yyyy h:mm a').format(subscription.nextBillingDate)}',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                         ],
@@ -922,6 +1453,192 @@ class _LargeSubscriptionsCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _UpcomingBillingCard extends StatelessWidget {
+  const _UpcomingBillingCard({
+    required this.subscriptions,
+    required this.totalsByCurrency,
+    required this.trialCount,
+    required this.window,
+    required this.onWindowChanged,
+    required this.onSubscriptionTap,
+    required this.numberFmt,
+  });
+
+  final List<Subscription> subscriptions;
+  final Map<String, double> totalsByCurrency;
+  final int trialCount;
+  final _BillingWindow window;
+  final ValueChanged<_BillingWindow> onWindowChanged;
+  final ValueChanged<Subscription> onSubscriptionTap;
+  final NumberFormat numberFmt;
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = totalsByCurrency.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final dateFmt = DateFormat('MMM d, yyyy h:mm a');
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final title = switch (window) {
+      _BillingWindow.sevenDays => 'Upcoming Billings (Next 7 Days)',
+      _BillingWindow.thirtyDays => 'Upcoming Billings (Next 30 Days)',
+      _BillingWindow.sixtyDays => 'Upcoming Billings (Next 60 Days)',
+    };
+    final overdueCount = subscriptions
+        .where(
+          (subscription) =>
+              _dayDifferenceFromToday(subscription.nextBillingDate, today) < 0,
+        )
+        .length;
+    final dueSoonCount = subscriptions.where((subscription) {
+      final daysAway = _dayDifferenceFromToday(
+        subscription.nextBillingDate,
+        today,
+      );
+      return daysAway >= 0 && daysAway <= 3;
+    }).length;
+    final dueWithin24hCount = subscriptions.where((subscription) {
+      final diff = subscription.nextBillingDate.difference(now);
+      return !diff.isNegative && diff.inHours <= 24;
+    }).length;
+    final dueWithin48hCount = subscriptions.where((subscription) {
+      final diff = subscription.nextBillingDate.difference(now);
+      return !diff.isNegative && diff.inHours > 24 && diff.inHours <= 48;
+    }).length;
+    final expiredTrialCount = subscriptions.where((subscription) {
+      if (!subscription.isTrial || subscription.trialEndsAt == null) {
+        return false;
+      }
+      return _dayDifferenceFromToday(subscription.trialEndsAt!, today) < 0;
+    }).length;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final entry in {
+                  _BillingWindow.sevenDays: '7D',
+                  _BillingWindow.thirtyDays: '30D',
+                  _BillingWindow.sixtyDays: '60D',
+                }.entries)
+                  ChoiceChip(
+                    label: Text(entry.value),
+                    selected: window == entry.key,
+                    onSelected: (_) => onWindowChanged(entry.key),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text('Scheduled payments: ${subscriptions.length}'),
+            Text('Trial renewals in window: $trialCount'),
+            Text('Overdue: $overdueCount · Due soon: $dueSoonCount'),
+            Text('Due <24h: $dueWithin24hCount · Due <48h: $dueWithin48hCount'),
+            if (expiredTrialCount > 0)
+              Text(
+                'Expired trials: $expiredTrialCount',
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            const SizedBox(height: 8),
+            if (entries.isEmpty)
+              const Text('No upcoming billings in this window')
+            else ...[
+              ...entries.map(
+                (entry) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text('${entry.key}: ${numberFmt.format(entry.value)}'),
+                ),
+              ),
+              ...subscriptions.take(5).map((subscription) {
+                final daysAway = _dayDifferenceFromToday(
+                  subscription.nextBillingDate,
+                  today,
+                );
+                final isOverdue = daysAway < 0;
+                final dueToday = daysAway == 0;
+                final dueSoon = daysAway > 0 && daysAway <= 3;
+                final urgent = isOverdue || dueToday || dueSoon;
+                final billingStatus = isOverdue
+                    ? 'Overdue by ${-daysAway}d'
+                    : dueToday
+                    ? 'Due today'
+                    : dueSoon
+                    ? 'Due in ${daysAway}d'
+                    : null;
+                final trialStatus = _trialStatusText(subscription, today);
+                final subtitle = [
+                  '${dateFmt.format(subscription.nextBillingDate)} · ${subscription.currency} ${numberFmt.format(subscription.amount)}',
+                  ?trialStatus,
+                  ?billingStatus,
+                ].join(' · ');
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      isOverdue
+                          ? Icons.warning_rounded
+                          : urgent
+                          ? Icons.notifications_active
+                          : Icons.receipt_long,
+                      color: isOverdue
+                          ? Theme.of(context).colorScheme.error
+                          : urgent
+                          ? Theme.of(context).colorScheme.error
+                          : Theme.of(context).colorScheme.primary,
+                    ),
+                    title: Text(subscription.name),
+                    subtitle: Text(subtitle),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => onSubscriptionTap(subscription),
+                  ),
+                );
+              }),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  int _dayDifferenceFromToday(DateTime value, DateTime today) {
+    final day = DateTime(value.year, value.month, value.day);
+    return day.difference(today).inDays;
+  }
+
+  String? _trialStatusText(Subscription subscription, DateTime today) {
+    if (!subscription.isTrial) {
+      return null;
+    }
+    final trialEnds = subscription.trialEndsAt;
+    if (trialEnds == null) {
+      return 'Trial';
+    }
+    final days = _dayDifferenceFromToday(trialEnds, today);
+    if (days < 0) {
+      return 'Trial expired ${-days}d ago';
+    }
+    if (days == 0) {
+      return 'Trial ends today';
+    }
+    return 'Trial ends in ${days}d';
   }
 }
 
@@ -938,7 +1655,7 @@ class _RecentActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dateFmt = DateFormat.yMMMd().add_jm();
+    final dateFmt = DateFormat('MMM d, yyyy h:mm a');
 
     return Card(
       child: Padding(

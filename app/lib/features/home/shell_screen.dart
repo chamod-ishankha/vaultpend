@@ -295,7 +295,7 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
       return null;
     }
 
-    final dateFmt = DateFormat.yMMMd().add_jm();
+    final dateFmt = DateFormat('MMM d, yyyy h:mm a');
     return syncStatusAsync.when(
       loading: () => 'Checking Cloud sync status…',
       error: (_, _) => 'Cloud status unavailable right now.',
@@ -411,7 +411,7 @@ class _SyncStatusTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(syncStatusProvider);
-    final dateFmt = DateFormat.yMMMd().add_jm();
+    final dateFmt = DateFormat('MMM d, yyyy h:mm a');
 
     return async.when(
       loading: () => const ListTile(

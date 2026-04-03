@@ -12,7 +12,7 @@ class FxReferenceStrip extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(fxRatesProvider);
     final scheme = Theme.of(context).colorScheme;
-    final dateFmt = DateFormat.yMMMd();
+    final dateFmt = DateFormat('MMM d, yyyy h:mm a');
 
     return async.when(
       data: (snap) {

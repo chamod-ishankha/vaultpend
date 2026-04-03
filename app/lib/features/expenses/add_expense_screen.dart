@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:isar_community/isar.dart';
 
 import '../../core/providers.dart';
@@ -31,6 +32,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   bool _recurring = false;
 
   static const _currencies = ['LKR', 'USD', 'EUR'];
+  static final _dateTimeFmt = DateFormat('MMM d, yyyy h:mm a');
 
   @override
   void initState() {
@@ -192,7 +194,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                 const SizedBox(height: 16),
                 ListTile(
                   title: const Text('Date & time'),
-                  subtitle: Text(_when.toLocal().toString()),
+                  subtitle: Text(_dateTimeFmt.format(_when.toLocal())),
                   onTap: _pickTime,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),

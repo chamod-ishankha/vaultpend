@@ -1,8 +1,8 @@
 # Project Specification: VaultSpend
 
-**Version:** 1.4.5  
+**Version:** 1.4.13  
 **Status:** In progress  
-**Last updated:** 2026-04-03  
+**Last updated:** 2026-04-04  
 **Target platforms:** Android, iOS  
 
 ---
@@ -172,8 +172,12 @@ Indexes and full sync payload shapes belong in the API/database design doc.
 
 - Mobile analytics and reporting enhancements.
 - Analytics views (e.g. pie charts, trend lines).
-- [x] Insights screen now includes range filters, top key metrics strip, spend trend bars, month-over-month spend comparison with directional indicators, currency split, category distribution, largest subscriptions, recent activity, subscription currency split, subscription burn summaries, subscription cycle mix, recurring expense snapshots, and next-30-day billing forecast by currency.
-- PDF and CSV export (per §3.3).
+- [x] Insights screen now includes range filters, top key metrics strip, spend trend line chart with shaded area, month-over-month spend comparison with directional indicators, currency split, category distribution with donut visualization, largest subscriptions, recent activity, subscription currency split, subscription burn summaries, subscription cycle mix, recurring expense snapshots, and configurable upcoming billing forecast (7/30/60-day windows) with nearest scheduled billings preview and tap-through to edit subscriptions.
+- [x] Insights CSV and PDF exports implemented with summary tables covering expenses, subscriptions, categories, recurring expense totals, upcoming billings, and recent activity.
+- [x] Upcoming billing analytics now surface overdue and due-soon counts plus trial lifecycle status labels (trial ends in X days / trial expired X days ago / due today) for clearer subscription risk monitoring.
+- [x] Mock trend mode removed; Insights trend now always reflects live filtered data with currency-scoped plotting.
+- [x] Renewal timing buckets added in Insights upcoming billing summary for due-in-24h and due-in-48h monitoring.
+- [x] Local subscription renewal reminders implemented and auto-synced (24h and 48h before billing) via scheduled mobile notifications.
 
 ### Phase 4: Intelligence and automation
 

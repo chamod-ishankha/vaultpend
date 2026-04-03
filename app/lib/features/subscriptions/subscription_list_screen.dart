@@ -17,10 +17,18 @@ import '../../data/models/subscription.dart';
 import 'add_subscription_screen.dart';
 import 'subscription_providers.dart';
 
-class SubscriptionListScreen extends ConsumerWidget {
+class SubscriptionListScreen extends ConsumerStatefulWidget {
   const SubscriptionListScreen({super.key, this.onOpenDrawer});
 
   final VoidCallback? onOpenDrawer;
+
+  @override
+  ConsumerState<SubscriptionListScreen> createState() =>
+      _SubscriptionListScreenState();
+}
+
+class _SubscriptionListScreenState
+    extends ConsumerState<SubscriptionListScreen> {
   static const _csvExportService = SubscriptionCsvExportService();
   static const _pdfExportService = SubscriptionPdfExportService();
 
@@ -139,15 +147,18 @@ class SubscriptionListScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final async = ref.watch(subscriptionListProvider);
     final currencyFormat = NumberFormat.currency(symbol: '');
-    final dateFmt = DateFormat.yMMMd();
+    final dateFmt = DateFormat('MMM d, yyyy h:mm a');
 
     return Scaffold(
       appBar: AppBar(
-        leading: onOpenDrawer != null
-            ? IconButton(icon: const Icon(Icons.menu), onPressed: onOpenDrawer)
+        leading: widget.onOpenDrawer != null
+            ? IconButton(
+                icon: const Icon(Icons.menu),
+                onPressed: widget.onOpenDrawer,
+              )
             : null,
         title: const Text('Subscriptions'),
         actions: [

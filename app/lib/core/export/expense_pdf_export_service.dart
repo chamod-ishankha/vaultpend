@@ -14,9 +14,9 @@ class ExpensePdfExportService {
   }) async {
     final doc = pw.Document();
     final themePrimary = PdfColor.fromInt(0xFF0F766E);
-    final dateFmt = DateFormat.yMMMd();
+    final dateFmt = DateFormat('MMM d, yyyy h:mm a');
     final currencyFmt = NumberFormat.currency(symbol: '');
-    final timestamp = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
+    final timestamp = DateFormat('MMM d, yyyy h:mm a').format(DateTime.now());
 
     final totalAmount = expenses.fold<double>(0, (sum, e) => sum + e.amount);
 

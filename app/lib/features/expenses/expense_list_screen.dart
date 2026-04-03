@@ -346,7 +346,7 @@ class _ExpenseSubtitle extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final dateStr = DateFormat.yMMMd().add_jm().format(expense.occurredAt);
+    final dateStr = DateFormat('MMM d, yyyy h:mm a').format(expense.occurredAt);
     final id = expense.categoryId;
     if (id == null) {
       return Text(_line('Uncategorized', dateStr));
