@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:logging/logging.dart';
 
 import 'core/notifications/subscription_reminder_service.dart';
 import 'core/theme/app_theme.dart';
@@ -13,6 +14,8 @@ import 'features/auth/auth_session.dart';
 import 'features/auth/login_screen.dart';
 import 'features/home/shell_screen.dart';
 import 'core/providers.dart';
+
+final _logger = Logger('VaultSpend.AppReminders');
 
 class VaultSpendApp extends ConsumerStatefulWidget {
   const VaultSpendApp({super.key});
@@ -125,6 +128,12 @@ class _VaultSpendAppState extends ConsumerState<VaultSpendApp>
       return;
     }
 
+    final scopedUserId = ref.read(currentUserIdProvider);
+    if (scopedUserId == null) {
+      _logger.info('app_global_reminder_sync_skipped_no_user_scope');
+      return;
+    }
+
     final remindersEnabled = ref.read(remindersEnabledProvider);
     if (!remindersEnabled) {
       await _reminderService.cancelManagedReminders();
@@ -138,6 +147,13 @@ class _VaultSpendAppState extends ConsumerState<VaultSpendApp>
       recurringExpenseRemindersEnabledProvider,
     );
 
+    _logger.info(
+      'app_global_reminder_sync_started '
+      'remindersEnabled=$remindersEnabled '
+      'subscriptionRemindersEnabled=$subscriptionRemindersEnabled '
+      'recurringExpenseRemindersEnabled=$recurringExpenseRemindersEnabled',
+    );
+
     _syncInFlight = true;
     try {
       final subscriptions = await ref
@@ -146,6 +162,7 @@ class _VaultSpendAppState extends ConsumerState<VaultSpendApp>
       final expenses = await ref.read(expenseRepositoryProvider).getAll();
       final signature = _signatureFor(subscriptions, expenses);
       if (signature == _lastGlobalReminderSignature) {
+        _logger.info('app_global_reminder_sync_skipped_same_signature');
         return;
       }
 
@@ -156,7 +173,9 @@ class _VaultSpendAppState extends ConsumerState<VaultSpendApp>
         includeRecurringExpenses: recurringExpenseRemindersEnabled,
       );
       _lastGlobalReminderSignature = signature;
-    } catch (_) {
+      _logger.info('app_global_reminder_sync_completed');
+    } catch (error, stack) {
+      _logger.warning('app_global_reminder_sync_failed', error, stack);
       // Reminder sync should never block app startup or navigation.
     } finally {
       _syncInFlight = false;

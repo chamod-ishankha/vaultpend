@@ -2,11 +2,31 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:intl/intl.dart';
+import 'package:logging/logging.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../../data/models/expense.dart';
 import '../../data/models/subscription.dart';
+import 'reminder_planning.dart';
+
+final _logger = Logger('VaultSpend.Reminders');
+
+class ReminderRuntimeStatus {
+  const ReminderRuntimeStatus({
+    required this.initialized,
+    required this.pluginAvailable,
+    required this.notificationsEnabled,
+    required this.exactAlarmsAllowed,
+    required this.managedPendingCount,
+  });
+
+  final bool initialized;
+  final bool pluginAvailable;
+  final bool? notificationsEnabled;
+  final bool? exactAlarmsAllowed;
+  final int managedPendingCount;
+}
 
 class SubscriptionReminderService {
   SubscriptionReminderService();
@@ -18,13 +38,16 @@ class SubscriptionReminderService {
 
   static const _payloadPrefix = 'vaultspend-renewal';
   static const _expensePayloadPrefix = 'vaultspend-recurring-expense';
-  static const _supportedBuckets = ['48h', '24h', 'due'];
   static final _dateTimeFmt = DateFormat('MMM d, yyyy h:mm a');
+  static const _grace48hTo24h = Duration(minutes: 2);
+  static const _grace24hToDue = Duration(seconds: 20);
 
   Future<void> initialize() async {
     if (_initialized || !_pluginAvailable) {
       return;
     }
+
+    _logger.info('reminder_init_started');
 
     const androidSettings = AndroidInitializationSettings(
       '@mipmap/ic_launcher',
@@ -42,7 +65,14 @@ class SubscriptionReminderService {
           .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin
           >();
-      await androidPlugin?.requestNotificationsPermission();
+        final notificationsPermission = await androidPlugin
+          ?.requestNotificationsPermission();
+        final exactAlarmsPermission = await androidPlugin
+          ?.requestExactAlarmsPermission();
+        final notificationsEnabled = await androidPlugin
+          ?.areNotificationsEnabled();
+        final exactAlarmsAllowed = await androidPlugin
+          ?.canScheduleExactNotifications();
 
       final iosPlugin = _plugin
           .resolvePlatformSpecificImplementation<
@@ -59,11 +89,45 @@ class SubscriptionReminderService {
       tz.setLocalLocation(tz.getLocation(localTzName));
 
       _initialized = true;
+      _logger.info(
+        'reminder_init_completed '
+        'notificationsPermission=$notificationsPermission '
+        'exactAlarmsPermission=$exactAlarmsPermission '
+        'notificationsEnabled=$notificationsEnabled '
+        'exactAlarmsAllowed=$exactAlarmsAllowed '
+        'timezone=$localTzName',
+      );
     } on MissingPluginException {
       _pluginAvailable = false;
+      _logger.warning('reminder_init_missing_plugin');
     } on PlatformException {
       _pluginAvailable = false;
+      _logger.warning('reminder_init_platform_exception');
     }
+  }
+
+  Future<ReminderRuntimeStatus> getRuntimeStatus() async {
+    await initialize();
+
+    bool? notificationsEnabled;
+    bool? exactAlarmsAllowed;
+    if (_pluginAvailable) {
+      final androidPlugin = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      notificationsEnabled = await androidPlugin?.areNotificationsEnabled();
+      exactAlarmsAllowed = await androidPlugin?.canScheduleExactNotifications();
+    }
+
+    final managedPendingCount = (await getManagedPendingReminders()).length;
+    return ReminderRuntimeStatus(
+      initialized: _initialized,
+      pluginAvailable: _pluginAvailable,
+      notificationsEnabled: notificationsEnabled,
+      exactAlarmsAllowed: exactAlarmsAllowed,
+      managedPendingCount: managedPendingCount,
+    );
   }
 
   Future<void> syncRenewalReminders(List<Subscription> subscriptions) async {
@@ -74,6 +138,13 @@ class SubscriptionReminderService {
 
     try {
       final pending = await _plugin.pendingNotificationRequests();
+      _logger.info(
+        'reminder_sync_renewal_started subscriptions=${subscriptions.length} pending=${pending.length}',
+      );
+      final existingSubscriptionBuckets = _existingBucketsByEntity(
+        pending,
+        _payloadPrefix,
+      );
       final subscriptionIds = subscriptions
           .map((subscription) => subscription.id)
           .toSet();
@@ -92,13 +163,24 @@ class SubscriptionReminderService {
 
       final now = DateTime.now();
       for (final subscription in subscriptions) {
-        final plan = _nextReminderPlan(subscription.nextBillingDate, now);
-        await _syncSubscriptionPlan(subscription, plan);
+        final plan = ReminderPlanning.nextReminderPlan(
+          subscription.nextBillingDate,
+          now,
+        );
+        await _syncSubscriptionPlan(
+          subscription,
+          plan,
+          existingBucket: existingSubscriptionBuckets[subscription.id],
+          now: now,
+        );
       }
-    } on MissingPluginException {
+      _logger.info('reminder_sync_renewal_completed');
+    } on MissingPluginException catch (error, stack) {
       _pluginAvailable = false;
-    } on PlatformException {
+      _logger.warning('reminder_sync_renewal_missing_plugin', error, stack);
+    } on PlatformException catch (error, stack) {
       _pluginAvailable = false;
+      _logger.warning('reminder_sync_renewal_platform_exception', error, stack);
     }
   }
 
@@ -115,6 +197,22 @@ class SubscriptionReminderService {
 
     try {
       final pending = await _plugin.pendingNotificationRequests();
+      _logger.info(
+        'reminder_sync_global_started '
+        'subscriptions=${subscriptions.length} '
+        'expenses=${expenses.length} '
+        'includeSubscriptions=$includeSubscriptions '
+        'includeRecurringExpenses=$includeRecurringExpenses '
+        'pending=${pending.length}',
+      );
+      final existingSubscriptionBuckets = _existingBucketsByEntity(
+        pending,
+        _payloadPrefix,
+      );
+      final existingRecurringBuckets = _existingBucketsByEntity(
+        pending,
+        _expensePayloadPrefix,
+      );
 
       final now = DateTime.now();
       if (includeSubscriptions) {
@@ -135,8 +233,16 @@ class SubscriptionReminderService {
         }
 
         for (final subscription in subscriptions) {
-          final plan = _nextReminderPlan(subscription.nextBillingDate, now);
-          await _syncSubscriptionPlan(subscription, plan);
+          final plan = ReminderPlanning.nextReminderPlan(
+            subscription.nextBillingDate,
+            now,
+          );
+          await _syncSubscriptionPlan(
+            subscription,
+            plan,
+            existingBucket: existingSubscriptionBuckets[subscription.id],
+            now: now,
+          );
         }
       } else {
         for (final request in pending) {
@@ -165,15 +271,17 @@ class SubscriptionReminderService {
         }
 
         for (final expense in recurringExpenses) {
-          final nextOccurrence = _nextMonthlyOccurrence(
+          final nextOccurrence = ReminderPlanning.nextMonthlyOccurrence(
             expense.occurredAt,
             now,
           );
-          final plan = _nextReminderPlan(nextOccurrence, now);
+          final plan = ReminderPlanning.nextReminderPlan(nextOccurrence, now);
           await _syncRecurringExpensePlan(
             expense: expense,
             nextOccurrence: nextOccurrence,
             plan: plan,
+            existingBucket: existingRecurringBuckets[expense.id],
+            now: now,
           );
         }
       } else {
@@ -183,10 +291,13 @@ class SubscriptionReminderService {
           }
         }
       }
-    } on MissingPluginException {
+      _logger.info('reminder_sync_global_completed');
+    } on MissingPluginException catch (error, stack) {
       _pluginAvailable = false;
-    } on PlatformException {
+      _logger.warning('reminder_sync_global_missing_plugin', error, stack);
+    } on PlatformException catch (error, stack) {
       _pluginAvailable = false;
+      _logger.warning('reminder_sync_global_platform_exception', error, stack);
     }
   }
 
@@ -205,10 +316,13 @@ class SubscriptionReminderService {
           await _plugin.cancel(request.id);
         }
       }
-    } on MissingPluginException {
+      _logger.info('reminder_cancel_managed_completed');
+    } on MissingPluginException catch (error, stack) {
       _pluginAvailable = false;
-    } on PlatformException {
+      _logger.warning('reminder_cancel_managed_missing_plugin', error, stack);
+    } on PlatformException catch (error, stack) {
       _pluginAvailable = false;
+      _logger.warning('reminder_cancel_managed_platform_exception', error, stack);
     }
   }
 
@@ -227,11 +341,13 @@ class SubscriptionReminderService {
                 payload?.startsWith(_expensePayloadPrefix) == true;
           })
           .toList(growable: false);
-    } on MissingPluginException {
+    } on MissingPluginException catch (error, stack) {
       _pluginAvailable = false;
+      _logger.warning('reminder_get_pending_missing_plugin', error, stack);
       return const <PendingNotificationRequest>[];
-    } on PlatformException {
+    } on PlatformException catch (error, stack) {
       _pluginAvailable = false;
+      _logger.warning('reminder_get_pending_platform_exception', error, stack);
       return const <PendingNotificationRequest>[];
     }
   }
@@ -259,6 +375,16 @@ class SubscriptionReminderService {
     required String payload,
   }) async {
     final triggerTz = tz.TZDateTime.from(trigger, tz.local);
+    final now = DateTime.now();
+    final delta = trigger.difference(now);
+
+    _logger.info(
+      'reminder_schedule '
+      'id=$id payload=$payload '
+      'trigger=${trigger.toIso8601String()} '
+      'now=${now.toIso8601String()} '
+      'deltaMs=${delta.inMilliseconds}',
+    );
 
     final details = NotificationDetails(
       android: AndroidNotificationDetails(
@@ -279,9 +405,11 @@ class SubscriptionReminderService {
       details,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       payload: payload,
     );
+
+    _logger.info('reminder_schedule_enqueued id=$id payload=$payload');
   }
 
   Future<void> _scheduleRecurringExpenseReminder({
@@ -300,6 +428,59 @@ class SubscriptionReminderService {
       trigger: trigger,
       payload: '$_expensePayloadPrefix:${expense.id}:$bucketLabel',
     );
+  }
+
+  Future<void> sendDebugNotificationNow() async {
+    await initialize();
+    if (!_initialized || !_pluginAvailable) {
+      _logger.warning('reminder_debug_notification_skipped_not_initialized');
+      return;
+    }
+
+    final id = 900000000 + (DateTime.now().millisecondsSinceEpoch % 1000000);
+    final details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'subscription_renewals',
+        'Subscription renewals',
+        channelDescription: 'Alerts sent before subscription renewal dates.',
+        importance: Importance.high,
+        priority: Priority.high,
+      ),
+      iOS: const DarwinNotificationDetails(),
+    );
+
+    await _plugin.show(
+      id,
+      'VaultSpend reminder test',
+      'If this appears, local notification delivery is working.',
+      details,
+      payload: 'vaultspend-debug:test',
+    );
+    _logger.info('reminder_debug_notification_shown id=$id');
+  }
+
+  Future<void> scheduleDebugNotification({
+    Duration delay = const Duration(seconds: 15),
+  }) async {
+    await initialize();
+    if (!_initialized || !_pluginAvailable) {
+      _logger.warning('reminder_debug_schedule_skipped_not_initialized');
+      return;
+    }
+
+    final trigger = DateTime.now().add(delay);
+    final id = 910000000 + (DateTime.now().millisecondsSinceEpoch % 1000000);
+    _logger.info(
+      'reminder_debug_schedule_requested id=$id trigger=${trigger.toIso8601String()} delayMs=${delay.inMilliseconds}',
+    );
+    await _schedule(
+      id: id,
+      title: 'VaultSpend scheduled test',
+      body: 'This confirms scheduled reminder delivery.',
+      trigger: trigger,
+      payload: 'vaultspend-debug-scheduled:test',
+    );
+    _logger.info('reminder_debug_schedule_enqueued id=$id');
   }
 
   int _notificationId(int subscriptionId, String bucketLabel) {
@@ -322,11 +503,30 @@ class SubscriptionReminderService {
 
   Future<void> _syncSubscriptionPlan(
     Subscription subscription,
-    _ReminderPlan? plan,
-  ) async {
+    ReminderPlan? plan, {
+    String? existingBucket,
+    required DateTime now,
+  }) async {
     if (plan == null) {
       await _cancelSubscriptionBuckets(subscription.id);
       return;
+    }
+
+    if (existingBucket != null) {
+      final keepExisting = _shouldKeepExistingBucketForEntity(
+        dueDate: subscription.nextBillingDate,
+        existingBucket: existingBucket,
+        plannedBucket: plan.bucketLabel,
+        now: now,
+      );
+      if (keepExisting) {
+        _logger.info(
+          'reminder_keep_existing_subscription '
+          'subscriptionId=${subscription.id} '
+          'existingBucket=$existingBucket plannedBucket=${plan.bucketLabel}',
+        );
+        return;
+      }
     }
 
     await _scheduleReminder(
@@ -343,11 +543,30 @@ class SubscriptionReminderService {
   Future<void> _syncRecurringExpensePlan({
     required Expense expense,
     required DateTime nextOccurrence,
-    required _ReminderPlan? plan,
+    required ReminderPlan? plan,
+    String? existingBucket,
+    required DateTime now,
   }) async {
     if (plan == null) {
       await _cancelRecurringBuckets(expense.id);
       return;
+    }
+
+    if (existingBucket != null) {
+      final keepExisting = _shouldKeepExistingBucketForEntity(
+        dueDate: nextOccurrence,
+        existingBucket: existingBucket,
+        plannedBucket: plan.bucketLabel,
+        now: now,
+      );
+      if (keepExisting) {
+        _logger.info(
+          'reminder_keep_existing_recurring '
+          'expenseId=${expense.id} '
+          'existingBucket=$existingBucket plannedBucket=${plan.bucketLabel}',
+        );
+        return;
+      }
     }
 
     await _scheduleRecurringExpenseReminder(
@@ -363,7 +582,7 @@ class SubscriptionReminderService {
     int subscriptionId, {
     String? exceptBucket,
   }) async {
-    for (final bucket in _supportedBuckets) {
+    for (final bucket in ReminderPlanning.supportedBuckets) {
       if (bucket == exceptBucket) {
         continue;
       }
@@ -375,7 +594,7 @@ class SubscriptionReminderService {
     int expenseId, {
     String? exceptBucket,
   }) async {
-    for (final bucket in _supportedBuckets) {
+    for (final bucket in ReminderPlanning.supportedBuckets) {
       if (bucket == exceptBucket) {
         continue;
       }
@@ -391,22 +610,93 @@ class SubscriptionReminderService {
     return int.tryParse(parts[1]);
   }
 
-  _ReminderPlan? _nextReminderPlan(DateTime dueDate, DateTime now) {
-    if (!dueDate.isAfter(now)) {
-      return null;
+  Map<int, String> _existingBucketsByEntity(
+    List<PendingNotificationRequest> pending,
+    String prefix,
+  ) {
+    final byEntity = <int, String>{};
+
+    for (final request in pending) {
+      final payload = request.payload;
+      if (payload?.startsWith(prefix) != true) {
+        continue;
+      }
+
+      final parts = payload!.split(':');
+      if (parts.length < 3) {
+        continue;
+      }
+      final entityId = int.tryParse(parts[1]);
+      if (entityId == null) {
+        continue;
+      }
+
+      byEntity[entityId] = parts[2].toLowerCase();
     }
 
-    final trigger48h = dueDate.subtract(const Duration(hours: 48));
-    if (trigger48h.isAfter(now)) {
-      return _ReminderPlan(bucketLabel: '48h', trigger: trigger48h);
+    return byEntity;
+  }
+
+  bool _shouldKeepExistingBucketForEntity({
+    required DateTime dueDate,
+    required String existingBucket,
+    required String plannedBucket,
+    required DateTime now,
+  }) {
+    if (!ReminderPlanning.shouldKeepExistingBucket(
+      existingBucket: existingBucket,
+      plannedBucket: plannedBucket,
+    )) {
+      return false;
     }
 
-    final trigger24h = dueDate.subtract(const Duration(hours: 24));
-    if (trigger24h.isAfter(now)) {
-      return _ReminderPlan(bucketLabel: '24h', trigger: trigger24h);
+    final existingTrigger = ReminderPlanning.triggerForBucket(
+      dueDate,
+      existingBucket,
+    );
+    if (existingTrigger == null) {
+      return false;
     }
 
-    return _ReminderPlan(bucketLabel: 'due', trigger: dueDate);
+    final overdueBy = now.difference(existingTrigger);
+    if (overdueBy.isNegative) {
+      return true;
+    }
+
+    final graceWindow = _graceWindowForTransition(
+      existingBucket: existingBucket,
+      plannedBucket: plannedBucket,
+    );
+    final keep = overdueBy <= graceWindow;
+    if (!keep) {
+      _logger.info(
+        'reminder_roll_forward_stale_bucket '
+        'existingBucket=$existingBucket '
+        'plannedBucket=$plannedBucket '
+        'dueDate=${dueDate.toIso8601String()} '
+        'existingTrigger=${existingTrigger.toIso8601String()} '
+        'graceMs=${graceWindow.inMilliseconds} '
+        'overdueMs=${overdueBy.inMilliseconds}',
+      );
+    }
+    return keep;
+  }
+
+  Duration _graceWindowForTransition({
+    required String existingBucket,
+    required String plannedBucket,
+  }) {
+    final existing = existingBucket.toLowerCase();
+    final planned = plannedBucket.toLowerCase();
+
+    if (existing == '48h' && planned == '24h') {
+      return _grace48hTo24h;
+    }
+    if (existing == '24h' && planned == 'due') {
+      return _grace24hToDue;
+    }
+
+    return Duration.zero;
   }
 
   String _subscriptionTitleForBucket(String bucketLabel) {
@@ -423,40 +713,7 @@ class SubscriptionReminderService {
     return 'Recurring expense in $bucketLabel';
   }
 
-  DateTime _nextMonthlyOccurrence(DateTime seed, DateTime now) {
-    var cursor = seed;
-    while (!cursor.isAfter(now)) {
-      cursor = _addMonthsKeepingTime(cursor, 1);
-    }
-    return cursor;
-  }
-
-  DateTime _addMonthsKeepingTime(DateTime value, int monthsToAdd) {
-    final totalMonths = value.month + monthsToAdd;
-    final year = value.year + ((totalMonths - 1) ~/ 12);
-    final month = ((totalMonths - 1) % 12) + 1;
-    final maxDay = DateTime(year, month + 1, 0).day;
-    final day = value.day <= maxDay ? value.day : maxDay;
-    return DateTime(
-      year,
-      month,
-      day,
-      value.hour,
-      value.minute,
-      value.second,
-      value.millisecond,
-      value.microsecond,
-    );
-  }
-
   String _formatDateTime(DateTime date) {
     return _dateTimeFmt.format(date.toLocal());
   }
-}
-
-class _ReminderPlan {
-  const _ReminderPlan({required this.bucketLabel, required this.trigger});
-
-  final String bucketLabel;
-  final DateTime trigger;
 }

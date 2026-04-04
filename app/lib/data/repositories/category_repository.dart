@@ -1,7 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:isar_community/isar.dart';
 
+import '../../core/logging/sync_incident_service.dart';
 import '../models/category.dart';
+
+final _syncIncidentService = SyncIncidentService();
 
 class CategoryRepository {
   CategoryRepository(
@@ -81,7 +84,13 @@ class CategoryRepository {
           await _isar.categorys.deleteAll(staleIds);
         }
       });
-    } catch (_) {
+    } catch (error) {
+      await _syncIncidentService.add(
+        entity: 'category',
+        operation: 'pull',
+        stage: '_pullFromRemoteIfAvailable',
+        error: error,
+      );
       // Keep local-only behavior if sync is unavailable.
     }
   }
@@ -116,7 +125,14 @@ class CategoryRepository {
         });
         item.remoteId = remote.id;
         await _isar.writeTxn(() => _isar.categorys.put(item));
-      } catch (_) {}
+      } catch (error) {
+        await _syncIncidentService.add(
+          entity: 'category',
+          operation: 'default_seed_push',
+          stage: '_ensureDefaultCategoriesIfEmpty',
+          error: error,
+        );
+      }
     }
   }
 
@@ -168,7 +184,14 @@ class CategoryRepository {
         }, SetOptions(merge: true));
       }
       await _isar.writeTxn(() => _isar.categorys.put(c));
-    } catch (_) {}
+    } catch (error) {
+      await _syncIncidentService.add(
+        entity: 'category',
+        operation: 'put',
+        stage: '_putAndSync',
+        error: error,
+      );
+    }
 
     return localId;
   }
@@ -183,7 +206,13 @@ class CategoryRepository {
     if (!_canSync || remoteId == null || remoteId.isEmpty) return;
     try {
       await _remoteCollection.doc(remoteId).delete();
-    } catch (_) {
+    } catch (error) {
+      await _syncIncidentService.add(
+        entity: 'category',
+        operation: 'delete',
+        stage: 'delete',
+        error: error,
+      );
       // Local-first: keep local deletion even if remote is unavailable.
     }
   }

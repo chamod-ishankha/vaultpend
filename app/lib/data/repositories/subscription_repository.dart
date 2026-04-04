@@ -1,7 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:isar_community/isar.dart';
 
+import '../../core/logging/sync_incident_service.dart';
 import '../models/subscription.dart';
+
+final _syncIncidentService = SyncIncidentService();
 
 class SubscriptionRepository {
   SubscriptionRepository(
@@ -123,7 +126,13 @@ class SubscriptionRepository {
           await _isar.subscriptions.deleteAll(staleIds);
         }
       });
-    } catch (_) {
+    } catch (error) {
+      await _syncIncidentService.add(
+        entity: 'subscription',
+        operation: 'pull',
+        stage: '_pullFromRemoteIfAvailable',
+        error: error,
+      );
       // Keep local-only behavior if sync is unavailable.
     }
   }
@@ -163,7 +172,13 @@ class SubscriptionRepository {
             .set(payload, SetOptions(merge: true));
       }
       await _isar.writeTxn(() => _isar.subscriptions.put(s));
-    } catch (_) {
+    } catch (error) {
+      await _syncIncidentService.add(
+        entity: 'subscription',
+        operation: 'put',
+        stage: 'put',
+        error: error,
+      );
       // Local-first: sync can retry on next refresh/action.
     }
 
@@ -180,7 +195,13 @@ class SubscriptionRepository {
     if (!_canSync || remoteId == null || remoteId.isEmpty) return;
     try {
       await _remoteCollection.doc(remoteId).delete();
-    } catch (_) {
+    } catch (error) {
+      await _syncIncidentService.add(
+        entity: 'subscription',
+        operation: 'delete',
+        stage: 'delete',
+        error: error,
+      );
       // Local-first: keep local deletion even if remote is unavailable.
     }
   }

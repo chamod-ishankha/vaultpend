@@ -35,7 +35,10 @@ final recurringExpenseRemindersEnabledControllerProvider =
 const guestLocalUserId = 'guest-local';
 
 final isGuestModeProvider = Provider<bool>((ref) {
-  return ref.watch(guestModeControllerProvider).value ?? false;
+  return ref.watch(guestModeControllerProvider).maybeWhen(
+        data: (value) => value,
+        orElse: () => false,
+      );
 });
 
 final remindersEnabledProvider = Provider<bool>((ref) {
@@ -54,7 +57,10 @@ final recurringExpenseRemindersEnabledProvider = Provider<bool>((ref) {
 
 /// Server-side user id (JWT `sub` / profile `id`). Local Isar data is scoped by this.
 final currentUserIdProvider = Provider<String?>((ref) {
-  final authUserId = ref.watch(authControllerProvider).value?.user.id;
+  final authUserId = ref.watch(authControllerProvider).maybeWhen(
+    data: (session) => session?.user.id,
+    orElse: () => null,
+  );
   if (authUserId != null) return authUserId;
   if (ref.watch(isGuestModeProvider)) return guestLocalUserId;
   return null;
@@ -64,7 +70,10 @@ final syncStatusProvider = FutureProvider.autoDispose<SyncStatus>((ref) async {
   if (ref.watch(isGuestModeProvider)) {
     throw StateError('sync is unavailable in guest mode');
   }
-  final session = ref.watch(authControllerProvider).value;
+  final session = ref.watch(authControllerProvider).maybeWhen(
+    data: (value) => value,
+    orElse: () => null,
+  );
   if (session == null) {
     throw StateError('syncStatusProvider requires signed-in session');
   }

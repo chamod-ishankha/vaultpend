@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../core/export/expense_csv_export_service.dart';
 import '../../core/providers.dart';
 import '../../core/export/expense_pdf_export_service.dart';
+import '../../core/notifications/reminder_sync_helper.dart';
 import '../../core/fx/fx_providers.dart';
 import '../../core/logging/app_logging.dart';
 import '../../core/widgets/fx_reference_strip.dart';
@@ -224,16 +225,28 @@ class ExpenseListScreen extends ConsumerWidget {
                           SizedBox(
                             height: MediaQuery.sizeOf(context).height * 0.25,
                           ),
-                          Center(
-                            child: Text(
-                              'No expenses yet.\nTap + to add one.\nPull down to refresh.',
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.bodyLarge
-                                  ?.copyWith(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurfaceVariant,
-                                  ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.receipt_long_outlined,
+                                  size: 40,
+                                  color: Theme.of(context).colorScheme.outline,
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'No expenses yet.\nTap + to add one.\nPull down to refresh.',
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(context).textTheme.bodyLarge
+                                      ?.copyWith(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
+                                      ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
@@ -292,6 +305,15 @@ class ExpenseListScreen extends ConsumerWidget {
                                       ),
                                     );
                                     if (ok == true && context.mounted) {
+                                      final categoryName = e.categoryId == null
+                                          ? 'Uncategorized'
+                                          : (await ref
+                                                        .read(
+                                                          categoryRepositoryProvider,
+                                                        )
+                                                        .getById(e.categoryId!))
+                                                    ?.name ??
+                                                'Category #${e.categoryId}';
                                       await ref
                                           .read(expenseRepositoryProvider)
                                           .delete(e.id);
@@ -300,8 +322,12 @@ class ExpenseListScreen extends ConsumerWidget {
                                           .add(
                                             action: 'Expense deleted',
                                             details:
-                                                '${e.currency} ${e.amount.toStringAsFixed(2)}',
+                                                '$categoryName · ${e.currency} ${e.amount.toStringAsFixed(2)} · ${e.isRecurring ? 'recurring' : 'one-time'}${e.note == null ? '' : ' · ${e.note}'}',
                                           );
+                                      await syncRemindersNow(
+                                        ref,
+                                        reason: 'expense_deleted',
+                                      );
                                       ref.invalidate(expenseListProvider);
                                     }
                                   }

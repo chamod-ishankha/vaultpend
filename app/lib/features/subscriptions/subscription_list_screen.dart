@@ -10,6 +10,7 @@ import '../../core/export/subscription_csv_export_service.dart';
 import '../../core/export/subscription_pdf_export_service.dart';
 import '../../core/fx/fx_providers.dart';
 import '../../core/logging/app_logging.dart';
+import '../../core/notifications/reminder_sync_helper.dart';
 import '../../core/providers.dart';
 import '../../core/widgets/fx_reference_strip.dart';
 import '../../core/widgets/responsive_layout.dart';
@@ -215,16 +216,28 @@ class _SubscriptionListScreenState
                           SizedBox(
                             height: MediaQuery.sizeOf(context).height * 0.25,
                           ),
-                          Center(
-                            child: Text(
-                              'No subscriptions yet.\nTap + to track one.\nPull down to refresh.',
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.bodyLarge
-                                  ?.copyWith(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurfaceVariant,
-                                  ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.subscriptions_outlined,
+                                  size: 40,
+                                  color: Theme.of(context).colorScheme.outline,
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'No subscriptions yet.\nTap + to track one.\nPull down to refresh.',
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(context).textTheme.bodyLarge
+                                      ?.copyWith(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
+                                      ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
@@ -354,8 +367,12 @@ class _SubscriptionListScreenState
                   .add(
                     action: 'Subscription deleted',
                     details:
-                        '${subscription.name} · ${subscription.currency} ${subscription.amount.toStringAsFixed(2)}',
+                        '${subscription.name} · ${subscription.currency} ${subscription.amount.toStringAsFixed(2)} · ${subscription.cycle} · ${subscription.isTrial ? 'trial' : 'paid'}${subscription.trialEndsAt == null ? '' : ' · trial ends ${DateFormat('MMM d, yyyy').format(subscription.trialEndsAt!.toLocal())}'}',
                   );
+              await syncRemindersNow(
+                ref,
+                reason: 'subscription_deleted',
+              );
               ref.invalidate(subscriptionListProvider);
             }
           } else if (v == 'mark_paid') {
@@ -431,7 +448,8 @@ class _SubscriptionListScreenState
           .read(activityLogServiceProvider)
           .add(
             action: 'Trial conversion cancelled',
-            details: subscription.name,
+            details:
+                '${subscription.name} · ${subscription.currency} ${subscription.amount.toStringAsFixed(2)} · ${subscription.cycle} · trial ends $trialEndsAtIso',
           );
       return;
     }
@@ -450,13 +468,21 @@ class _SubscriptionListScreenState
 
     try {
       await ref.read(subscriptionRepositoryProvider).put(updated);
+      await syncRemindersNow(
+        ref,
+        reason: 'subscription_trial_marked_paid',
+      );
       ref.invalidate(subscriptionListProvider);
       logger.info(
         'subscription_trial_mark_paid_succeeded id=${subscription.id} name=${subscription.name} previous_trial_ends_at=$trialEndsAtIso next_billing_at=$nextBillingIso',
       );
       await ref
           .read(activityLogServiceProvider)
-          .add(action: 'Trial marked as paid', details: subscription.name);
+          .add(
+            action: 'Trial marked as paid',
+            details:
+                '${subscription.name} · ${subscription.currency} ${subscription.amount.toStringAsFixed(2)} · ${subscription.cycle} · previous trial $trialEndsAtIso',
+          );
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${subscription.name} marked as paid.')),
@@ -471,7 +497,8 @@ class _SubscriptionListScreenState
           .read(activityLogServiceProvider)
           .add(
             action: 'Trial conversion failed',
-            details: '${subscription.name}: ${error.toString()}',
+            details:
+                '${subscription.name} · ${subscription.currency} ${subscription.amount.toStringAsFixed(2)} · ${subscription.cycle} · ${error.toString()}',
           );
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

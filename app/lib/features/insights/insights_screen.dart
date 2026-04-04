@@ -1681,8 +1681,8 @@ class _UpcomingBillingCard extends StatelessWidget {
                 final trialStatus = _trialStatusText(subscription, today);
                 final subtitleParts = <String>[
                   '${dateFmt.format(subscription.nextBillingDate)} · ${subscription.currency} ${numberFmt.format(subscription.amount)}',
-                  if (trialStatus != null) trialStatus,
-                  if (billingStatus != null) billingStatus,
+                  ?trialStatus,
+                  ?billingStatus,
                 ];
 
                 return Padding(

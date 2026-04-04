@@ -1,9 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:isar_community/isar.dart';
 
+import '../../core/logging/sync_incident_service.dart';
 import '../models/category.dart';
 
 import '../models/expense.dart';
+
+final _syncIncidentService = SyncIncidentService();
 
 class ExpenseRepository {
   ExpenseRepository(
@@ -117,7 +120,13 @@ class ExpenseRepository {
           await _isar.expenses.deleteAll(staleIds);
         }
       });
-    } catch (_) {
+    } catch (error) {
+      await _syncIncidentService.add(
+        entity: 'expense',
+        operation: 'pull',
+        stage: '_pullFromRemoteIfAvailable',
+        error: error,
+      );
       // Keep local-only behavior if sync is unavailable.
     }
   }
@@ -173,7 +182,13 @@ class ExpenseRepository {
             .set(payload, SetOptions(merge: true));
       }
       await _isar.writeTxn(() => _isar.expenses.put(e));
-    } catch (_) {
+    } catch (error) {
+      await _syncIncidentService.add(
+        entity: 'expense',
+        operation: 'put',
+        stage: 'put',
+        error: error,
+      );
       // Local-first: sync can retry on next refresh/action.
     }
 
@@ -190,7 +205,13 @@ class ExpenseRepository {
     if (!_canSync || remoteId == null || remoteId.isEmpty) return;
     try {
       await _remoteCollection.doc(remoteId).delete();
-    } catch (_) {
+    } catch (error) {
+      await _syncIncidentService.add(
+        entity: 'expense',
+        operation: 'delete',
+        stage: 'delete',
+        error: error,
+      );
       // Local-first: keep local deletion even if remote is unavailable.
     }
   }

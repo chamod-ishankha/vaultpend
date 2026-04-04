@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:isar_community/isar.dart';
 
 import '../../core/logging/app_logging.dart';
+import '../../core/notifications/reminder_sync_helper.dart';
 import '../../core/providers.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../data/models/subscription.dart';
@@ -128,14 +129,26 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
       ..isTrial = _trial
       ..trialEndsAt = _trial ? _trialEnds : null;
     await repo.put(s);
+    final trialDetails = _trial
+        ? (_trialEnds == null
+              ? 'trial active'
+              : 'trial ends ${DateFormat('MMM d, yyyy').format(_trialEnds!.toLocal())}')
+        : 'paid';
     await ref
         .read(activityLogServiceProvider)
         .add(
           action: existing == null
               ? 'Subscription added'
               : 'Subscription updated',
-          details: '$name · ${s.currency} ${s.amount.toStringAsFixed(2)}',
+          details:
+              '$name · ${s.currency} ${s.amount.toStringAsFixed(2)} · ${s.cycle} · $trialDetails',
         );
+    await syncRemindersNow(
+      ref,
+      reason: existing == null
+        ? 'subscription_added'
+        : 'subscription_updated',
+    );
     if (mounted) Navigator.of(context).pop();
   }
 

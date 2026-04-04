@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar_community/isar.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../core/notifications/subscription_reminder_service.dart';
 import '../data/models/category.dart';
 import '../data/models/expense.dart';
 import '../data/models/subscription.dart';
@@ -18,6 +19,10 @@ final isarProvider = Provider<Isar>((ref) {
 
 final firestoreProvider = Provider<FirebaseFirestore>((ref) {
   return FirebaseFirestore.instance;
+});
+
+final reminderServiceProvider = Provider<SubscriptionReminderService>((ref) {
+  return SubscriptionReminderService();
 });
 
 final categoryRepositoryProvider = Provider<CategoryRepository>((ref) {

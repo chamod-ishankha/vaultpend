@@ -8,6 +8,7 @@ import 'package:logging/logging.dart';
 
 import '../../core/providers.dart';
 import '../../core/logging/app_logging.dart';
+import '../../core/notifications/reminder_sync_helper.dart';
 import '../../core/ocr/receipt_ocr_service.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../data/models/category.dart';
@@ -295,14 +296,23 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       ..note = _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim()
       ..isRecurring = _recurring
       ..categoryId = _categoryId;
+    final categoryName = _categoryId == null
+        ? 'Uncategorized'
+        : (await ref.read(categoryRepositoryProvider).getById(_categoryId!))
+                  ?.name ??
+              'Category #$_categoryId';
     await repo.put(e);
     await ref
         .read(activityLogServiceProvider)
         .add(
           action: existing == null ? 'Expense added' : 'Expense updated',
           details:
-              '${e.currency} ${e.amount.toStringAsFixed(2)}${e.note == null ? '' : ' · ${e.note}'}',
+              '$categoryName · ${e.currency} ${e.amount.toStringAsFixed(2)} · ${_recurring ? 'recurring' : 'one-time'}${e.note == null ? '' : ' · ${e.note}'}',
         );
+    await syncRemindersNow(
+      ref,
+      reason: existing == null ? 'expense_added' : 'expense_updated',
+    );
     if (mounted) Navigator.of(context).pop();
   }
 
