@@ -4,10 +4,7 @@ import '../../features/auth/auth_providers.dart';
 import '../logging/app_logging.dart';
 import '../providers.dart';
 
-Future<void> syncRemindersNow(
-  WidgetRef ref, {
-  required String reason,
-}) async {
+Future<void> syncRemindersNow(WidgetRef ref, {required String reason}) async {
   final logger = ref.read(appLoggerProvider);
   final uid = ref.read(currentUserIdProvider);
   if (uid == null) {
@@ -34,7 +31,9 @@ Future<void> syncRemindersNow(
       'recurringEnabled=$recurringEnabled',
     );
 
-    final subscriptions = await ref.read(subscriptionRepositoryProvider).getAll();
+    final subscriptions = await ref
+        .read(subscriptionRepositoryProvider)
+        .getAll();
     final expenses = await ref.read(expenseRepositoryProvider).getAll();
 
     await service.syncGlobalReminders(

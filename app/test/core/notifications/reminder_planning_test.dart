@@ -118,10 +118,7 @@ void main() {
         ReminderPlanning.triggerForBucket(dueDate, '24h'),
         DateTime(2026, 4, 5, 23, 18),
       );
-      expect(
-        ReminderPlanning.triggerForBucket(dueDate, 'due'),
-        dueDate,
-      );
+      expect(ReminderPlanning.triggerForBucket(dueDate, 'due'), dueDate);
     });
 
     test('returns null for unsupported bucket', () {

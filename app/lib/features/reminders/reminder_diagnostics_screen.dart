@@ -196,9 +196,9 @@ class _ReminderDiagnosticsScreenState
       );
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Test notification failed: $error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Test notification failed: $error')),
+      );
     }
   }
 
