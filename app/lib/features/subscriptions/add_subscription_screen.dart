@@ -9,6 +9,7 @@ import '../../core/notifications/reminder_sync_helper.dart';
 import '../../core/providers.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../data/models/subscription.dart';
+import '../auth/auth_providers.dart';
 
 class AddSubscriptionScreen extends ConsumerStatefulWidget {
   const AddSubscriptionScreen({super.key, this.subscription});
@@ -29,6 +30,7 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
   DateTime _nextBilling = DateTime.now();
   bool _trial = false;
   DateTime? _trialEnds;
+  bool _saving = false;
 
   static const _currencies = ['LKR', 'USD', 'EUR'];
   static const _cycles = ['monthly', 'annual', 'custom'];
@@ -46,6 +48,8 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
       _nextBilling = s.nextBillingDate;
       _trial = s.isTrial;
       _trialEnds = s.trialEndsAt;
+    } else {
+      _currency = ref.read(preferredCurrencyProvider);
     }
   }
 
@@ -101,6 +105,7 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
   }
 
   Future<void> _save() async {
+    if (_saving) return;
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) {
       ScaffoldMessenger.of(
@@ -116,40 +121,52 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
       ).showSnackBar(const SnackBar(content: Text('Enter a valid amount')));
       return;
     }
-    final repo = ref.read(subscriptionRepositoryProvider);
-    final existing = widget.subscription;
-    final s = Subscription()
-      ..id = existing?.id ?? Isar.autoIncrement
-      ..remoteId = existing?.remoteId
-      ..name = name
-      ..amount = amount
-      ..currency = _currency
-      ..cycle = _cycle
-      ..nextBillingDate = _nextBilling
-      ..isTrial = _trial
-      ..trialEndsAt = _trial ? _trialEnds : null;
-    await repo.put(s);
-    final trialDetails = _trial
-        ? (_trialEnds == null
-              ? 'trial active'
-              : 'trial ends ${DateFormat('MMM d, yyyy').format(_trialEnds!.toLocal())}')
-        : 'paid';
-    await ref
-        .read(activityLogServiceProvider)
-        .add(
-          action: existing == null
-              ? 'Subscription added'
-              : 'Subscription updated',
-          details:
-              '$name · ${s.currency} ${s.amount.toStringAsFixed(2)} · ${s.cycle} · $trialDetails',
-        );
-    await syncRemindersNow(
-      ref,
-      reason: existing == null
-        ? 'subscription_added'
-        : 'subscription_updated',
-    );
-    if (mounted) Navigator.of(context).pop();
+    setState(() => _saving = true);
+    try {
+      final repo = ref.read(subscriptionRepositoryProvider);
+      final existing = widget.subscription;
+      final s = Subscription()
+        ..id = existing?.id ?? Isar.autoIncrement
+        ..remoteId = existing?.remoteId
+        ..name = name
+        ..amount = amount
+        ..currency = _currency
+        ..cycle = _cycle
+        ..nextBillingDate = _nextBilling
+        ..isTrial = _trial
+        ..trialEndsAt = _trial ? _trialEnds : null;
+      await repo.put(s);
+      final trialDetails = _trial
+          ? (_trialEnds == null
+                ? 'trial active'
+                : 'trial ends ${DateFormat('MMM d, yyyy').format(_trialEnds!.toLocal())}')
+          : 'paid';
+      await ref
+          .read(activityLogServiceProvider)
+          .add(
+            action: existing == null
+                ? 'Subscription added'
+                : 'Subscription updated',
+            details:
+                '$name · ${s.currency} ${s.amount.toStringAsFixed(2)} · ${s.cycle} · $trialDetails',
+          );
+      await syncRemindersNow(
+        ref,
+        reason: existing == null
+            ? 'subscription_added'
+            : 'subscription_updated',
+      );
+      if (mounted) Navigator.of(context).pop();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Save failed: $error')));
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
   }
 
   @override
@@ -253,10 +270,16 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
             ],
             const SizedBox(height: 16),
             FilledButton(
-              onPressed: _save,
-              child: const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
-                child: Text('Save'),
+              onPressed: _saving ? null : _save,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: _saving
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Save'),
               ),
             ),
           ],

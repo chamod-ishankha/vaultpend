@@ -5,19 +5,96 @@ import 'package:intl/intl.dart';
 import '../../core/logging/activity_log_service.dart';
 import '../../core/logging/app_logging.dart';
 
-final activityLogListProvider =
-    FutureProvider.autoDispose<List<ActivityLogEntry>>((ref) {
-      return ref.watch(activityLogServiceProvider).readAll();
-    });
-
-class ActivityLogScreen extends ConsumerWidget {
+class ActivityLogScreen extends ConsumerStatefulWidget {
   const ActivityLogScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final logsAsync = ref.watch(activityLogListProvider);
-    final dateFmt = DateFormat('MMM d, yyyy h:mm a');
+  ConsumerState<ActivityLogScreen> createState() => _ActivityLogScreenState();
+}
 
+class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
+  static const _pageSize = 25;
+  final _scrollController = ScrollController();
+  final _dateFmt = DateFormat('MMM d, yyyy h:mm a');
+
+  final List<ActivityLogEntry> _entries = [];
+  DateTime? _cursor;
+  bool _hasMore = true;
+  bool _loadingInitial = true;
+  bool _loadingMore = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+    _load(reset: true);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_hasMore || _loadingMore || _loadingInitial) {
+      return;
+    }
+    if (_scrollController.position.extentAfter < 280) {
+      _load();
+    }
+  }
+
+  Future<void> _load({bool reset = false}) async {
+    if (_loadingMore || _loadingInitial && !reset) {
+      return;
+    }
+
+    if (reset) {
+      setState(() {
+        _loadingInitial = true;
+        _loadingMore = false;
+        _error = null;
+        _cursor = null;
+        _hasMore = true;
+        _entries.clear();
+      });
+    } else {
+      setState(() {
+        _loadingMore = true;
+        _error = null;
+      });
+    }
+
+    try {
+      final page = await ref
+          .read(activityLogServiceProvider)
+          .readPage(pageSize: _pageSize, startAfter: reset ? null : _cursor);
+
+      if (!mounted) return;
+      setState(() {
+        _entries.addAll(page.entries);
+        _cursor = page.nextCursor;
+        _hasMore = page.hasMore;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = '$error';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingInitial = false;
+          _loadingMore = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Activity Log'),
@@ -30,7 +107,7 @@ class ActivityLogScreen extends ConsumerWidget {
                 builder: (ctx) => AlertDialog(
                   title: const Text('Clear activity log?'),
                   content: const Text(
-                    'This removes all local activity records.',
+                    'This removes all activity records for this account.',
                   ),
                   actions: [
                     TextButton(
@@ -50,7 +127,7 @@ class ActivityLogScreen extends ConsumerWidget {
               }
 
               await ref.read(activityLogServiceProvider).clear();
-              ref.invalidate(activityLogListProvider);
+              await _load(reset: true);
               if (!context.mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Activity log cleared.')),
@@ -60,44 +137,65 @@ class ActivityLogScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: logsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('Failed to load log: $error')),
-        data: (logs) {
-          if (logs.isEmpty) {
-            return const Center(child: Text('No activity recorded yet.'));
-          }
+      body: _loadingInitial
+          ? const Center(child: CircularProgressIndicator())
+          : _entries.isEmpty
+          ? Center(
+              child: Text(
+                _error == null
+                    ? 'No activity recorded yet.'
+                    : 'Failed to load log: $_error',
+              ),
+            )
+          : RefreshIndicator(
+              onRefresh: () => _load(reset: true),
+              child: ListView.separated(
+                controller: _scrollController,
+                padding: const EdgeInsets.all(12),
+                itemCount: _entries.length + 1,
+                separatorBuilder: (_, index) => index == _entries.length - 1
+                    ? const SizedBox.shrink()
+                    : const SizedBox(height: 8),
+                itemBuilder: (context, index) {
+                  if (index == _entries.length) {
+                    if (_loadingMore) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        child: Center(child: CircularProgressIndicator()),
+                      );
+                    }
+                    if (!_hasMore) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        child: Center(child: Text('End of activity log')),
+                      );
+                    }
+                    return Center(
+                      child: TextButton(
+                        onPressed: () => _load(),
+                        child: const Text('Load more'),
+                      ),
+                    );
+                  }
 
-          return RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(activityLogListProvider);
-              await ref.read(activityLogListProvider.future);
-            },
-            child: ListView.separated(
-              padding: const EdgeInsets.all(12),
-              itemCount: logs.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 8),
-              itemBuilder: (context, index) {
-                final item = logs[index];
-                return Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.history),
-                    title: Text(item.action),
-                    subtitle: Text(
-                      [
-                        dateFmt.format(item.timestamp.toLocal()),
-                        if (item.details != null &&
-                            item.details!.trim().isNotEmpty)
-                          item.details!.trim(),
-                      ].join(' · '),
+                  final item = _entries[index];
+                  return Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.history),
+                      title: Text(item.action),
+                      subtitle: Text(
+                        [
+                          _dateFmt.format(item.timestamp.toLocal()),
+                          if (item.details != null &&
+                              item.details!.trim().isNotEmpty)
+                            item.details!.trim(),
+                        ].join(' · '),
+                      ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
-          );
-        },
-      ),
     );
   }
 }

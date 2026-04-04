@@ -2,11 +2,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:isar_community/isar.dart';
 
 import '../../core/logging/sync_incident_service.dart';
+import '../../core/network/network_guard.dart';
 import '../models/category.dart';
 
 import '../models/expense.dart';
 
 final _syncIncidentService = SyncIncidentService();
+const _remoteSyncTimeout = Duration(seconds: 2);
 
 class ExpenseRepository {
   ExpenseRepository(
@@ -58,8 +60,12 @@ class ExpenseRepository {
 
   Future<void> _pullFromRemoteIfAvailable() async {
     if (!_canSync) return;
+    if (shouldBypassCloudSync()) return;
+    if (!await hasNetworkConnection()) return;
     try {
-      final remoteItems = await _remoteCollection.get();
+      final remoteItems = await _remoteCollection.get().timeout(
+        _remoteSyncTimeout,
+      );
       final local = await _isar.expenses
           .filter()
           .userIdEqualTo(_userId)
@@ -120,7 +126,9 @@ class ExpenseRepository {
           await _isar.expenses.deleteAll(staleIds);
         }
       });
+      markCloudSyncSuccess();
     } catch (error) {
+      markCloudSyncFailure();
       await _syncIncidentService.add(
         entity: 'expense',
         operation: 'pull',
@@ -141,6 +149,24 @@ class ExpenseRepository {
     e.userId = _userId;
     final localId = await _isar.writeTxn(() => _isar.expenses.put(e));
     if (!_canSync) return localId;
+    if (shouldBypassCloudSync()) {
+      await _syncIncidentService.add(
+        entity: 'expense',
+        operation: 'put',
+        stage: 'local_only_bypass',
+        error: StateError('Cloud sync bypass active; saved locally.'),
+      );
+      return localId;
+    }
+    if (!await hasNetworkConnection()) {
+      await _syncIncidentService.add(
+        entity: 'expense',
+        operation: 'put',
+        stage: 'local_only_offline',
+        error: StateError('No network connection; saved locally.'),
+      );
+      return localId;
+    }
 
     try {
       String? remoteCategoryId;
@@ -149,12 +175,14 @@ class ExpenseRepository {
         final category = await _isar.categorys.get(localCategoryId);
         if (category != null && category.userId == _userId) {
           if (category.remoteId == null || category.remoteId!.isEmpty) {
-            final remoteCategory = await _remoteCategories.add({
-              'name': category.name,
-              'icon_key': category.iconKey,
-              'color': category.color,
-              'updated_at': FieldValue.serverTimestamp(),
-            });
+            final remoteCategory = await _remoteCategories
+                .add({
+                  'name': category.name,
+                  'icon_key': category.iconKey,
+                  'color': category.color,
+                  'updated_at': FieldValue.serverTimestamp(),
+                })
+                .timeout(_remoteSyncTimeout);
             category.remoteId = remoteCategory.id;
             await _isar.writeTxn(() => _isar.categorys.put(category));
           }
@@ -174,15 +202,20 @@ class ExpenseRepository {
       };
 
       if (remoteId == null || remoteId.isEmpty) {
-        final remote = await _remoteCollection.add(payload);
+        final remote = await _remoteCollection
+            .add(payload)
+            .timeout(_remoteSyncTimeout);
         e.remoteId = remote.id;
       } else {
         await _remoteCollection
             .doc(remoteId)
-            .set(payload, SetOptions(merge: true));
+            .set(payload, SetOptions(merge: true))
+            .timeout(_remoteSyncTimeout);
       }
       await _isar.writeTxn(() => _isar.expenses.put(e));
+      markCloudSyncSuccess();
     } catch (error) {
+      markCloudSyncFailure();
       await _syncIncidentService.add(
         entity: 'expense',
         operation: 'put',
@@ -203,9 +236,32 @@ class ExpenseRepository {
     await _isar.writeTxn(() => _isar.expenses.delete(id));
 
     if (!_canSync || remoteId == null || remoteId.isEmpty) return;
+    if (shouldBypassCloudSync()) {
+      await _syncIncidentService.add(
+        entity: 'expense',
+        operation: 'delete',
+        stage: 'local_only_bypass',
+        error: StateError('Cloud sync bypass active; deleted locally.'),
+      );
+      return;
+    }
+    if (!await hasNetworkConnection()) {
+      await _syncIncidentService.add(
+        entity: 'expense',
+        operation: 'delete',
+        stage: 'local_only_offline',
+        error: StateError('No network connection; deleted locally.'),
+      );
+      return;
+    }
     try {
-      await _remoteCollection.doc(remoteId).delete();
+      await _remoteCollection
+          .doc(remoteId)
+          .delete()
+          .timeout(_remoteSyncTimeout);
+      markCloudSyncSuccess();
     } catch (error) {
+      markCloudSyncFailure();
       await _syncIncidentService.add(
         entity: 'expense',
         operation: 'delete',

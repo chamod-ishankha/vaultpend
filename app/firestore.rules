@@ -30,6 +30,11 @@ service cloud.firestore {
         && request.resource.data.updated_at == request.time;
     }
 
+    function hasServerCreatedAt() {
+      return request.resource.data.created_at is timestamp
+        && request.resource.data.created_at == request.time;
+    }
+
     function isValidCategoryDoc() {
       return request.resource.data.keys().hasOnly([
           'name',
@@ -108,6 +113,67 @@ service cloud.firestore {
         && hasServerUpdatedAt();
     }
 
+    function isValidActivityLogDoc() {
+      return request.resource.data.keys().hasOnly([
+          'timestamp',
+          'action',
+          'details',
+          'created_at',
+        ])
+        && request.resource.data.keys().hasAll([
+          'timestamp',
+          'action',
+          'created_at',
+        ])
+        && request.resource.data.timestamp is timestamp
+        && request.resource.data.action is string
+        && request.resource.data.action.size() > 0
+        && isNullableString(request.resource.data.details)
+        && hasServerCreatedAt();
+    }
+
+    function isValidSyncIncidentDoc() {
+      return request.resource.data.keys().hasOnly([
+          'timestamp',
+          'entity',
+          'operation',
+          'stage',
+          'error',
+          'created_at',
+        ])
+        && request.resource.data.keys().hasAll([
+          'timestamp',
+          'entity',
+          'operation',
+          'stage',
+          'error',
+          'created_at',
+        ])
+        && request.resource.data.timestamp is timestamp
+        && request.resource.data.entity is string
+        && request.resource.data.entity.size() > 0
+        && request.resource.data.operation is string
+        && request.resource.data.operation.size() > 0
+        && request.resource.data.stage is string
+        && request.resource.data.stage.size() > 0
+        && request.resource.data.error is string
+        && request.resource.data.error.size() > 0
+        && hasServerCreatedAt();
+    }
+
+    function isValidUserSettingsDoc() {
+      return request.resource.data.keys().hasOnly([
+          'preferred_currency',
+          'updated_at',
+        ])
+        && request.resource.data.keys().hasAll([
+          'preferred_currency',
+          'updated_at',
+        ])
+        && isCurrency(request.resource.data.preferred_currency)
+        && hasServerUpdatedAt();
+    }
+
     match /users/{uid} {
       allow read: if isOwner(uid);
       allow write: if false;
@@ -128,6 +194,23 @@ service cloud.firestore {
         allow read: if isOwner(uid);
         allow create, update: if isOwner(uid) && isValidSubscriptionDoc();
         allow delete: if isOwner(uid);
+      }
+
+      match /activity_logs/{logId} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && isValidActivityLogDoc();
+        allow delete: if isOwner(uid);
+      }
+
+      match /sync_incidents/{incidentId} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && isValidSyncIncidentDoc();
+        allow delete: if isOwner(uid);
+      }
+
+      match /settings/{settingId} {
+        allow read: if isOwner(uid);
+        allow create, update: if isOwner(uid) && isValidUserSettingsDoc();
       }
     }
 

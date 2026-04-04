@@ -6,6 +6,8 @@ const _kSubscriptionRemindersEnabled =
     'vaultspend_subscription_reminders_enabled';
 const _kRecurringExpenseRemindersEnabled =
     'vaultspend_recurring_expense_reminders_enabled';
+const _kInsightsReportView = 'vaultspend_insights_report_view';
+const _kPreferredCurrency = 'vaultspend_preferred_currency';
 
 class TokenStorage {
   TokenStorage({FlutterSecureStorage? storage})
@@ -63,4 +65,26 @@ class TokenStorage {
     key: _kRecurringExpenseRemindersEnabled,
     value: enabled ? 'true' : 'false',
   );
+
+  Future<String> readInsightsReportView() async {
+    final value = await _s.read(key: _kInsightsReportView);
+    return value == null || value.trim().isEmpty ? 'overview' : value;
+  }
+
+  Future<void> writeInsightsReportView(String value) => _s.write(
+    key: _kInsightsReportView,
+    value: value.trim().isEmpty ? 'overview' : value.trim(),
+  );
+
+  Future<String> readPreferredCurrency() async {
+    final value = await _s.read(key: _kPreferredCurrency);
+    final code = value?.trim().toUpperCase();
+    if (code == 'LKR' || code == 'USD' || code == 'EUR') {
+      return code!;
+    }
+    return 'USD';
+  }
+
+  Future<void> writePreferredCurrency(String value) =>
+      _s.write(key: _kPreferredCurrency, value: value.trim().toUpperCase());
 }

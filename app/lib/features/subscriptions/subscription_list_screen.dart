@@ -8,13 +8,17 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../core/export/subscription_csv_export_service.dart';
 import '../../core/export/subscription_pdf_export_service.dart';
+import '../../core/formatters/time_remaining_formatter.dart';
+import '../../core/fx/currency_conversion.dart';
 import '../../core/fx/fx_providers.dart';
+import '../../core/fx/fx_snapshot.dart';
 import '../../core/logging/app_logging.dart';
 import '../../core/notifications/reminder_sync_helper.dart';
 import '../../core/providers.dart';
 import '../../core/widgets/fx_reference_strip.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../data/models/subscription.dart';
+import '../auth/auth_providers.dart';
 import 'add_subscription_screen.dart';
 import 'subscription_providers.dart';
 
@@ -153,6 +157,10 @@ class _SubscriptionListScreenState
     final currencyFormat = NumberFormat.currency(symbol: '');
     final dateFmt = DateFormat('MMM d, yyyy h:mm a');
     final now = DateTime.now();
+    final preferredCurrency = ref.watch(preferredCurrencyProvider);
+    final fxSnapshot = ref
+        .watch(fxRatesProvider)
+        .maybeWhen(data: (value) => value, orElse: () => null);
 
     return Scaffold(
       appBar: AppBar(
@@ -289,6 +297,8 @@ class _SubscriptionListScreenState
                             currencyFormat: currencyFormat,
                             dateFmt: dateFmt,
                             now: now,
+                            preferredCurrency: preferredCurrency,
+                            fxSnapshot: fxSnapshot,
                           ),
                         ],
                       ],
@@ -319,9 +329,22 @@ class _SubscriptionListScreenState
     required NumberFormat currencyFormat,
     required DateFormat dateFmt,
     required DateTime now,
+    required String preferredCurrency,
+    required FxSnapshot? fxSnapshot,
   }) {
     final next = dateFmt.format(subscription.nextBillingDate);
     final isTrial = subscription.isTrial;
+    final converted = convertCurrencyAmount(
+      amount: subscription.amount,
+      from: subscription.currency,
+      to: preferredCurrency,
+      snapshot: fxSnapshot,
+    );
+    final showBase =
+        converted != null && subscription.currency != preferredCurrency;
+    final amountText = showBase
+        ? '$preferredCurrency ${currencyFormat.format(converted).trim()}'
+        : '${subscription.currency} ${currencyFormat.format(subscription.amount).trim()}';
 
     return ListTile(
       leading: Icon(
@@ -330,7 +353,7 @@ class _SubscriptionListScreenState
       title: Text(subscription.name),
       subtitle: Text(
         [
-          '${subscription.currency} ${currencyFormat.format(subscription.amount).trim()} · ${subscription.cycle}',
+          '$amountText · ${subscription.cycle}',
           'Next: $next',
           if (isTrial) _trialStatusLabel(subscription, now),
         ].join(' · '),
@@ -369,10 +392,7 @@ class _SubscriptionListScreenState
                     details:
                         '${subscription.name} · ${subscription.currency} ${subscription.amount.toStringAsFixed(2)} · ${subscription.cycle} · ${subscription.isTrial ? 'trial' : 'paid'}${subscription.trialEndsAt == null ? '' : ' · trial ends ${DateFormat('MMM d, yyyy').format(subscription.trialEndsAt!.toLocal())}'}',
                   );
-              await syncRemindersNow(
-                ref,
-                reason: 'subscription_deleted',
-              );
+              await syncRemindersNow(ref, reason: 'subscription_deleted');
               ref.invalidate(subscriptionListProvider);
             }
           } else if (v == 'mark_paid') {
@@ -468,10 +488,7 @@ class _SubscriptionListScreenState
 
     try {
       await ref.read(subscriptionRepositoryProvider).put(updated);
-      await syncRemindersNow(
-        ref,
-        reason: 'subscription_trial_marked_paid',
-      );
+      await syncRemindersNow(ref, reason: 'subscription_trial_marked_paid');
       ref.invalidate(subscriptionListProvider);
       logger.info(
         'subscription_trial_mark_paid_succeeded id=${subscription.id} name=${subscription.name} previous_trial_ends_at=$trialEndsAtIso next_billing_at=$nextBillingIso',
@@ -536,20 +553,11 @@ class _SubscriptionListScreenState
   }
 
   String _trialStatusLabel(Subscription subscription, DateTime now) {
-    final trialEnds = subscription.trialEndsAt;
-    if (trialEnds == null) {
-      return 'Trial active';
-    }
-
-    final remaining = trialEnds.difference(now);
-    if (remaining.isNegative) {
-      final days = now.difference(trialEnds).inDays;
-      return 'Trial expired ${days}d ago';
-    }
-    if (remaining.inDays == 0) {
-      return 'Trial ends today';
-    }
-    return 'Trial ends in ${remaining.inDays}d';
+    return formatTrialStatusLabel(
+      subscription.trialEndsAt,
+      now: now,
+      noEndLabel: 'Trial active',
+    );
   }
 }
 

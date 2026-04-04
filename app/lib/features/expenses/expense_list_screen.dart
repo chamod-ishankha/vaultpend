@@ -10,12 +10,14 @@ import '../../core/export/expense_csv_export_service.dart';
 import '../../core/providers.dart';
 import '../../core/export/expense_pdf_export_service.dart';
 import '../../core/notifications/reminder_sync_helper.dart';
+import '../../core/fx/currency_conversion.dart';
 import '../../core/fx/fx_providers.dart';
 import '../../core/logging/app_logging.dart';
 import '../../core/widgets/fx_reference_strip.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../data/models/category.dart';
 import '../../data/models/expense.dart';
+import '../auth/auth_providers.dart';
 import 'add_expense_screen.dart';
 import 'expense_providers.dart';
 
@@ -165,6 +167,10 @@ class ExpenseListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(expenseListProvider);
     final currencyFormat = NumberFormat.currency(symbol: '');
+    final preferredCurrency = ref.watch(preferredCurrencyProvider);
+    final fxSnapshot = ref
+        .watch(fxRatesProvider)
+        .maybeWhen(data: (value) => value, orElse: () => null);
 
     return Scaffold(
       appBar: AppBar(
@@ -263,9 +269,21 @@ class ExpenseListScreen extends ConsumerWidget {
                           const Divider(height: 1),
                       itemBuilder: (context, i) {
                         final e = items[i];
+                        final converted = convertCurrencyAmount(
+                          amount: e.amount,
+                          from: e.currency,
+                          to: preferredCurrency,
+                          snapshot: fxSnapshot,
+                        );
+                        final showBase =
+                            converted != null &&
+                            e.currency != preferredCurrency;
+                        final amountText = showBase
+                            ? '$preferredCurrency ${currencyFormat.format(converted).trim()}'
+                            : '${e.currency} ${currencyFormat.format(e.amount).trim()}';
                         return ListTile(
                           title: Text(
-                            '${e.currency} ${currencyFormat.format(e.amount).trim()}',
+                            amountText,
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                           subtitle: _ExpenseSubtitle(expense: e),

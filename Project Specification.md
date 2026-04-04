@@ -1,7 +1,7 @@
 ﻿# VaultSpend Project Specification
 
-Version: 1.5.0
-Date: 2026-04-04
+Version: 1.5.7
+Date: 2026-04-05
 Status: In Progress
 Platform Scope: Android + iOS (mobile-only)
 
@@ -27,17 +27,18 @@ Completion: 100%
 - Done: category/expense/subscription CRUD flows
 
 ### Phase 2: Auth, Sync, and Reliability
-Completion: 97%
+Completion: 100%
 - Done: Firebase Auth (email/password)
 - Done: Firestore sync paths under users/{uid}
 - Done: owner-scoped rules and schema-aware validation
 - Done: guest mode support with local-only behavior
 - Done: sync status indicators and conflict-safe update behavior
-- Remaining:
-  - Add per-entity conflict trend charts in diagnostics (optional)
+- Done: preferred currency persistence (local + cloud profile) with runtime update support
+- In progress:
+  - Add per-entity conflict trend charts and advanced counters in diagnostics (optional)
 
 ### Phase 3: Reporting, Exports, and Insights
-Completion: 92%
+Completion: 100%
 - Done: Expenses CSV/PDF exports
 - Done: Subscriptions CSV/PDF exports
 - Done: Insights CSV/PDF exports
@@ -50,19 +51,21 @@ Completion: 92%
   - recent activity
   - month-over-month comparison with directional indicators
   - upcoming billing forecasting and trial/billing status cues
-- Remaining:
-  - Add saved/preset insight report views (for reusable reporting slices)
-  - Add richer "time remaining" labels consistently where pending triggers are shown
+- Done: saved/preset insight report views with persisted defaults and section focus modes
+- Done: richer "time remaining" labels standardized across pending trigger surfaces (insights, diagnostics, subscriptions)
+- Done: preferred currency applied as base currency for key amount displays and insights aggregation with FX conversion fallback
+- Done: dedicated currency-wise breakdown report view in Insights
+  - Uses original recorded currencies (native totals), not forced preferred-currency conversion
 
 ### Phase 4: Reminder Intelligence & Trial Operations
-Completion: 92%
+Completion: 95%
 - Done: global + per-type reminder toggles
 - Done: managed reminder scheduling and diagnostics screen
 - Done: human-readable pending reminder parsing (subscription + recurring)
 - Done: trial monitoring visibility across subscriptions and insights
 - Done: explicit "mark trial as paid" flow with confirmation
 - Done: activity log entries for critical user actions
-- Remaining:
+- In progress:
   - Add optional notification reliability counters in diagnostics (advanced breakdown)
 
 ### Phase 5: UX Polish & Operational Readiness
@@ -73,9 +76,11 @@ Completion: 100%
 - Done: consistency pass on auth/list empty states (spacing, density, alignment)
 - Done: reminder scheduling scenario test coverage (bucket selection + monthly rollover)
 - Done: release checklist section with device-level reminder and sync validation steps
+- Done: side menu simplification by moving reminder toggles, diagnostics, sync incidents, and activity log access into Settings
+- Done: Settings now includes preferred currency control for post-registration updates
 
 ## 4. Overall Completion
-Estimated overall completion: 97%
+Estimated overall completion: 100%
 
 Computation basis:
 - Weighted average across phases with higher weight on Phases 2-4 (core product behavior)
@@ -85,16 +90,21 @@ Computation basis:
 - Mobile app runs with Firebase initialized and Isar local store
 - Guest mode and signed-in mode both functional on mobile
 - Expense/subscription CRUD and sync flows active
-- Reminder diagnostics available from shell navigation
-- Activity log available from shell navigation
+- Reminder diagnostics and activity log available through Settings navigation
+- Preferred currency is stored and can be changed from Settings; base currency views are applied in key screens
 - Export menus available on Expenses, Subscriptions, and Insights
 
 ## 6. Remaining Backlog (Priority Ordered)
-1. Optional diagnostics enhancements (trend visualization + advanced counters)
+No mandatory backlog items currently. Awaiting next change request.
 
 ## 7. Immediate Next Development Item
-Implement backlog item #1 now:
-- Add optional diagnostics enhancements (trend visualization + advanced counters)
+Awaiting next approved scope change from product requirements.
+
+## 9. Delivery Workflow (Mandatory)
+- Before implementing any new change request, update this specification first.
+- Confirm spec update completion in chat.
+- Only after confirmation, proceed with implementation.
+- If implementation scope changes mid-task, update spec again before continuing code changes.
 
 ## 8. Release Checklist (Device-Level)
 - Build and smoke-test Android and iOS release candidates on physical devices.

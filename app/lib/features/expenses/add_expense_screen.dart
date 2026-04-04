@@ -13,6 +13,7 @@ import '../../core/ocr/receipt_ocr_service.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../data/models/category.dart';
 import '../../data/models/expense.dart';
+import '../auth/auth_providers.dart';
 
 class AddExpenseScreen extends ConsumerStatefulWidget {
   const AddExpenseScreen({super.key, this.expense});
@@ -37,6 +38,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
   DateTime _when = DateTime.now();
   bool _recurring = false;
+  bool _saving = false;
 
   static const _currencies = ['LKR', 'USD', 'EUR'];
   static final _dateTimeFmt = DateFormat('MMM d, yyyy h:mm a');
@@ -55,6 +57,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       if (note != null && note.isNotEmpty) {
         _noteCtrl.text = note;
       }
+    } else {
+      _currency = ref.read(preferredCurrencyProvider);
     }
   }
 
@@ -277,6 +281,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   }
 
   Future<void> _save() async {
+    if (_saving) return;
     final raw = _amountCtrl.text.trim().replaceAll(',', '.');
     final amount = double.tryParse(raw);
     final existing = widget.expense;
@@ -286,34 +291,46 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       ).showSnackBar(const SnackBar(content: Text('Enter a valid amount')));
       return;
     }
-    final repo = ref.read(expenseRepositoryProvider);
-    final e = Expense()
-      ..id = existing?.id ?? Isar.autoIncrement
-      ..remoteId = existing?.remoteId
-      ..amount = amount
-      ..currency = _currency
-      ..occurredAt = _when
-      ..note = _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim()
-      ..isRecurring = _recurring
-      ..categoryId = _categoryId;
-    final categoryName = _categoryId == null
-        ? 'Uncategorized'
-        : (await ref.read(categoryRepositoryProvider).getById(_categoryId!))
-                  ?.name ??
-              'Category #$_categoryId';
-    await repo.put(e);
-    await ref
-        .read(activityLogServiceProvider)
-        .add(
-          action: existing == null ? 'Expense added' : 'Expense updated',
-          details:
-              '$categoryName · ${e.currency} ${e.amount.toStringAsFixed(2)} · ${_recurring ? 'recurring' : 'one-time'}${e.note == null ? '' : ' · ${e.note}'}',
-        );
-    await syncRemindersNow(
-      ref,
-      reason: existing == null ? 'expense_added' : 'expense_updated',
-    );
-    if (mounted) Navigator.of(context).pop();
+    setState(() => _saving = true);
+    try {
+      final repo = ref.read(expenseRepositoryProvider);
+      final e = Expense()
+        ..id = existing?.id ?? Isar.autoIncrement
+        ..remoteId = existing?.remoteId
+        ..amount = amount
+        ..currency = _currency
+        ..occurredAt = _when
+        ..note = _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim()
+        ..isRecurring = _recurring
+        ..categoryId = _categoryId;
+      final categoryName = _categoryId == null
+          ? 'Uncategorized'
+          : (await ref.read(categoryRepositoryProvider).getById(_categoryId!))
+                    ?.name ??
+                'Category #$_categoryId';
+      await repo.put(e);
+      await ref
+          .read(activityLogServiceProvider)
+          .add(
+            action: existing == null ? 'Expense added' : 'Expense updated',
+            details:
+                '$categoryName · ${e.currency} ${e.amount.toStringAsFixed(2)} · ${_recurring ? 'recurring' : 'one-time'}${e.note == null ? '' : ' · ${e.note}'}',
+          );
+      await syncRemindersNow(
+        ref,
+        reason: existing == null ? 'expense_added' : 'expense_updated',
+      );
+      if (mounted) Navigator.of(context).pop();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Save failed: $error')));
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
   }
 
   @override
@@ -434,10 +451,16 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                 ),
                 const SizedBox(height: 24),
                 FilledButton(
-                  onPressed: _save,
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    child: Text('Save'),
+                  onPressed: _saving ? null : _save,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: _saving
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Save'),
                   ),
                 ),
               ],

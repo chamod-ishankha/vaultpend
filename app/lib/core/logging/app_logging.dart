@@ -5,10 +5,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logging/logging.dart';
 
 import 'activity_log_service.dart';
+import 'sync_incident_service.dart';
 
 final appLoggerProvider = Provider<Logger>((ref) => Logger('VaultSpend'));
 final activityLogServiceProvider = Provider<ActivityLogService>(
   (ref) => ActivityLogService(),
+);
+final syncIncidentServiceProvider = Provider<SyncIncidentService>(
+  (ref) => SyncIncidentService(),
 );
 
 var _loggingConfigured = false;

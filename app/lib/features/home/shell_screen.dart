@@ -1,17 +1,20 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/logging/app_logging.dart';
+import '../../core/network/network_providers.dart';
 import '../../core/providers.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../auth/auth_providers.dart';
 import '../auth/sync_status.dart';
-import '../activity/activity_log_screen.dart';
 import '../categories/manage_categories_screen.dart';
 import '../expenses/expense_list_screen.dart';
 import '../expenses/expense_providers.dart';
 import '../insights/insights_screen.dart';
-import '../reminders/reminder_diagnostics_screen.dart';
+import '../settings/settings_screen.dart';
 import '../subscriptions/subscription_list_screen.dart';
 import '../subscriptions/subscription_providers.dart';
 
@@ -26,13 +29,54 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
   final GlobalKey<ScaffoldState> _shellKey = GlobalKey<ScaffoldState>();
   int _index = 0;
   bool _syncing = false;
+  ProviderSubscription<AsyncValue<bool>>? _networkSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _networkSub = ref.listenManual<AsyncValue<bool>>(networkOnlineProvider, (
+      previous,
+      next,
+    ) {
+      final wasOnline = previous?.value ?? true;
+      final isOnline = next.value ?? true;
+      if (!wasOnline && isOnline) {
+        final signedIn = ref.read(authControllerProvider).value != null;
+        if (signedIn) {
+          unawaited(_syncNow());
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _networkSub?.close();
+    super.dispose();
+  }
 
   void _openDrawer() => _shellKey.currentState?.openDrawer();
 
   Future<void> _syncNow() async {
     if (_syncing) return;
+    final online = ref.read(networkOnlineProvider).value ?? true;
+    if (!online) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Offline mode active. Changes are saved locally and will sync when online.',
+          ),
+        ),
+      );
+      return;
+    }
     setState(() => _syncing = true);
     try {
+      await Future.wait([
+        ref.read(activityLogServiceProvider).syncPendingToDatabase(),
+        ref.read(syncIncidentServiceProvider).syncPendingToDatabase(),
+      ]);
       ref.invalidate(categoryListProvider);
       ref.invalidate(expenseListProvider);
       ref.invalidate(subscriptionListProvider);
@@ -42,6 +86,17 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
         ref.read(subscriptionListProvider.future),
       ]);
       ref.invalidate(syncStatusProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Cloud sync completed.')));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Sync failed. Using local mode: $error')),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() => _syncing = false);
@@ -54,15 +109,9 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
     final isDesktop = isDesktopWidth(MediaQuery.sizeOf(context).width);
     final authSession = ref.watch(authControllerProvider).value;
     final isGuest = ref.watch(isGuestModeProvider);
+    final online = ref.watch(networkOnlineProvider).value ?? true;
     final signedIn = authSession != null;
     final syncStatusAsync = signedIn ? ref.watch(syncStatusProvider) : null;
-    final remindersEnabled = ref.watch(remindersEnabledProvider);
-    final subscriptionRemindersEnabled = ref.watch(
-      subscriptionRemindersEnabledProvider,
-    );
-    final recurringExpenseRemindersEnabled = ref.watch(
-      recurringExpenseRemindersEnabledProvider,
-    );
     final email = signedIn ? authSession.user.email : 'Guest mode';
     final subtitle = signedIn ? 'Signed in' : 'Local-only (sync disabled)';
 
@@ -129,83 +178,15 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
                         );
                       },
                     ),
-                    SwitchListTile(
-                      secondary: Icon(
-                        remindersEnabled
-                            ? Icons.notifications_active_outlined
-                            : Icons.notifications_off_outlined,
-                      ),
-                      title: const Text('Renewal reminders'),
-                      subtitle: Text(
-                        remindersEnabled
-                            ? 'Subscription and recurring reminders are on'
-                            : 'All renewal reminders are off',
-                      ),
-                      value: remindersEnabled,
-                      onChanged: (value) {
-                        ref
-                            .read(remindersEnabledControllerProvider.notifier)
-                            .setEnabled(value);
-                      },
-                    ),
-                    SwitchListTile(
-                      secondary: const Icon(Icons.subscriptions_outlined),
-                      title: const Text('Subscription reminders'),
-                      subtitle: Text(
-                        remindersEnabled
-                            ? '24h/48h reminders for subscription renewals'
-                            : 'Disabled while Renewal reminders is off',
-                      ),
-                      value: subscriptionRemindersEnabled,
-                      onChanged: (value) {
-                        ref
-                            .read(
-                              subscriptionRemindersEnabledControllerProvider
-                                  .notifier,
-                            )
-                            .setEnabled(value);
-                      },
-                    ),
-                    SwitchListTile(
-                      secondary: const Icon(Icons.repeat_outlined),
-                      title: const Text('Recurring expense reminders'),
-                      subtitle: Text(
-                        remindersEnabled
-                            ? '24h/48h reminders for recurring expenses'
-                            : 'Disabled while Renewal reminders is off',
-                      ),
-                      value: recurringExpenseRemindersEnabled,
-                      onChanged: (value) {
-                        ref
-                            .read(
-                              recurringExpenseRemindersEnabledControllerProvider
-                                  .notifier,
-                            )
-                            .setEnabled(value);
-                      },
-                    ),
                     ListTile(
-                      leading: const Icon(Icons.bug_report_outlined),
-                      title: const Text('Reminder diagnostics'),
-                      subtitle: const Text('View pending reminder jobs'),
+                      leading: const Icon(Icons.settings_outlined),
+                      title: const Text('Settings'),
+                      subtitle: const Text('Reminders, diagnostics, and logs'),
                       onTap: () {
                         Navigator.of(context).pop();
                         Navigator.of(context).push<void>(
                           MaterialPageRoute<void>(
-                            builder: (_) => const ReminderDiagnosticsScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.history_outlined),
-                      title: const Text('Activity log'),
-                      subtitle: const Text('See your recent actions'),
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        Navigator.of(context).push<void>(
-                          MaterialPageRoute<void>(
-                            builder: (_) => const ActivityLogScreen(),
+                            builder: (_) => const SettingsScreen(),
                           ),
                         );
                       },
@@ -282,77 +263,15 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
                       icon: const Icon(Icons.category_outlined),
                     ),
                     IconButton(
-                      tooltip: remindersEnabled
-                          ? 'Turn reminders off'
-                          : 'Turn reminders on',
-                      onPressed: () {
-                        ref
-                            .read(remindersEnabledControllerProvider.notifier)
-                            .setEnabled(!remindersEnabled);
-                      },
-                      icon: Icon(
-                        remindersEnabled
-                            ? Icons.notifications_active_outlined
-                            : Icons.notifications_off_outlined,
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: subscriptionRemindersEnabled
-                          ? 'Turn subscription reminders off'
-                          : 'Turn subscription reminders on',
-                      onPressed: () {
-                        ref
-                            .read(
-                              subscriptionRemindersEnabledControllerProvider
-                                  .notifier,
-                            )
-                            .setEnabled(!subscriptionRemindersEnabled);
-                      },
-                      icon: Icon(
-                        subscriptionRemindersEnabled
-                            ? Icons.subscriptions
-                            : Icons.subscriptions_outlined,
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: recurringExpenseRemindersEnabled
-                          ? 'Turn recurring expense reminders off'
-                          : 'Turn recurring expense reminders on',
-                      onPressed: () {
-                        ref
-                            .read(
-                              recurringExpenseRemindersEnabledControllerProvider
-                                  .notifier,
-                            )
-                            .setEnabled(!recurringExpenseRemindersEnabled);
-                      },
-                      icon: Icon(
-                        recurringExpenseRemindersEnabled
-                            ? Icons.repeat
-                            : Icons.repeat_outlined,
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Reminder diagnostics',
+                      tooltip: 'Settings',
                       onPressed: () {
                         Navigator.of(context).push<void>(
                           MaterialPageRoute<void>(
-                            builder: (_) => const ReminderDiagnosticsScreen(),
+                            builder: (_) => const SettingsScreen(),
                           ),
                         );
                       },
-                      icon: const Icon(Icons.bug_report_outlined),
-                    ),
-                    IconButton(
-                      tooltip: 'Activity log',
-                      onPressed: () {
-                        Navigator.of(context).push<void>(
-                          MaterialPageRoute<void>(
-                            builder: (_) => const ActivityLogScreen(),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.history_outlined),
+                      icon: const Icon(Icons.settings_outlined),
                     ),
                     if (signedIn)
                       IconButton(
@@ -412,6 +331,7 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
                 _ShellStatusBanner(
                   signedIn: signedIn,
                   isGuest: isGuest,
+                  online: online,
                   syncing: _syncing,
                   cloudSubtitle: _cloudSubtitle(syncStatusAsync),
                   onSyncNow: signedIn && !_syncing ? _syncNow : null,
@@ -480,6 +400,7 @@ class _ShellStatusBanner extends StatelessWidget {
   const _ShellStatusBanner({
     required this.signedIn,
     required this.isGuest,
+    required this.online,
     required this.syncing,
     required this.cloudSubtitle,
     required this.onSyncNow,
@@ -487,6 +408,7 @@ class _ShellStatusBanner extends StatelessWidget {
 
   final bool signedIn;
   final bool isGuest;
+  final bool online;
   final bool syncing;
   final String? cloudSubtitle;
   final VoidCallback? onSyncNow;
@@ -506,11 +428,18 @@ class _ShellStatusBanner extends StatelessWidget {
       icon = syncing ? Icons.sync : Icons.cloud_done_outlined;
       background = colorScheme.primaryContainer;
       foreground = colorScheme.onPrimaryContainer;
-      title = syncing ? 'Syncing account data' : 'Account sync active';
-      subtitle = syncing
-          ? 'Pulling remote changes into this device.'
-          : (cloudSubtitle ?? 'Local data can sync with your Cloud account.');
-      actionLabel = syncing ? null : 'Sync now';
+      if (!online) {
+        title = 'Offline local mode';
+        subtitle =
+            'No network connection. Changes are stored locally and sync when online.';
+        actionLabel = null;
+      } else {
+        title = syncing ? 'Syncing account data' : 'Account sync active';
+        subtitle = syncing
+            ? 'Pulling remote changes into this device.'
+            : (cloudSubtitle ?? 'Local data can sync with your Cloud account.');
+        actionLabel = syncing ? null : 'Sync now';
+      }
     } else if (isGuest) {
       icon = Icons.person_outline;
       background = colorScheme.secondaryContainer;

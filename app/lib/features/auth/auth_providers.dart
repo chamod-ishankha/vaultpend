@@ -1,13 +1,23 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:vaultspend/core/firebase/firebase_bootstrap.dart';
 import 'package:vaultspend/core/logging/app_logging.dart';
+import 'package:vaultspend/core/network/network_guard.dart';
 
 import 'auth_session.dart';
 import 'sync_status.dart';
 import 'token_storage.dart';
+
+const _supportedCurrencies = <String>{'USD', 'EUR', 'LKR'};
+
+String _normalizeCurrencyCode(String value) {
+  final code = value.trim().toUpperCase();
+  return _supportedCurrencies.contains(code) ? code : 'USD';
+}
 
 final tokenStorageProvider = Provider<TokenStorage>((ref) => TokenStorage());
 final firebaseAuthProvider = Provider<FirebaseAuth>(
@@ -31,14 +41,17 @@ final recurringExpenseRemindersEnabledControllerProvider =
     AsyncNotifierProvider<RecurringExpenseRemindersEnabledNotifier, bool>(
       RecurringExpenseRemindersEnabledNotifier.new,
     );
+final preferredCurrencyControllerProvider =
+    AsyncNotifierProvider<PreferredCurrencyNotifier, String>(
+      PreferredCurrencyNotifier.new,
+    );
 
 const guestLocalUserId = 'guest-local';
 
 final isGuestModeProvider = Provider<bool>((ref) {
-  return ref.watch(guestModeControllerProvider).maybeWhen(
-        data: (value) => value,
-        orElse: () => false,
-      );
+  return ref
+      .watch(guestModeControllerProvider)
+      .maybeWhen(data: (value) => value, orElse: () => false);
 });
 
 final remindersEnabledProvider = Provider<bool>((ref) {
@@ -55,12 +68,28 @@ final recurringExpenseRemindersEnabledProvider = Provider<bool>((ref) {
       true;
 });
 
+final preferredCurrencyProvider = Provider<String>((ref) {
+  final fromController = ref.watch(preferredCurrencyControllerProvider).value;
+  if (fromController != null) {
+    return fromController;
+  }
+  final fromSession = ref
+      .watch(authControllerProvider)
+      .value
+      ?.user
+      .preferredCurrency;
+  final code = fromSession?.trim().toUpperCase();
+  if (code != null && _supportedCurrencies.contains(code)) {
+    return code;
+  }
+  return 'USD';
+});
+
 /// Server-side user id (JWT `sub` / profile `id`). Local Isar data is scoped by this.
 final currentUserIdProvider = Provider<String?>((ref) {
-  final authUserId = ref.watch(authControllerProvider).maybeWhen(
-    data: (session) => session?.user.id,
-    orElse: () => null,
-  );
+  final authUserId = ref
+      .watch(authControllerProvider)
+      .maybeWhen(data: (session) => session?.user.id, orElse: () => null);
   if (authUserId != null) return authUserId;
   if (ref.watch(isGuestModeProvider)) return guestLocalUserId;
   return null;
@@ -70,12 +99,15 @@ final syncStatusProvider = FutureProvider.autoDispose<SyncStatus>((ref) async {
   if (ref.watch(isGuestModeProvider)) {
     throw StateError('sync is unavailable in guest mode');
   }
-  final session = ref.watch(authControllerProvider).maybeWhen(
-    data: (value) => value,
-    orElse: () => null,
-  );
+  final session = ref
+      .watch(authControllerProvider)
+      .maybeWhen(data: (value) => value, orElse: () => null);
   if (session == null) {
     throw StateError('syncStatusProvider requires signed-in session');
+  }
+
+  if (!await hasNetworkConnection()) {
+    throw StateError('syncStatusProvider offline');
   }
 
   DateTime? coerceDate(Object? value) {
@@ -96,7 +128,8 @@ final syncStatusProvider = FutureProvider.autoDispose<SyncStatus>((ref) async {
         .collection('users')
         .doc(session.user.id)
         .collection(collection)
-        .get();
+        .get()
+        .timeout(const Duration(seconds: 4));
 
     DateTime? latest;
     for (final doc in query.docs) {
@@ -217,13 +250,141 @@ class RecurringExpenseRemindersEnabledNotifier extends AsyncNotifier<bool> {
   }
 }
 
+class PreferredCurrencyNotifier extends AsyncNotifier<String> {
+  @override
+  Future<String> build() async {
+    return ref.read(tokenStorageProvider).readPreferredCurrency();
+  }
+
+  Future<void> refreshFromSession(AuthSession? session) async {
+    if (session == null) {
+      return;
+    }
+    final currency = _normalizeCurrencyCode(session.user.preferredCurrency);
+    await ref.read(tokenStorageProvider).writePreferredCurrency(currency);
+    state = AsyncValue.data(currency);
+  }
+
+  Future<void> setPreferredCurrency(String currency) async {
+    final logger = ref.read(appLoggerProvider);
+    final normalized = _normalizeCurrencyCode(currency);
+    await ref.read(tokenStorageProvider).writePreferredCurrency(normalized);
+
+    final authSession = ref.read(authControllerProvider).value;
+    if (authSession != null) {
+      ref
+          .read(authControllerProvider.notifier)
+          .updatePreferredCurrencyLocal(normalized);
+      try {
+        await ref
+            .read(authControllerProvider.notifier)
+            .persistPreferredCurrency(normalized);
+      } catch (error, stack) {
+        logger.warning('preferred_currency_cloud_save_failed', error, stack);
+      }
+      await ref
+          .read(activityLogServiceProvider)
+          .add(action: 'Preferred currency updated', details: normalized);
+    }
+    state = AsyncValue.data(normalized);
+  }
+}
+
 class AuthNotifier extends AsyncNotifier<AuthSession?> {
-  AuthSession _sessionFromFirebaseUser(User user) {
+  static const _terminalRestoreErrorCodes = <String>{
+    'invalid-user-token',
+    'user-token-expired',
+    'user-disabled',
+    'user-not-found',
+  };
+
+  AuthSession _sessionFromFirebaseUser(
+    User user, {
+    String preferredCurrency = 'USD',
+  }) {
     return AuthSession(
       user: AuthUser(
         id: user.uid,
         email: user.email ?? 'unknown@vaultspend.local',
-        preferredCurrency: 'USD',
+        preferredCurrency: _normalizeCurrency(preferredCurrency),
+      ),
+    );
+  }
+
+  String _normalizeCurrency(String value) {
+    return _normalizeCurrencyCode(value);
+  }
+
+  Future<String> _readPreferredCurrency(User user) async {
+    final storage = ref.read(tokenStorageProvider);
+    final local = _normalizeCurrency(await storage.readPreferredCurrency());
+
+    if (!isFirebaseReady || !await hasNetworkConnection()) {
+      return local;
+    }
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('settings')
+          .doc('profile')
+          .get()
+          .timeout(const Duration(seconds: 4));
+      final remote = _normalizeCurrency(
+        (doc.data()?['preferred_currency'] as String?) ?? local,
+      );
+      await storage.writePreferredCurrency(remote);
+      return remote;
+    } catch (_) {
+      return local;
+    }
+  }
+
+  Future<void> _persistPreferredCurrencyForUid(
+    String uid,
+    String currency,
+  ) async {
+    if (!isFirebaseReady || !await hasNetworkConnection()) {
+      return;
+    }
+    final normalized = _normalizeCurrency(currency);
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('settings')
+        .doc('profile')
+        .set({
+          'preferred_currency': normalized,
+          'updated_at': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true))
+        .timeout(const Duration(seconds: 4));
+  }
+
+  Future<void> persistPreferredCurrency(String currency) async {
+    final session = state.value;
+    if (session == null) {
+      return;
+    }
+    await _persistPreferredCurrencyForUid(session.user.id, currency);
+    await ref
+        .read(tokenStorageProvider)
+        .writePreferredCurrency(_normalizeCurrency(currency));
+  }
+
+  void updatePreferredCurrencyLocal(String currency) {
+    final session = state.value;
+    if (session == null) {
+      return;
+    }
+    final normalized = _normalizeCurrency(currency);
+    state = AsyncValue.data(
+      AuthSession(
+        user: AuthUser(
+          id: session.user.id,
+          email: session.user.email,
+          preferredCurrency: normalized,
+        ),
       ),
     );
   }
@@ -237,25 +398,70 @@ class AuthNotifier extends AsyncNotifier<AuthSession?> {
     }
 
     final firebaseAuth = ref.read(firebaseAuthProvider);
+    final storage = ref.read(tokenStorageProvider);
     final user = firebaseAuth.currentUser;
     if (user == null) {
       logger.fine('auth_restore_skipped_no_token');
       return null;
     }
 
+    // Keep local-first behavior across app restarts: if offline, keep cached user.
+    if (!await hasNetworkConnection()) {
+      logger.info('auth_restore_offline_cached_session');
+      final preferredCurrency = await storage.readPreferredCurrency();
+      return _sessionFromFirebaseUser(
+        user,
+        preferredCurrency: preferredCurrency,
+      );
+    }
+
     try {
-      await user.reload();
+      await user.reload().timeout(const Duration(seconds: 4));
       final refreshedUser = firebaseAuth.currentUser ?? user;
+      final preferredCurrency = await _readPreferredCurrency(refreshedUser);
       logger.info('auth_restored');
-      return _sessionFromFirebaseUser(refreshedUser);
+      return _sessionFromFirebaseUser(
+        refreshedUser,
+        preferredCurrency: preferredCurrency,
+      );
+    } on TimeoutException catch (error, stack) {
+      logger.warning('auth_restore_timeout_using_cached_session', error, stack);
+      final preferredCurrency = await storage.readPreferredCurrency();
+      return _sessionFromFirebaseUser(
+        firebaseAuth.currentUser ?? user,
+        preferredCurrency: preferredCurrency,
+      );
     } on FirebaseAuthException catch (error, stack) {
-      logger.warning('auth_restore_failed_firebase', error, stack);
-      await firebaseAuth.signOut();
-      return null;
+      if (_terminalRestoreErrorCodes.contains(error.code)) {
+        logger.warning(
+          'auth_restore_failed_terminal_signing_out',
+          error,
+          stack,
+        );
+        await firebaseAuth.signOut();
+        return null;
+      }
+      logger.warning(
+        'auth_restore_failed_firebase_using_cached_session',
+        error,
+        stack,
+      );
+      final preferredCurrency = await storage.readPreferredCurrency();
+      return _sessionFromFirebaseUser(
+        firebaseAuth.currentUser ?? user,
+        preferredCurrency: preferredCurrency,
+      );
     } catch (error, stack) {
-      logger.warning('auth_restore_failed_unexpected', error, stack);
-      await firebaseAuth.signOut();
-      return null;
+      logger.warning(
+        'auth_restore_failed_unexpected_using_cached_session',
+        error,
+        stack,
+      );
+      final preferredCurrency = await storage.readPreferredCurrency();
+      return _sessionFromFirebaseUser(
+        firebaseAuth.currentUser ?? user,
+        preferredCurrency: preferredCurrency,
+      );
     }
   }
 
@@ -279,10 +485,19 @@ class AuthNotifier extends AsyncNotifier<AuthSession?> {
       if (user == null) {
         throw StateError('Firebase sign-in did not return a user.');
       }
+      final preferredCurrency = await _readPreferredCurrency(user);
+      await storage.writePreferredCurrency(preferredCurrency);
       await storage.clearGuestMode();
       ref.invalidate(guestModeControllerProvider);
-      state = AsyncValue.data(_sessionFromFirebaseUser(user));
+      state = AsyncValue.data(
+        _sessionFromFirebaseUser(user, preferredCurrency: preferredCurrency),
+      );
+      await ref
+          .read(preferredCurrencyControllerProvider.notifier)
+          .refreshFromSession(state.value);
       logger.info('sign_in_succeeded');
+      await ref.read(activityLogServiceProvider).syncPendingToDatabase();
+      await ref.read(syncIncidentServiceProvider).syncPendingToDatabase();
       await ref
           .read(activityLogServiceProvider)
           .add(action: 'Signed in', details: user.email ?? email);
@@ -319,6 +534,9 @@ class AuthNotifier extends AsyncNotifier<AuthSession?> {
       if (user == null) {
         throw StateError('Firebase sign-up did not return a user.');
       }
+      final normalizedCurrency = _normalizeCurrency(preferredCurrency);
+      await _persistPreferredCurrencyForUid(user.uid, normalizedCurrency);
+      await storage.writePreferredCurrency(normalizedCurrency);
       await storage.clearGuestMode();
       ref.invalidate(guestModeControllerProvider);
       state = AsyncValue.data(
@@ -326,11 +544,16 @@ class AuthNotifier extends AsyncNotifier<AuthSession?> {
           user: AuthUser(
             id: user.uid,
             email: user.email ?? 'unknown@vaultspend.local',
-            preferredCurrency: preferredCurrency,
+            preferredCurrency: normalizedCurrency,
           ),
         ),
       );
+      await ref
+          .read(preferredCurrencyControllerProvider.notifier)
+          .refreshFromSession(state.value);
       logger.info('sign_up_succeeded');
+      await ref.read(activityLogServiceProvider).syncPendingToDatabase();
+      await ref.read(syncIncidentServiceProvider).syncPendingToDatabase();
       await ref
           .read(activityLogServiceProvider)
           .add(action: 'Account created', details: user.email ?? email);
