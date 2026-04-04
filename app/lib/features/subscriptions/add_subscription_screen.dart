@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:isar_community/isar.dart';
 
+import '../../core/logging/app_logging.dart';
 import '../../core/providers.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../data/models/subscription.dart';
@@ -127,6 +128,14 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
       ..isTrial = _trial
       ..trialEndsAt = _trial ? _trialEnds : null;
     await repo.put(s);
+    await ref
+        .read(activityLogServiceProvider)
+        .add(
+          action: existing == null
+              ? 'Subscription added'
+              : 'Subscription updated',
+          details: '$name · ${s.currency} ${s.amount.toStringAsFixed(2)}',
+        );
     if (mounted) Navigator.of(context).pop();
   }
 

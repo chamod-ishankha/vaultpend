@@ -6,10 +6,12 @@ import '../../core/providers.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../auth/auth_providers.dart';
 import '../auth/sync_status.dart';
+import '../activity/activity_log_screen.dart';
 import '../categories/manage_categories_screen.dart';
 import '../expenses/expense_list_screen.dart';
 import '../expenses/expense_providers.dart';
 import '../insights/insights_screen.dart';
+import '../reminders/reminder_diagnostics_screen.dart';
 import '../subscriptions/subscription_list_screen.dart';
 import '../subscriptions/subscription_providers.dart';
 
@@ -54,6 +56,13 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
     final isGuest = ref.watch(isGuestModeProvider);
     final signedIn = authSession != null;
     final syncStatusAsync = signedIn ? ref.watch(syncStatusProvider) : null;
+    final remindersEnabled = ref.watch(remindersEnabledProvider);
+    final subscriptionRemindersEnabled = ref.watch(
+      subscriptionRemindersEnabledProvider,
+    );
+    final recurringExpenseRemindersEnabled = ref.watch(
+      recurringExpenseRemindersEnabledProvider,
+    );
     final email = signedIn ? authSession.user.email : 'Guest mode';
     final subtitle = signedIn ? 'Signed in' : 'Local-only (sync disabled)';
 
@@ -116,6 +125,87 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
                         Navigator.of(context).push<void>(
                           MaterialPageRoute<void>(
                             builder: (_) => const ManageCategoriesScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    SwitchListTile(
+                      secondary: Icon(
+                        remindersEnabled
+                            ? Icons.notifications_active_outlined
+                            : Icons.notifications_off_outlined,
+                      ),
+                      title: const Text('Renewal reminders'),
+                      subtitle: Text(
+                        remindersEnabled
+                            ? 'Subscription and recurring reminders are on'
+                            : 'All renewal reminders are off',
+                      ),
+                      value: remindersEnabled,
+                      onChanged: (value) {
+                        ref
+                            .read(remindersEnabledControllerProvider.notifier)
+                            .setEnabled(value);
+                      },
+                    ),
+                    SwitchListTile(
+                      secondary: const Icon(Icons.subscriptions_outlined),
+                      title: const Text('Subscription reminders'),
+                      subtitle: Text(
+                        remindersEnabled
+                            ? '24h/48h reminders for subscription renewals'
+                            : 'Disabled while Renewal reminders is off',
+                      ),
+                      value: subscriptionRemindersEnabled,
+                      onChanged: (value) {
+                        ref
+                            .read(
+                              subscriptionRemindersEnabledControllerProvider
+                                  .notifier,
+                            )
+                            .setEnabled(value);
+                      },
+                    ),
+                    SwitchListTile(
+                      secondary: const Icon(Icons.repeat_outlined),
+                      title: const Text('Recurring expense reminders'),
+                      subtitle: Text(
+                        remindersEnabled
+                            ? '24h/48h reminders for recurring expenses'
+                            : 'Disabled while Renewal reminders is off',
+                      ),
+                      value: recurringExpenseRemindersEnabled,
+                      onChanged: (value) {
+                        ref
+                            .read(
+                              recurringExpenseRemindersEnabledControllerProvider
+                                  .notifier,
+                            )
+                            .setEnabled(value);
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.bug_report_outlined),
+                      title: const Text('Reminder diagnostics'),
+                      subtitle: const Text('View pending reminder jobs'),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(context).push<void>(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const ReminderDiagnosticsScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.history_outlined),
+                      title: const Text('Activity log'),
+                      subtitle: const Text('See your recent actions'),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(context).push<void>(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const ActivityLogScreen(),
                           ),
                         );
                       },
@@ -190,6 +280,79 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
                         );
                       },
                       icon: const Icon(Icons.category_outlined),
+                    ),
+                    IconButton(
+                      tooltip: remindersEnabled
+                          ? 'Turn reminders off'
+                          : 'Turn reminders on',
+                      onPressed: () {
+                        ref
+                            .read(remindersEnabledControllerProvider.notifier)
+                            .setEnabled(!remindersEnabled);
+                      },
+                      icon: Icon(
+                        remindersEnabled
+                            ? Icons.notifications_active_outlined
+                            : Icons.notifications_off_outlined,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: subscriptionRemindersEnabled
+                          ? 'Turn subscription reminders off'
+                          : 'Turn subscription reminders on',
+                      onPressed: () {
+                        ref
+                            .read(
+                              subscriptionRemindersEnabledControllerProvider
+                                  .notifier,
+                            )
+                            .setEnabled(!subscriptionRemindersEnabled);
+                      },
+                      icon: Icon(
+                        subscriptionRemindersEnabled
+                            ? Icons.subscriptions
+                            : Icons.subscriptions_outlined,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: recurringExpenseRemindersEnabled
+                          ? 'Turn recurring expense reminders off'
+                          : 'Turn recurring expense reminders on',
+                      onPressed: () {
+                        ref
+                            .read(
+                              recurringExpenseRemindersEnabledControllerProvider
+                                  .notifier,
+                            )
+                            .setEnabled(!recurringExpenseRemindersEnabled);
+                      },
+                      icon: Icon(
+                        recurringExpenseRemindersEnabled
+                            ? Icons.repeat
+                            : Icons.repeat_outlined,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Reminder diagnostics',
+                      onPressed: () {
+                        Navigator.of(context).push<void>(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const ReminderDiagnosticsScreen(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.bug_report_outlined),
+                    ),
+                    IconButton(
+                      tooltip: 'Activity log',
+                      onPressed: () {
+                        Navigator.of(context).push<void>(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const ActivityLogScreen(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.history_outlined),
                     ),
                     if (signedIn)
                       IconButton(

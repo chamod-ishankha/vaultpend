@@ -295,6 +295,13 @@ class ExpenseListScreen extends ConsumerWidget {
                                       await ref
                                           .read(expenseRepositoryProvider)
                                           .delete(e.id);
+                                      await ref
+                                          .read(activityLogServiceProvider)
+                                          .add(
+                                            action: 'Expense deleted',
+                                            details:
+                                                '${e.currency} ${e.amount.toStringAsFixed(2)}',
+                                          );
                                       ref.invalidate(expenseListProvider);
                                     }
                                   }

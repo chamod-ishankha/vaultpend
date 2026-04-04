@@ -18,9 +18,8 @@ class SubscriptionReminderService {
 
   static const _payloadPrefix = 'vaultspend-renewal';
   static const _expensePayloadPrefix = 'vaultspend-recurring-expense';
+  static const _supportedBuckets = ['48h', '24h', 'due'];
   static final _dateTimeFmt = DateFormat('MMM d, yyyy h:mm a');
-
-  static const _recurringOffsets = [Duration(hours: 48), Duration(hours: 24)];
 
   Future<void> initialize() async {
     if (_initialized || !_pluginAvailable) {
@@ -75,26 +74,26 @@ class SubscriptionReminderService {
 
     try {
       final pending = await _plugin.pendingNotificationRequests();
+      final subscriptionIds = subscriptions
+          .map((subscription) => subscription.id)
+          .toSet();
+
       for (final request in pending) {
-        if (request.payload?.startsWith(_payloadPrefix) == true) {
+        final payload = request.payload;
+        if (payload?.startsWith(_payloadPrefix) != true) {
+          continue;
+        }
+
+        final entityId = _entityIdFromPayload(payload!);
+        if (entityId == null || !subscriptionIds.contains(entityId)) {
           await _plugin.cancel(request.id);
         }
       }
 
       final now = DateTime.now();
       for (final subscription in subscriptions) {
-        await _scheduleReminder(
-          subscription: subscription,
-          now: now,
-          offset: const Duration(hours: 48),
-          bucketLabel: '48h',
-        );
-        await _scheduleReminder(
-          subscription: subscription,
-          now: now,
-          offset: const Duration(hours: 24),
-          bucketLabel: '24h',
-        );
+        final plan = _nextReminderPlan(subscription.nextBillingDate, now);
+        await _syncSubscriptionPlan(subscription, plan);
       }
     } on MissingPluginException {
       _pluginAvailable = false;
@@ -106,7 +105,92 @@ class SubscriptionReminderService {
   Future<void> syncGlobalReminders({
     required List<Subscription> subscriptions,
     required List<Expense> expenses,
+    bool includeSubscriptions = true,
+    bool includeRecurringExpenses = true,
   }) async {
+    await initialize();
+    if (!_initialized || !_pluginAvailable) {
+      return;
+    }
+
+    try {
+      final pending = await _plugin.pendingNotificationRequests();
+
+      final now = DateTime.now();
+      if (includeSubscriptions) {
+        final subscriptionIds = subscriptions
+            .map((subscription) => subscription.id)
+            .toSet();
+
+        for (final request in pending) {
+          final payload = request.payload;
+          if (payload?.startsWith(_payloadPrefix) != true) {
+            continue;
+          }
+
+          final entityId = _entityIdFromPayload(payload!);
+          if (entityId == null || !subscriptionIds.contains(entityId)) {
+            await _plugin.cancel(request.id);
+          }
+        }
+
+        for (final subscription in subscriptions) {
+          final plan = _nextReminderPlan(subscription.nextBillingDate, now);
+          await _syncSubscriptionPlan(subscription, plan);
+        }
+      } else {
+        for (final request in pending) {
+          if (request.payload?.startsWith(_payloadPrefix) == true) {
+            await _plugin.cancel(request.id);
+          }
+        }
+      }
+
+      if (includeRecurringExpenses) {
+        final recurringExpenses = expenses.where((e) => e.isRecurring);
+        final recurringIds = recurringExpenses
+            .map((expense) => expense.id)
+            .toSet();
+
+        for (final request in pending) {
+          final payload = request.payload;
+          if (payload?.startsWith(_expensePayloadPrefix) != true) {
+            continue;
+          }
+
+          final entityId = _entityIdFromPayload(payload!);
+          if (entityId == null || !recurringIds.contains(entityId)) {
+            await _plugin.cancel(request.id);
+          }
+        }
+
+        for (final expense in recurringExpenses) {
+          final nextOccurrence = _nextMonthlyOccurrence(
+            expense.occurredAt,
+            now,
+          );
+          final plan = _nextReminderPlan(nextOccurrence, now);
+          await _syncRecurringExpensePlan(
+            expense: expense,
+            nextOccurrence: nextOccurrence,
+            plan: plan,
+          );
+        }
+      } else {
+        for (final request in pending) {
+          if (request.payload?.startsWith(_expensePayloadPrefix) == true) {
+            await _plugin.cancel(request.id);
+          }
+        }
+      }
+    } on MissingPluginException {
+      _pluginAvailable = false;
+    } on PlatformException {
+      _pluginAvailable = false;
+    }
+  }
+
+  Future<void> cancelManagedReminders() async {
     await initialize();
     if (!_initialized || !_pluginAvailable) {
       return;
@@ -121,35 +205,6 @@ class SubscriptionReminderService {
           await _plugin.cancel(request.id);
         }
       }
-
-      final now = DateTime.now();
-      for (final subscription in subscriptions) {
-        await _scheduleReminder(
-          subscription: subscription,
-          now: now,
-          offset: const Duration(hours: 48),
-          bucketLabel: '48h',
-        );
-        await _scheduleReminder(
-          subscription: subscription,
-          now: now,
-          offset: const Duration(hours: 24),
-          bucketLabel: '24h',
-        );
-      }
-
-      final recurringExpenses = expenses.where((e) => e.isRecurring);
-      for (final expense in recurringExpenses) {
-        final nextOccurrence = _nextMonthlyOccurrence(expense.occurredAt, now);
-        for (final offset in _recurringOffsets) {
-          await _scheduleRecurringExpenseReminder(
-            expense: expense,
-            nextOccurrence: nextOccurrence,
-            now: now,
-            offset: offset,
-          );
-        }
-      }
     } on MissingPluginException {
       _pluginAvailable = false;
     } on PlatformException {
@@ -157,39 +212,38 @@ class SubscriptionReminderService {
     }
   }
 
+  Future<List<PendingNotificationRequest>> getManagedPendingReminders() async {
+    await initialize();
+    if (!_initialized || !_pluginAvailable) {
+      return const <PendingNotificationRequest>[];
+    }
+
+    try {
+      final pending = await _plugin.pendingNotificationRequests();
+      return pending
+          .where((request) {
+            final payload = request.payload;
+            return payload?.startsWith(_payloadPrefix) == true ||
+                payload?.startsWith(_expensePayloadPrefix) == true;
+          })
+          .toList(growable: false);
+    } on MissingPluginException {
+      _pluginAvailable = false;
+      return const <PendingNotificationRequest>[];
+    } on PlatformException {
+      _pluginAvailable = false;
+      return const <PendingNotificationRequest>[];
+    }
+  }
+
   Future<void> _scheduleReminder({
     required Subscription subscription,
-    required DateTime now,
-    required Duration offset,
     required String bucketLabel,
+    required DateTime trigger,
   }) async {
-    final remaining = subscription.nextBillingDate.difference(now);
-    if (remaining.isNegative || remaining.inSeconds == 0) {
-      return;
-    }
-
-    final trigger = subscription.nextBillingDate.subtract(offset);
-    if (!trigger.isAfter(now)) {
-      final isCatchUpFor48h =
-          bucketLabel == '48h' &&
-          remaining.inHours > 24 &&
-          remaining.inHours <= 48;
-      final isCatchUpFor24h = bucketLabel == '24h' && remaining.inHours <= 24;
-      if (isCatchUpFor48h || isCatchUpFor24h) {
-        await _showNow(
-          id: _notificationId(subscription.id, bucketLabel),
-          title: 'Subscription renewal in $bucketLabel',
-          body:
-              '${subscription.name} renews on ${_formatDateTime(subscription.nextBillingDate)} (${subscription.currency} ${subscription.amount.toStringAsFixed(2)})',
-          payload: '$_payloadPrefix:${subscription.id}:$bucketLabel',
-        );
-      }
-      return;
-    }
-
     await _schedule(
       id: _notificationId(subscription.id, bucketLabel),
-      title: 'Subscription renewal in $bucketLabel',
+      title: _subscriptionTitleForBucket(bucketLabel),
       body:
           '${subscription.name} renews on ${_formatDateTime(subscription.nextBillingDate)} (${subscription.currency} ${subscription.amount.toStringAsFixed(2)})',
       trigger: trigger,
@@ -233,39 +287,14 @@ class SubscriptionReminderService {
   Future<void> _scheduleRecurringExpenseReminder({
     required Expense expense,
     required DateTime nextOccurrence,
-    required DateTime now,
-    required Duration offset,
+    required String bucketLabel,
+    required DateTime trigger,
   }) async {
-    final remaining = nextOccurrence.difference(now);
-    if (remaining.isNegative || remaining.inSeconds == 0) {
-      return;
-    }
-
-    final trigger = nextOccurrence.subtract(offset);
-    final bucketLabel = '${offset.inHours}h';
     final id = _recurringNotificationId(expense.id, bucketLabel);
-
-    if (!trigger.isAfter(now)) {
-      final isCatchUpFor48h =
-          offset.inHours == 48 &&
-          remaining.inHours > 24 &&
-          remaining.inHours <= 48;
-      final isCatchUpFor24h = offset.inHours == 24 && remaining.inHours <= 24;
-      if (isCatchUpFor48h || isCatchUpFor24h) {
-        await _showNow(
-          id: id,
-          title: 'Recurring expense in $bucketLabel',
-          body:
-              '${expense.currency} ${expense.amount.toStringAsFixed(2)} due on ${_formatDateTime(nextOccurrence)}',
-          payload: '$_expensePayloadPrefix:${expense.id}:$bucketLabel',
-        );
-      }
-      return;
-    }
 
     await _schedule(
       id: id,
-      title: 'Recurring expense in $bucketLabel',
+      title: _recurringTitleForBucket(bucketLabel),
       body:
           '${expense.currency} ${expense.amount.toStringAsFixed(2)} due on ${_formatDateTime(nextOccurrence)}',
       trigger: trigger,
@@ -273,34 +302,125 @@ class SubscriptionReminderService {
     );
   }
 
-  Future<void> _showNow({
-    required int id,
-    required String title,
-    required String body,
-    required String payload,
-  }) async {
-    final details = NotificationDetails(
-      android: AndroidNotificationDetails(
-        'subscription_renewals',
-        'Subscription renewals',
-        channelDescription: 'Alerts sent before subscription renewal dates.',
-        importance: Importance.high,
-        priority: Priority.high,
-      ),
-      iOS: const DarwinNotificationDetails(),
-    );
-
-    await _plugin.show(id, title, body, details, payload: payload);
-  }
-
   int _notificationId(int subscriptionId, String bucketLabel) {
-    final bucketPart = bucketLabel == '24h' ? 24 : 48;
+    final bucketPart = bucketLabel == '48h'
+        ? 48
+        : bucketLabel == '24h'
+        ? 24
+        : 0;
     return (subscriptionId * 100) + bucketPart;
   }
 
   int _recurringNotificationId(int expenseId, String bucketLabel) {
-    final bucketPart = bucketLabel == '24h' ? 24 : 48;
+    final bucketPart = bucketLabel == '48h'
+        ? 48
+        : bucketLabel == '24h'
+        ? 24
+        : 0;
     return 100000000 + (expenseId * 100) + bucketPart;
+  }
+
+  Future<void> _syncSubscriptionPlan(
+    Subscription subscription,
+    _ReminderPlan? plan,
+  ) async {
+    if (plan == null) {
+      await _cancelSubscriptionBuckets(subscription.id);
+      return;
+    }
+
+    await _scheduleReminder(
+      subscription: subscription,
+      bucketLabel: plan.bucketLabel,
+      trigger: plan.trigger,
+    );
+    await _cancelSubscriptionBuckets(
+      subscription.id,
+      exceptBucket: plan.bucketLabel,
+    );
+  }
+
+  Future<void> _syncRecurringExpensePlan({
+    required Expense expense,
+    required DateTime nextOccurrence,
+    required _ReminderPlan? plan,
+  }) async {
+    if (plan == null) {
+      await _cancelRecurringBuckets(expense.id);
+      return;
+    }
+
+    await _scheduleRecurringExpenseReminder(
+      expense: expense,
+      nextOccurrence: nextOccurrence,
+      bucketLabel: plan.bucketLabel,
+      trigger: plan.trigger,
+    );
+    await _cancelRecurringBuckets(expense.id, exceptBucket: plan.bucketLabel);
+  }
+
+  Future<void> _cancelSubscriptionBuckets(
+    int subscriptionId, {
+    String? exceptBucket,
+  }) async {
+    for (final bucket in _supportedBuckets) {
+      if (bucket == exceptBucket) {
+        continue;
+      }
+      await _plugin.cancel(_notificationId(subscriptionId, bucket));
+    }
+  }
+
+  Future<void> _cancelRecurringBuckets(
+    int expenseId, {
+    String? exceptBucket,
+  }) async {
+    for (final bucket in _supportedBuckets) {
+      if (bucket == exceptBucket) {
+        continue;
+      }
+      await _plugin.cancel(_recurringNotificationId(expenseId, bucket));
+    }
+  }
+
+  int? _entityIdFromPayload(String payload) {
+    final parts = payload.split(':');
+    if (parts.length < 3) {
+      return null;
+    }
+    return int.tryParse(parts[1]);
+  }
+
+  _ReminderPlan? _nextReminderPlan(DateTime dueDate, DateTime now) {
+    if (!dueDate.isAfter(now)) {
+      return null;
+    }
+
+    final trigger48h = dueDate.subtract(const Duration(hours: 48));
+    if (trigger48h.isAfter(now)) {
+      return _ReminderPlan(bucketLabel: '48h', trigger: trigger48h);
+    }
+
+    final trigger24h = dueDate.subtract(const Duration(hours: 24));
+    if (trigger24h.isAfter(now)) {
+      return _ReminderPlan(bucketLabel: '24h', trigger: trigger24h);
+    }
+
+    return _ReminderPlan(bucketLabel: 'due', trigger: dueDate);
+  }
+
+  String _subscriptionTitleForBucket(String bucketLabel) {
+    if (bucketLabel == 'due') {
+      return 'Subscription renewal due now';
+    }
+    return 'Subscription renewal in $bucketLabel';
+  }
+
+  String _recurringTitleForBucket(String bucketLabel) {
+    if (bucketLabel == 'due') {
+      return 'Recurring expense due now';
+    }
+    return 'Recurring expense in $bucketLabel';
   }
 
   DateTime _nextMonthlyOccurrence(DateTime seed, DateTime now) {
@@ -332,4 +452,11 @@ class SubscriptionReminderService {
   String _formatDateTime(DateTime date) {
     return _dateTimeFmt.format(date.toLocal());
   }
+}
+
+class _ReminderPlan {
+  const _ReminderPlan({required this.bucketLabel, required this.trigger});
+
+  final String bucketLabel;
+  final DateTime trigger;
 }

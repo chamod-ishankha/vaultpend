@@ -29,6 +29,9 @@ class _VaultSpendAppState extends ConsumerState<VaultSpendApp>
   String _lastGlobalReminderSignature = '';
   bool _syncInFlight = false;
   ProviderSubscription<String?>? _userIdSub;
+  ProviderSubscription<bool>? _remindersEnabledSub;
+  ProviderSubscription<bool>? _subscriptionRemindersEnabledSub;
+  ProviderSubscription<bool>? _recurringExpenseRemindersEnabledSub;
 
   @override
   void initState() {
@@ -55,6 +58,42 @@ class _VaultSpendAppState extends ConsumerState<VaultSpendApp>
       }
     }, fireImmediately: true);
 
+    _remindersEnabledSub = ref.listenManual<bool>(remindersEnabledProvider, (
+      previous,
+      next,
+    ) {
+      if (previous != next) {
+        _lastGlobalReminderSignature = '';
+      }
+      if (next) {
+        unawaited(_syncRemindersGlobally());
+      } else {
+        unawaited(_reminderService.cancelManagedReminders());
+      }
+    }, fireImmediately: true);
+
+    _subscriptionRemindersEnabledSub = ref.listenManual<bool>(
+      subscriptionRemindersEnabledProvider,
+      (previous, next) {
+        if (previous != next) {
+          _lastGlobalReminderSignature = '';
+          unawaited(_syncRemindersGlobally());
+        }
+      },
+      fireImmediately: true,
+    );
+
+    _recurringExpenseRemindersEnabledSub = ref.listenManual<bool>(
+      recurringExpenseRemindersEnabledProvider,
+      (previous, next) {
+        if (previous != next) {
+          _lastGlobalReminderSignature = '';
+          unawaited(_syncRemindersGlobally());
+        }
+      },
+      fireImmediately: true,
+    );
+
     Timer(const Duration(seconds: 3), () {
       if (!mounted) return;
       setState(() {
@@ -74,6 +113,9 @@ class _VaultSpendAppState extends ConsumerState<VaultSpendApp>
   void dispose() {
     _reminderSyncTicker?.cancel();
     _userIdSub?.close();
+    _remindersEnabledSub?.close();
+    _subscriptionRemindersEnabledSub?.close();
+    _recurringExpenseRemindersEnabledSub?.close();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -82,6 +124,19 @@ class _VaultSpendAppState extends ConsumerState<VaultSpendApp>
     if (!mounted || _syncInFlight) {
       return;
     }
+
+    final remindersEnabled = ref.read(remindersEnabledProvider);
+    if (!remindersEnabled) {
+      await _reminderService.cancelManagedReminders();
+      _lastGlobalReminderSignature = '';
+      return;
+    }
+    final subscriptionRemindersEnabled = ref.read(
+      subscriptionRemindersEnabledProvider,
+    );
+    final recurringExpenseRemindersEnabled = ref.read(
+      recurringExpenseRemindersEnabledProvider,
+    );
 
     _syncInFlight = true;
     try {
@@ -97,6 +152,8 @@ class _VaultSpendAppState extends ConsumerState<VaultSpendApp>
       await _reminderService.syncGlobalReminders(
         subscriptions: subscriptions,
         expenses: expenses,
+        includeSubscriptions: subscriptionRemindersEnabled,
+        includeRecurringExpenses: recurringExpenseRemindersEnabled,
       );
       _lastGlobalReminderSignature = signature;
     } catch (_) {
@@ -110,6 +167,14 @@ class _VaultSpendAppState extends ConsumerState<VaultSpendApp>
     List<Subscription> subscriptions,
     List<Expense> expenses,
   ) {
+    final remindersEnabled = ref.read(remindersEnabledProvider);
+    final subscriptionRemindersEnabled = ref.read(
+      subscriptionRemindersEnabledProvider,
+    );
+    final recurringExpenseRemindersEnabled = ref.read(
+      recurringExpenseRemindersEnabledProvider,
+    );
+
     final subSignature = subscriptions
         .map(
           (s) =>
@@ -125,7 +190,7 @@ class _VaultSpendAppState extends ConsumerState<VaultSpendApp>
         )
         .join('|');
 
-    return '$subSignature||$recurringExpenseSignature';
+    return '$remindersEnabled|$subscriptionRemindersEnabled|$recurringExpenseRemindersEnabled||$subSignature||$recurringExpenseSignature';
   }
 
   @override

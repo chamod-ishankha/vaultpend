@@ -242,6 +242,7 @@ class _InsightsDashboardState extends ConsumerState<_InsightsDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
     final filteredExpenses = _filteredExpenses(widget.data.expenses);
     final expenseByCurrency = <String, double>{};
     for (final e in filteredExpenses) {
@@ -331,6 +332,25 @@ class _InsightsDashboardState extends ConsumerState<_InsightsDashboard> {
       );
     }
     final upcomingTrialCount = upcomingBillings.where((s) => s.isTrial).length;
+    final activeTrialCount = widget.data.subscriptions.where((subscription) {
+      if (!subscription.isTrial) {
+        return false;
+      }
+      final trialEnds = subscription.trialEndsAt;
+      return trialEnds == null || !trialEnds.isBefore(now);
+    }).length;
+    final expiredTrialCount = widget.data.subscriptions.where((subscription) {
+      if (!subscription.isTrial || subscription.trialEndsAt == null) {
+        return false;
+      }
+      final trialEndDay = DateTime(
+        subscription.trialEndsAt!.year,
+        subscription.trialEndsAt!.month,
+        subscription.trialEndsAt!.day,
+      );
+      final todayDay = DateTime(now.year, now.month, now.day);
+      return trialEndDay.difference(todayDay).inDays < 0;
+    }).length;
 
     final numberFmt = NumberFormat('#,##0.00');
     final trendCurrency = _dominantCurrency(filteredExpenses);
@@ -465,6 +485,8 @@ class _InsightsDashboardState extends ConsumerState<_InsightsDashboard> {
               label: 'Subscriptions',
               value: '${widget.data.subscriptions.length}',
             ),
+            _MetricItem(label: 'Trials', value: '$activeTrialCount'),
+            _MetricItem(label: 'Trial Expired', value: '$expiredTrialCount'),
             _MetricItem(label: 'MoM Up', value: '$increasingCurrencies'),
           ],
         ),
@@ -1399,6 +1421,7 @@ class _LargeSubscriptionsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final today = DateTime.now();
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -1415,44 +1438,93 @@ class _LargeSubscriptionsCard extends StatelessWidget {
             if (subscriptions.isEmpty)
               const Text('No subscriptions yet')
             else
-              ...subscriptions
-                  .take(5)
-                  .map(
-                    (subscription) => Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+              ...subscriptions.take(5).map((subscription) {
+                final trialStatus = _trialStatusText(subscription, today);
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
                               children: [
-                                Text(
-                                  subscription.name,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodyMedium
-                                      ?.copyWith(fontWeight: FontWeight.w600),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  '${subscription.currency} ${numberFmt.format(subscription.amount)} · ${subscription.cycle}',
-                                  style: Theme.of(context).textTheme.bodySmall,
+                                Expanded(
+                                  child: Text(
+                                    subscription.name,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(fontWeight: FontWeight.w600),
+                                  ),
                                 ),
                               ],
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            'Next ${DateFormat('MMM d, yyyy h:mm a').format(subscription.nextBillingDate)}',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
+                            if (subscription.isTrial) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                trialStatus ?? 'Trial',
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color:
+                                          subscription.trialEndsAt != null &&
+                                              subscription.trialEndsAt!
+                                                  .isBefore(today)
+                                          ? Theme.of(context).colorScheme.error
+                                          : Theme.of(
+                                              context,
+                                            ).colorScheme.onSurfaceVariant,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                              ),
+                            ],
+                            const SizedBox(height: 2),
+                            Text(
+                              '${subscription.currency} ${numberFmt.format(subscription.amount)} · ${subscription.cycle}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Next ${DateFormat('MMM d, yyyy h:mm a').format(subscription.nextBillingDate)}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
                   ),
+                );
+              }),
           ],
         ),
       ),
     );
+  }
+
+  String? _trialStatusText(Subscription subscription, DateTime today) {
+    if (!subscription.isTrial) {
+      return null;
+    }
+    final trialEnds = subscription.trialEndsAt;
+    if (trialEnds == null) {
+      return 'Trial';
+    }
+    final days = _dayDifferenceFromToday(trialEnds, today);
+    if (days < 0) {
+      return 'Trial expired ${-days}d ago';
+    }
+    if (days == 0) {
+      return 'Trial ends today';
+    }
+    return 'Trial ends in ${days}d';
+  }
+
+  int _dayDifferenceFromToday(DateTime value, DateTime today) {
+    final day = DateTime(value.year, value.month, value.day);
+    return day.difference(today).inDays;
   }
 }
 
@@ -1482,6 +1554,23 @@ class _UpcomingBillingCard extends StatelessWidget {
     final dateFmt = DateFormat('MMM d, yyyy h:mm a');
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
+    final displayedSubscriptions = [...subscriptions]
+      ..sort((left, right) {
+        if (left.isTrial != right.isTrial) {
+          return left.isTrial ? -1 : 1;
+        }
+
+        final leftTrialEnds = left.trialEndsAt;
+        final rightTrialEnds = right.trialEndsAt;
+        if (left.isTrial && right.isTrial) {
+          if (leftTrialEnds == null && rightTrialEnds == null) return 0;
+          if (leftTrialEnds == null) return 1;
+          if (rightTrialEnds == null) return -1;
+          return leftTrialEnds.compareTo(rightTrialEnds);
+        }
+
+        return left.nextBillingDate.compareTo(right.nextBillingDate);
+      });
     final title = switch (window) {
       _BillingWindow.sevenDays => 'Upcoming Billings (Next 7 Days)',
       _BillingWindow.thirtyDays => 'Upcoming Billings (Next 30 Days)',
@@ -1558,13 +1647,22 @@ class _UpcomingBillingCard extends StatelessWidget {
             if (entries.isEmpty)
               const Text('No upcoming billings in this window')
             else ...[
+              if (trialCount > 0) ...[
+                const SizedBox(height: 4),
+                _UpcomingTrialSummaryRow(
+                  trialCount: trialCount,
+                  expiredTrialCount: expiredTrialCount,
+                  dueWithin24hCount: dueWithin24hCount,
+                ),
+                const SizedBox(height: 8),
+              ],
               ...entries.map(
                 (entry) => Padding(
                   padding: const EdgeInsets.only(bottom: 4),
                   child: Text('${entry.key}: ${numberFmt.format(entry.value)}'),
                 ),
               ),
-              ...subscriptions.take(5).map((subscription) {
+              ...displayedSubscriptions.take(5).map((subscription) {
                 final daysAway = _dayDifferenceFromToday(
                   subscription.nextBillingDate,
                   today,
@@ -1581,11 +1679,11 @@ class _UpcomingBillingCard extends StatelessWidget {
                     ? 'Due in ${daysAway}d'
                     : null;
                 final trialStatus = _trialStatusText(subscription, today);
-                final subtitle = [
+                final subtitleParts = <String>[
                   '${dateFmt.format(subscription.nextBillingDate)} · ${subscription.currency} ${numberFmt.format(subscription.amount)}',
-                  ?trialStatus,
-                  ?billingStatus,
-                ].join(' · ');
+                  if (trialStatus != null) trialStatus,
+                  if (billingStatus != null) billingStatus,
+                ];
 
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 8),
@@ -1593,20 +1691,33 @@ class _UpcomingBillingCard extends StatelessWidget {
                     dense: true,
                     contentPadding: EdgeInsets.zero,
                     leading: Icon(
-                      isOverdue
+                      subscription.isTrial
+                          ? Icons.hourglass_bottom
+                          : isOverdue
                           ? Icons.warning_rounded
                           : urgent
                           ? Icons.notifications_active
                           : Icons.receipt_long,
-                      color: isOverdue
+                      color: subscription.isTrial
+                          ? Theme.of(context).colorScheme.tertiary
+                          : isOverdue
                           ? Theme.of(context).colorScheme.error
                           : urgent
                           ? Theme.of(context).colorScheme.error
                           : Theme.of(context).colorScheme.primary,
                     ),
                     title: Text(subscription.name),
-                    subtitle: Text(subtitle),
-                    trailing: const Icon(Icons.chevron_right),
+                    subtitle: Text(subtitleParts.join(' · ')),
+                    trailing: subscription.isTrial
+                        ? _TrialStatusChip(
+                            label: trialStatus ?? 'Trial',
+                            isExpired: _isTrialExpired(subscription, today),
+                            isEndingSoon: _isTrialEndingSoon(
+                              subscription,
+                              today,
+                            ),
+                          )
+                        : const Icon(Icons.chevron_right),
                     onTap: () => onSubscriptionTap(subscription),
                   ),
                 );
@@ -1640,6 +1751,88 @@ class _UpcomingBillingCard extends StatelessWidget {
     }
     return 'Trial ends in ${days}d';
   }
+
+  bool _isTrialExpired(Subscription subscription, DateTime today) {
+    final trialEnds = subscription.trialEndsAt;
+    return subscription.isTrial &&
+        trialEnds != null &&
+        _dayDifferenceFromToday(trialEnds, today) < 0;
+  }
+
+  bool _isTrialEndingSoon(Subscription subscription, DateTime today) {
+    final trialEnds = subscription.trialEndsAt;
+    if (!subscription.isTrial || trialEnds == null) {
+      return false;
+    }
+    final days = _dayDifferenceFromToday(trialEnds, today);
+    return days >= 0 && days <= 7;
+  }
+}
+
+class _UpcomingTrialSummaryRow extends StatelessWidget {
+  const _UpcomingTrialSummaryRow({
+    required this.trialCount,
+    required this.expiredTrialCount,
+    required this.dueWithin24hCount,
+  });
+
+  final int trialCount;
+  final int expiredTrialCount;
+  final int dueWithin24hCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.secondaryContainer.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        'Trials in window: $trialCount · Expired: $expiredTrialCount · Due <24h: $dueWithin24hCount',
+        style: Theme.of(
+          context,
+        ).textTheme.bodySmall?.copyWith(color: scheme.onSecondaryContainer),
+      ),
+    );
+  }
+}
+
+class _TrialStatusChip extends StatelessWidget {
+  const _TrialStatusChip({
+    required this.label,
+    required this.isExpired,
+    required this.isEndingSoon,
+  });
+
+  final String label;
+  final bool isExpired;
+  final bool isEndingSoon;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final background = isExpired
+        ? scheme.errorContainer
+        : isEndingSoon
+        ? scheme.tertiaryContainer
+        : scheme.secondaryContainer;
+    final foreground = isExpired
+        ? scheme.onErrorContainer
+        : isEndingSoon
+        ? scheme.onTertiaryContainer
+        : scheme.onSecondaryContainer;
+
+    return Chip(
+      label: Text(label),
+      backgroundColor: background,
+      labelStyle: TextStyle(color: foreground),
+      side: BorderSide(color: background),
+      visualDensity: VisualDensity.compact,
+    );
+  }
 }
 
 class _RecentActivityCard extends StatelessWidget {
@@ -1656,6 +1849,7 @@ class _RecentActivityCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dateFmt = DateFormat('MMM d, yyyy h:mm a');
+    final today = DateTime.now();
 
     return Card(
       child: Padding(
@@ -1697,12 +1891,52 @@ class _RecentActivityCard extends StatelessWidget {
                 Text(
                   '${recentSubscriptions.first.name} · ${dateFmt.format(recentSubscriptions.first.nextBillingDate)}',
                 ),
+                if (_trialStatusText(recentSubscriptions.first, today) !=
+                    null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    _trialStatusText(recentSubscriptions.first, today)!,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color:
+                          recentSubscriptions.first.trialEndsAt != null &&
+                              recentSubscriptions.first.trialEndsAt!.isBefore(
+                                today,
+                              )
+                          ? Theme.of(context).colorScheme.error
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ],
             ],
           ],
         ),
       ),
     );
+  }
+
+  String? _trialStatusText(Subscription subscription, DateTime today) {
+    if (!subscription.isTrial) {
+      return null;
+    }
+    final trialEnds = subscription.trialEndsAt;
+    if (trialEnds == null) {
+      return 'Trial';
+    }
+    final days = _dayDifferenceFromToday(trialEnds, today);
+    if (days < 0) {
+      return 'Trial expired ${-days}d ago';
+    }
+    if (days == 0) {
+      return 'Trial ends today';
+    }
+    return 'Trial ends in ${days}d';
+  }
+
+  int _dayDifferenceFromToday(DateTime value, DateTime today) {
+    final day = DateTime(value.year, value.month, value.day);
+    return day.difference(today).inDays;
   }
 }
 

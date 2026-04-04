@@ -3,8 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:isar_community/isar.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:logging/logging.dart';
 
 import '../../core/providers.dart';
+import '../../core/logging/app_logging.dart';
+import '../../core/ocr/receipt_ocr_service.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../data/models/category.dart';
 import '../../data/models/expense.dart';
@@ -20,6 +24,8 @@ class AddExpenseScreen extends ConsumerStatefulWidget {
 }
 
 class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
+  final _logger = Logger('VaultSpend.ReceiptOCR');
+  final _receiptOcrService = ReceiptOcrService();
   final _amountCtrl = TextEditingController();
   final _noteCtrl = TextEditingController();
   String _currency = 'USD';
@@ -84,9 +90,195 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     });
   }
 
+  Future<void> _scanReceipt() async {
+    final appLogger = ref.read(appLoggerProvider);
+    appLogger.info('receipt_scan_sheet_opened');
+
+    final source = await showModalBottomSheet<ImageSource?>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined),
+              title: const Text('Use camera'),
+              onTap: () {
+                appLogger.info('receipt_scan_source_selected source=camera');
+                Navigator.of(ctx).pop(ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from gallery'),
+              onTap: () {
+                appLogger.info('receipt_scan_source_selected source=gallery');
+                Navigator.of(ctx).pop(ImageSource.gallery);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null || !mounted) {
+      appLogger.info('receipt_scan_source_cancelled');
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Scanning receipt...')),
+    );
+
+    try {
+      final result = await _receiptOcrService.scanReceiptFromSource(
+        source,
+        logger: _logger,
+      );
+      if (!mounted) return;
+
+      if (result == null || result.rawText.trim().isEmpty) {
+        appLogger.warning('receipt_scan_no_text_detected');
+        messenger.showSnackBar(
+          const SnackBar(content: Text('No text found in receipt image.')),
+        );
+        return;
+      }
+
+      final selectedAmount = await _confirmDetectedAmount(result);
+      if (!mounted) return;
+
+      setState(() {
+        if (selectedAmount != null) {
+          _amountCtrl.text = selectedAmount.toStringAsFixed(2);
+        }
+        final note = result.note;
+        if (note != null &&
+            note.trim().isNotEmpty &&
+            _noteCtrl.text.trim().isEmpty) {
+          _noteCtrl.text = note.trim();
+        }
+      });
+
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            selectedAmount != null
+                ? 'Receipt scanned. Amount set to ${selectedAmount.toStringAsFixed(2)}.'
+                : 'Receipt scanned. No amount selected.',
+          ),
+        ),
+      );
+      appLogger.info(
+        'receipt_scan_completed amount=${selectedAmount ?? 'none'} note=${result.note?.isNotEmpty == true ? 'yes' : 'no'} candidate_count=${result.amountCandidates.length}',
+      );
+    } on PlatformException catch (error, stack) {
+      appLogger.severe('receipt_scan_platform_exception', error, stack);
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Receipt scan platform error: ${error.message ?? error.code}',
+          ),
+        ),
+      );
+    } catch (error, stack) {
+      appLogger.severe('receipt_scan_failed', error, stack);
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('Receipt scan failed: $error')),
+      );
+    }
+  }
+
+  Future<double?> _confirmDetectedAmount(ReceiptScanResult result) async {
+    if (result.amountCandidates.isEmpty) {
+      return result.amount;
+    }
+
+    final candidates = result.amountCandidates.take(3).toList(growable: false);
+    var selectedIndex = 0;
+
+    if (result.amount != null) {
+      final idx = candidates.indexWhere(
+        (candidate) => candidate.amount == result.amount,
+      );
+      if (idx >= 0) {
+        selectedIndex = idx;
+      }
+    }
+
+    return showModalBottomSheet<double?>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setSheetState) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Confirm detected amount',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Choose the best match from receipt scan results.',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 12),
+                for (var i = 0; i < candidates.length; i++)
+                  ListTile(
+                    onTap: () => setSheetState(() => selectedIndex = i),
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    leading: Icon(
+                      selectedIndex == i
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_unchecked,
+                    ),
+                    title: Text(candidates[i].amount.toStringAsFixed(2)),
+                    subtitle: Text(
+                      candidates[i].line,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).pop(),
+                      child: const Text('Skip'),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed: () => Navigator.of(
+                        ctx,
+                      ).pop(candidates[selectedIndex].amount),
+                      child: const Text('Use amount'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _save() async {
     final raw = _amountCtrl.text.trim().replaceAll(',', '.');
     final amount = double.tryParse(raw);
+    final existing = widget.expense;
     if (amount == null || amount <= 0) {
       ScaffoldMessenger.of(
         context,
@@ -94,7 +286,6 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       return;
     }
     final repo = ref.read(expenseRepositoryProvider);
-    final existing = widget.expense;
     final e = Expense()
       ..id = existing?.id ?? Isar.autoIncrement
       ..remoteId = existing?.remoteId
@@ -105,6 +296,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       ..isRecurring = _recurring
       ..categoryId = _categoryId;
     await repo.put(e);
+    await ref
+        .read(activityLogServiceProvider)
+        .add(
+          action: existing == null ? 'Expense added' : 'Expense updated',
+          details:
+              '${e.currency} ${e.amount.toStringAsFixed(2)}${e.note == null ? '' : ' · ${e.note}'}',
+        );
     if (mounted) Navigator.of(context).pop();
   }
 
@@ -115,6 +313,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.expense != null ? 'Edit expense' : 'Add expense'),
+        actions: [
+          IconButton(
+            tooltip: 'Scan receipt',
+            icon: const Icon(Icons.document_scanner_outlined),
+            onPressed: _scanReceipt,
+          ),
+        ],
       ),
       body: catsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),

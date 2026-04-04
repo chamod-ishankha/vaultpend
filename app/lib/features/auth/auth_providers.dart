@@ -19,11 +19,37 @@ final authControllerProvider =
 
 final guestModeControllerProvider =
     AsyncNotifierProvider<GuestModeNotifier, bool>(GuestModeNotifier.new);
+final remindersEnabledControllerProvider =
+    AsyncNotifierProvider<RemindersEnabledNotifier, bool>(
+      RemindersEnabledNotifier.new,
+    );
+final subscriptionRemindersEnabledControllerProvider =
+    AsyncNotifierProvider<SubscriptionRemindersEnabledNotifier, bool>(
+      SubscriptionRemindersEnabledNotifier.new,
+    );
+final recurringExpenseRemindersEnabledControllerProvider =
+    AsyncNotifierProvider<RecurringExpenseRemindersEnabledNotifier, bool>(
+      RecurringExpenseRemindersEnabledNotifier.new,
+    );
 
 const guestLocalUserId = 'guest-local';
 
 final isGuestModeProvider = Provider<bool>((ref) {
   return ref.watch(guestModeControllerProvider).value ?? false;
+});
+
+final remindersEnabledProvider = Provider<bool>((ref) {
+  return ref.watch(remindersEnabledControllerProvider).value ?? true;
+});
+
+final subscriptionRemindersEnabledProvider = Provider<bool>((ref) {
+  return ref.watch(subscriptionRemindersEnabledControllerProvider).value ??
+      true;
+});
+
+final recurringExpenseRemindersEnabledProvider = Provider<bool>((ref) {
+  return ref.watch(recurringExpenseRemindersEnabledControllerProvider).value ??
+      true;
 });
 
 /// Server-side user id (JWT `sub` / profile `id`). Local Isar data is scoped by this.
@@ -100,6 +126,12 @@ class GuestModeNotifier extends AsyncNotifier<bool> {
     await storage.writeGuestMode(true);
     state = const AsyncValue.data(true);
     logger.info('guest_mode_enabled');
+    await ref
+        .read(activityLogServiceProvider)
+        .add(
+          action: 'Guest mode enabled',
+          details: 'Signed out and switched to local-only mode.',
+        );
   }
 
   Future<void> exitGuestMode() async {
@@ -108,6 +140,71 @@ class GuestModeNotifier extends AsyncNotifier<bool> {
     await storage.clearGuestMode();
     state = const AsyncValue.data(false);
     logger.info('guest_mode_disabled');
+    await ref
+        .read(activityLogServiceProvider)
+        .add(
+          action: 'Guest mode disabled',
+          details: 'Account sign-in is now available.',
+        );
+  }
+}
+
+class RemindersEnabledNotifier extends AsyncNotifier<bool> {
+  @override
+  Future<bool> build() async {
+    return ref.read(tokenStorageProvider).readRemindersEnabled();
+  }
+
+  Future<void> setEnabled(bool enabled) async {
+    final logger = ref.read(appLoggerProvider);
+    await ref.read(tokenStorageProvider).writeRemindersEnabled(enabled);
+    state = AsyncValue.data(enabled);
+    logger.info('reminders_enabled_set value=$enabled');
+    await ref
+        .read(activityLogServiceProvider)
+        .add(action: 'Renewal reminders ${enabled ? 'enabled' : 'disabled'}');
+  }
+}
+
+class SubscriptionRemindersEnabledNotifier extends AsyncNotifier<bool> {
+  @override
+  Future<bool> build() async {
+    return ref.read(tokenStorageProvider).readSubscriptionRemindersEnabled();
+  }
+
+  Future<void> setEnabled(bool enabled) async {
+    final logger = ref.read(appLoggerProvider);
+    await ref
+        .read(tokenStorageProvider)
+        .writeSubscriptionRemindersEnabled(enabled);
+    state = AsyncValue.data(enabled);
+    logger.info('subscription_reminders_enabled_set value=$enabled');
+    await ref
+        .read(activityLogServiceProvider)
+        .add(
+          action: 'Subscription reminders ${enabled ? 'enabled' : 'disabled'}',
+        );
+  }
+}
+
+class RecurringExpenseRemindersEnabledNotifier extends AsyncNotifier<bool> {
+  @override
+  Future<bool> build() async {
+    return ref
+        .read(tokenStorageProvider)
+        .readRecurringExpenseRemindersEnabled();
+  }
+
+  Future<void> setEnabled(bool enabled) async {
+    final logger = ref.read(appLoggerProvider);
+    await ref
+        .read(tokenStorageProvider)
+        .writeRecurringExpenseRemindersEnabled(enabled);
+    state = AsyncValue.data(enabled);
+    logger.info('recurring_expense_reminders_enabled_set value=$enabled');
+    await ref
+        .read(activityLogServiceProvider)
+        .add(action: 'Recurring reminders ${enabled ? 'enabled' : 'disabled'}');
   }
 }
 
@@ -177,9 +274,15 @@ class AuthNotifier extends AsyncNotifier<AuthSession?> {
       ref.invalidate(guestModeControllerProvider);
       state = AsyncValue.data(_sessionFromFirebaseUser(user));
       logger.info('sign_in_succeeded');
+      await ref
+          .read(activityLogServiceProvider)
+          .add(action: 'Signed in', details: user.email ?? email);
     } catch (error, stack) {
       logger.warning('sign_in_failed', error, stack);
       state = AsyncValue.error(error, stack);
+      await ref
+          .read(activityLogServiceProvider)
+          .add(action: 'Sign-in failed', details: error.toString());
     }
   }
 
@@ -219,19 +322,29 @@ class AuthNotifier extends AsyncNotifier<AuthSession?> {
         ),
       );
       logger.info('sign_up_succeeded');
+      await ref
+          .read(activityLogServiceProvider)
+          .add(action: 'Account created', details: user.email ?? email);
     } catch (error, stack) {
       logger.warning('sign_up_failed', error, stack);
       state = AsyncValue.error(error, stack);
+      await ref
+          .read(activityLogServiceProvider)
+          .add(action: 'Sign-up failed', details: error.toString());
     }
   }
 
   Future<void> signOut() async {
     final logger = ref.read(appLoggerProvider);
     final storage = ref.read(tokenStorageProvider);
+    final session = state.value;
     await ref.read(firebaseAuthProvider).signOut();
     await storage.clearGuestMode();
     state = const AsyncValue.data(null);
     ref.invalidate(guestModeControllerProvider);
     logger.info('sign_out_completed');
+    await ref
+        .read(activityLogServiceProvider)
+        .add(action: 'Signed out', details: session?.user.email);
   }
 }

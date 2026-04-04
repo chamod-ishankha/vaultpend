@@ -4,7 +4,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logging/logging.dart';
 
+import 'activity_log_service.dart';
+
 final appLoggerProvider = Provider<Logger>((ref) => Logger('VaultSpend'));
+final activityLogServiceProvider = Provider<ActivityLogService>(
+  (ref) => ActivityLogService(),
+);
 
 var _loggingConfigured = false;
 
