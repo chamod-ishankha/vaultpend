@@ -302,17 +302,34 @@ class AuthNotifier extends AsyncNotifier<AuthSession?> {
     User user, {
     String preferredCurrency = 'USD',
   }) {
+    final displayName = _normalizeDisplayName(
+      user.displayName,
+      fallbackEmail: user.email,
+    );
     return AuthSession(
       user: AuthUser(
         id: user.uid,
         email: user.email ?? 'unknown@vaultspend.local',
         preferredCurrency: _normalizeCurrency(preferredCurrency),
+        displayName: displayName,
       ),
     );
   }
 
   String _normalizeCurrency(String value) {
     return _normalizeCurrencyCode(value);
+  }
+
+  String _normalizeDisplayName(String? value, {String? fallbackEmail}) {
+    final trimmed = value?.trim() ?? '';
+    if (trimmed.isNotEmpty) {
+      return trimmed;
+    }
+    final email = fallbackEmail?.trim() ?? '';
+    if (email.contains('@')) {
+      return email.split('@').first;
+    }
+    return 'VaultSpend User';
   }
 
   Future<String> _readPreferredCurrency(User user) async {
@@ -384,6 +401,7 @@ class AuthNotifier extends AsyncNotifier<AuthSession?> {
           id: session.user.id,
           email: session.user.email,
           preferredCurrency: normalized,
+          displayName: session.user.displayName,
         ),
       ),
     );
@@ -545,6 +563,10 @@ class AuthNotifier extends AsyncNotifier<AuthSession?> {
             id: user.uid,
             email: user.email ?? 'unknown@vaultspend.local',
             preferredCurrency: normalizedCurrency,
+            displayName: _normalizeDisplayName(
+              user.displayName,
+              fallbackEmail: user.email ?? email,
+            ),
           ),
         ),
       );
@@ -578,5 +600,155 @@ class AuthNotifier extends AsyncNotifier<AuthSession?> {
     await ref
         .read(activityLogServiceProvider)
         .add(action: 'Signed out', details: session?.user.email);
+  }
+
+  Future<void> updateEmail(String email) async {
+    final logger = ref.read(appLoggerProvider);
+    final session = state.value;
+    if (session == null) {
+      throw StateError('updateEmail requires a signed-in session');
+    }
+
+    final normalizedEmail = email.trim();
+    if (normalizedEmail.isEmpty) {
+      throw ArgumentError.value(email, 'email', 'Email cannot be empty');
+    }
+    if (normalizedEmail == session.user.email) {
+      return;
+    }
+
+    final firebaseUser = ref.read(firebaseAuthProvider).currentUser;
+    if (firebaseUser == null) {
+      throw StateError('updateEmail requires an authenticated Firebase user');
+    }
+
+    try {
+      await firebaseUser
+          .verifyBeforeUpdateEmail(normalizedEmail)
+          .timeout(const Duration(seconds: 4));
+      logger.info('profile_email_verification_sent');
+      await ref
+          .read(activityLogServiceProvider)
+          .add(
+            action: 'Profile email verification sent',
+            details: normalizedEmail,
+          );
+      await firebaseUser.reload().timeout(const Duration(seconds: 4));
+      state = AsyncValue.data(
+        AuthSession(
+          user: AuthUser(
+            id: session.user.id,
+            email: session.user.email,
+            preferredCurrency: session.user.preferredCurrency,
+            displayName: session.user.displayName,
+          ),
+        ),
+      );
+    } catch (error, stack) {
+      logger.warning('profile_email_update_failed', error, stack);
+      rethrow;
+    }
+  }
+
+  Future<void> updateDisplayName(String displayName) async {
+    final logger = ref.read(appLoggerProvider);
+    final session = state.value;
+    if (session == null) {
+      throw StateError('updateDisplayName requires a signed-in session');
+    }
+
+    final normalized = _normalizeDisplayName(
+      displayName,
+      fallbackEmail: session.user.email,
+    );
+    if (normalized == session.user.displayName) {
+      return;
+    }
+
+    final firebaseUser = ref.read(firebaseAuthProvider).currentUser;
+    if (firebaseUser == null) {
+      throw StateError(
+        'updateDisplayName requires an authenticated Firebase user',
+      );
+    }
+
+    try {
+      await firebaseUser
+          .updateDisplayName(normalized)
+          .timeout(const Duration(seconds: 4));
+      await firebaseUser.reload().timeout(const Duration(seconds: 4));
+      state = AsyncValue.data(
+        AuthSession(
+          user: AuthUser(
+            id: session.user.id,
+            email: session.user.email,
+            preferredCurrency: session.user.preferredCurrency,
+            displayName: normalized,
+          ),
+        ),
+      );
+      logger.info('profile_display_name_updated');
+      await ref
+          .read(activityLogServiceProvider)
+          .add(action: 'Profile display name updated', details: normalized);
+    } catch (error, stack) {
+      logger.warning('profile_display_name_update_failed', error, stack);
+      rethrow;
+    }
+  }
+
+  Future<void> updatePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final logger = ref.read(appLoggerProvider);
+    final session = state.value;
+    if (session == null) {
+      throw StateError('updatePassword requires a signed-in session');
+    }
+
+    final current = currentPassword.trim();
+    final next = newPassword;
+    if (current.isEmpty) {
+      throw ArgumentError.value(
+        currentPassword,
+        'currentPassword',
+        'Current password is required',
+      );
+    }
+    if (next.length < 8) {
+      throw ArgumentError.value(
+        newPassword,
+        'newPassword',
+        'Password must be at least 8 characters',
+      );
+    }
+
+    final firebaseUser = ref.read(firebaseAuthProvider).currentUser;
+    if (firebaseUser == null) {
+      throw StateError(
+        'updatePassword requires an authenticated Firebase user',
+      );
+    }
+
+    try {
+      final credential = EmailAuthProvider.credential(
+        email: session.user.email,
+        password: current,
+      );
+      await firebaseUser
+          .reauthenticateWithCredential(credential)
+          .timeout(const Duration(seconds: 6));
+      await firebaseUser
+          .updatePassword(next)
+          .timeout(const Duration(seconds: 4));
+      logger.info('profile_password_updated');
+      await ref
+          .read(activityLogServiceProvider)
+          .add(action: 'Profile password updated');
+    } catch (error, stack) {
+      logger.warning('profile_password_update_failed', error, stack);
+      rethrow;
+    }
   }
 }

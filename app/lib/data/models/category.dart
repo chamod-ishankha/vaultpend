@@ -14,6 +14,7 @@ class Category {
 
   late String name;
 
+  String? description;
   String? iconKey;
   String? color;
 }

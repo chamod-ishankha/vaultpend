@@ -1,6 +1,6 @@
 ﻿# VaultSpend Project Specification
 
-Version: 1.5.7
+Version: 1.5.22
 Date: 2026-04-05
 Status: In Progress
 Platform Scope: Android + iOS (mobile-only)
@@ -25,6 +25,11 @@ VaultSpend is a personal finance app focused on:
 Completion: 100%
 - Done: app scaffolding, domain models, local persistence, repository patterns
 - Done: category/expense/subscription CRUD flows
+- Done: category metadata expansion (optional description, color, icon_key) in add/edit/list and sync paths
+- Done: icon_key resolver with live preview for category add/edit/list UI
+- Done: database-backed category icon picklist seeded from bundled JSON
+- In progress:
+  - Replace free-form category color entry with a database-backed theme color picklist
 
 ### Phase 2: Auth, Sync, and Reliability
 Completion: 100%
@@ -34,8 +39,8 @@ Completion: 100%
 - Done: guest mode support with local-only behavior
 - Done: sync status indicators and conflict-safe update behavior
 - Done: preferred currency persistence (local + cloud profile) with runtime update support
-- In progress:
-  - Add per-entity conflict trend charts and advanced counters in diagnostics (optional)
+- Done: per-entity conflict trend charts and advanced counters in diagnostics
+- Done: profile management with editable display name, password change handling, and read-only email display
 
 ### Phase 3: Reporting, Exports, and Insights
 Completion: 100%
@@ -58,15 +63,14 @@ Completion: 100%
   - Uses original recorded currencies (native totals), not forced preferred-currency conversion
 
 ### Phase 4: Reminder Intelligence & Trial Operations
-Completion: 95%
+Completion: 100%
 - Done: global + per-type reminder toggles
 - Done: managed reminder scheduling and diagnostics screen
 - Done: human-readable pending reminder parsing (subscription + recurring)
 - Done: trial monitoring visibility across subscriptions and insights
 - Done: explicit "mark trial as paid" flow with confirmation
 - Done: activity log entries for critical user actions
-- In progress:
-  - Add optional notification reliability counters in diagnostics (advanced breakdown)
+- Done: notification reliability counters in diagnostics (expected vs pending, by reminder type and bucket)
 
 ### Phase 5: UX Polish & Operational Readiness
 Completion: 100%
@@ -90,15 +94,18 @@ Computation basis:
 - Mobile app runs with Firebase initialized and Isar local store
 - Guest mode and signed-in mode both functional on mobile
 - Expense/subscription CRUD and sync flows active
+- Category add/edit supports optional description, icon key, and color metadata
+- Category icon choices load from an Isar-backed catalog seeded from bundled JSON
 - Reminder diagnostics and activity log available through Settings navigation
 - Preferred currency is stored and can be changed from Settings; base currency views are applied in key screens
 - Export menus available on Expenses, Subscriptions, and Insights
 
 ## 6. Remaining Backlog (Priority Ordered)
-No mandatory backlog items currently. Awaiting next change request.
+1. Replace free-form category color entry with a database-backed theme color picklist.
 
 ## 7. Immediate Next Development Item
-Awaiting next approved scope change from product requirements.
+Implement backlog item #1 now:
+- Replace free-form category color entry with a database-backed theme color picklist.
 
 ## 9. Delivery Workflow (Mandatory)
 - Before implementing any new change request, update this specification first.

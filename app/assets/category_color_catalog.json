@@ -1,0 +1,27 @@
+[
+    {
+        "color_key": "primary_container",
+        "label": "Primary",
+        "sort_order": 0
+    },
+    {
+        "color_key": "secondary_container",
+        "label": "Secondary",
+        "sort_order": 1
+    },
+    {
+        "color_key": "tertiary_container",
+        "label": "Tertiary",
+        "sort_order": 2
+    },
+    {
+        "color_key": "error_container",
+        "label": "Error",
+        "sort_order": 3
+    },
+    {
+        "color_key": "surface_container_highest",
+        "label": "Neutral",
+        "sort_order": 4
+    }
+]

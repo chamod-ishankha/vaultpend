@@ -34,6 +34,8 @@ class _ReminderDiagnosticsScreenState
   Map<int, Subscription> _subscriptionById = {};
   Map<String, int> _pendingSubscriptionByBucket = {};
   Map<String, int> _pendingRecurringByBucket = {};
+  Map<String, int> _expectedSubscriptionByBucket = {};
+  Map<String, int> _expectedRecurringByBucket = {};
   int _expectedSubscriptionReminders = 0;
   int _expectedRecurringReminders = 0;
   int _pendingSubscriptionReminders = 0;
@@ -120,6 +122,39 @@ class _ReminderDiagnosticsScreenState
         return ReminderPlanning.nextReminderPlan(dueDate, now) != null;
       }).length;
 
+      final expectedSubscriptionByBucket = <String, int>{};
+      for (final subscription in subscriptions) {
+        final plan = ReminderPlanning.nextReminderPlan(
+          subscription.nextBillingDate,
+          now,
+        );
+        if (plan == null) {
+          continue;
+        }
+        expectedSubscriptionByBucket.update(
+          plan.bucketLabel.toUpperCase(),
+          (value) => value + 1,
+          ifAbsent: () => 1,
+        );
+      }
+
+      final expectedRecurringByBucket = <String, int>{};
+      for (final expense in recurringExpenses) {
+        final dueDate = ReminderPlanning.nextMonthlyOccurrence(
+          expense.occurredAt,
+          now,
+        );
+        final plan = ReminderPlanning.nextReminderPlan(dueDate, now);
+        if (plan == null) {
+          continue;
+        }
+        expectedRecurringByBucket.update(
+          plan.bucketLabel.toUpperCase(),
+          (value) => value + 1,
+          ifAbsent: () => 1,
+        );
+      }
+
       final pendingSubscriptionReminders = requests.where((request) {
         return request.payload?.startsWith('vaultspend-renewal') == true;
       }).length;
@@ -162,6 +197,8 @@ class _ReminderDiagnosticsScreenState
           _subscriptionById = subscriptionById;
           _pendingSubscriptionByBucket = pendingSubscriptionByBucket;
           _pendingRecurringByBucket = pendingRecurringByBucket;
+          _expectedSubscriptionByBucket = expectedSubscriptionByBucket;
+          _expectedRecurringByBucket = expectedRecurringByBucket;
           _expectedSubscriptionReminders = expectedSubscriptionReminders;
           _expectedRecurringReminders = expectedRecurringReminders;
           _pendingSubscriptionReminders = pendingSubscriptionReminders;
@@ -327,6 +364,32 @@ class _ReminderDiagnosticsScreenState
                         'Recurring buckets: ${_formatBucketCounts(_pendingRecurringByBucket)}',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Notification reliability breakdown',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _bucketReliabilityLine(
+                        label: 'Subscriptions',
+                        expectedByBucket: _expectedSubscriptionByBucket,
+                        pendingByBucket: _pendingSubscriptionByBucket,
+                        expectedTotal: _expectedSubscriptionReminders,
+                        pendingTotal: _pendingSubscriptionReminders,
+                      ),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    Text(
+                      _bucketReliabilityLine(
+                        label: 'Recurring',
+                        expectedByBucket: _expectedRecurringByBucket,
+                        pendingByBucket: _pendingRecurringByBucket,
+                        expectedTotal: _expectedRecurringReminders,
+                        pendingTotal: _pendingRecurringReminders,
+                      ),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                   ],
                 ),
               ),
@@ -522,6 +585,35 @@ class _ReminderDiagnosticsScreenState
     final entries = values.entries.toList()
       ..sort((a, b) => a.key.compareTo(b.key));
     return entries.map((entry) => '${entry.key}:${entry.value}').join(', ');
+  }
+
+  String _bucketReliabilityLine({
+    required String label,
+    required Map<String, int> expectedByBucket,
+    required Map<String, int> pendingByBucket,
+    required int expectedTotal,
+    required int pendingTotal,
+  }) {
+    final bucketOrder = ReminderPlanning.supportedBuckets.map(
+      (bucket) => bucket.toUpperCase(),
+    );
+    final bucketSegments = <String>[];
+    for (final bucket in bucketOrder) {
+      final expected = expectedByBucket[bucket] ?? 0;
+      final pending = pendingByBucket[bucket] ?? 0;
+      if (expected == 0 && pending == 0) {
+        continue;
+      }
+      bucketSegments.add('$bucket $pending/$expected');
+    }
+
+    final bucketText = bucketSegments.isEmpty
+        ? 'no bucket data'
+        : bucketSegments.join(' · ');
+    final coverage = expectedTotal <= 0
+        ? 100
+        : (pendingTotal / expectedTotal) * 100;
+    return '$label: ${coverage.toStringAsFixed(0)}% ($pendingTotal/$expectedTotal) [$bucketText]';
   }
 
   String _buildPendingTitle(PendingNotificationRequest request) {

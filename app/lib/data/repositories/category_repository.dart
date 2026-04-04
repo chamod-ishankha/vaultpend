@@ -67,6 +67,7 @@ class CategoryRepository {
         target.name = (data['name'] as String?)?.trim().isNotEmpty == true
             ? (data['name'] as String)
             : 'Unnamed';
+        target.description = (data['description'] as String?)?.trim();
         target.iconKey = data['icon_key'] as String?;
         target.color = data['color'] as String?;
         upserts.add(target);
@@ -128,6 +129,7 @@ class CategoryRepository {
         final remote = await _remoteCollection
             .add({
               'name': item.name,
+              'description': item.description,
               'icon_key': item.iconKey,
               'color': item.color,
               'updated_at': FieldValue.serverTimestamp(),
@@ -201,6 +203,7 @@ class CategoryRepository {
         final doc = await _remoteCollection
             .add({
               'name': c.name,
+              'description': c.description,
               'icon_key': c.iconKey,
               'color': c.color,
               'updated_at': FieldValue.serverTimestamp(),
@@ -212,6 +215,7 @@ class CategoryRepository {
             .doc(remoteId)
             .set({
               'name': c.name,
+              'description': c.description,
               'icon_key': c.iconKey,
               'color': c.color,
               'updated_at': FieldValue.serverTimestamp(),

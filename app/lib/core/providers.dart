@@ -5,12 +5,18 @@ import 'package:path_provider/path_provider.dart';
 
 import '../core/notifications/subscription_reminder_service.dart';
 import '../data/models/category.dart';
+import '../data/models/category_icon_catalog_entry.dart';
+import '../data/models/category_color_catalog_entry.dart';
 import '../data/models/expense.dart';
 import '../data/models/subscription.dart';
 import '../data/repositories/category_repository.dart';
+import '../data/repositories/category_color_catalog_repository.dart';
+import '../data/repositories/category_icon_catalog_repository.dart';
 import '../data/repositories/expense_repository.dart';
 import '../data/repositories/subscription_repository.dart';
 import '../features/auth/auth_providers.dart';
+import '../features/categories/category_icon_catalog.dart';
+import '../features/categories/category_color_catalog.dart';
 
 /// Set in [main] via [ProviderScope] override after [Isar.open].
 final isarProvider = Provider<Isar>((ref) {
@@ -69,6 +75,26 @@ final subscriptionRepositoryProvider = Provider<SubscriptionRepository>((ref) {
   );
 });
 
+final categoryIconCatalogRepositoryProvider =
+    Provider<CategoryIconCatalogRepository>((ref) {
+      return CategoryIconCatalogRepository(ref.watch(isarProvider));
+    });
+
+final categoryIconCatalogProvider =
+    FutureProvider.autoDispose<List<CategoryIconOption>>((ref) async {
+      return ref.watch(categoryIconCatalogRepositoryProvider).getAllOptions();
+    });
+
+final categoryColorCatalogRepositoryProvider =
+    Provider<CategoryColorCatalogRepository>((ref) {
+      return CategoryColorCatalogRepository(ref.watch(isarProvider));
+    });
+
+final categoryColorCatalogProvider =
+    FutureProvider.autoDispose<List<CategoryColorOption>>((ref) async {
+      return ref.watch(categoryColorCatalogRepositoryProvider).getAllOptions();
+    });
+
 final categoryListProvider = FutureProvider.autoDispose<List<Category>>((
   ref,
 ) async {
@@ -78,7 +104,13 @@ final categoryListProvider = FutureProvider.autoDispose<List<Category>>((
 Future<Isar> openIsar() async {
   final directory = (await getApplicationDocumentsDirectory()).path;
   return Isar.open(
-    [CategorySchema, ExpenseSchema, SubscriptionSchema],
+    [
+      CategorySchema,
+      CategoryIconCatalogEntrySchema,
+      CategoryColorCatalogEntrySchema,
+      ExpenseSchema,
+      SubscriptionSchema,
+    ],
     directory: directory,
     name: 'vaultspend',
   );

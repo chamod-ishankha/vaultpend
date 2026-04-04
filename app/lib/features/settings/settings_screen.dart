@@ -3,16 +3,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../activity/activity_log_screen.dart';
 import '../auth/auth_providers.dart';
+import '../auth/login_screen.dart';
 import '../reminders/reminder_diagnostics_screen.dart';
 import '../reminders/sync_incident_screen.dart';
+import 'profile_update_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
-  static const _currencies = ['LKR', 'USD', 'EUR'];
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final authSession = ref.watch(authControllerProvider).value;
     final remindersEnabled = ref.watch(remindersEnabledProvider);
     final subscriptionRemindersEnabled = ref.watch(
       subscriptionRemindersEnabledProvider,
@@ -21,6 +22,11 @@ class SettingsScreen extends ConsumerWidget {
       recurringExpenseRemindersEnabledProvider,
     );
     final preferredCurrency = ref.watch(preferredCurrencyProvider);
+    final signedIn = authSession != null;
+    final profileTitle = signedIn ? authSession.user.email : 'Guest mode';
+    final profileSubtitle = signedIn
+        ? 'Preferred currency: $preferredCurrency'
+        : 'Sign in to edit email and profile preferences';
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -35,26 +41,26 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 6),
           Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: DropdownButtonFormField<String>(
-                initialValue: preferredCurrency,
-                decoration: const InputDecoration(
-                  labelText: 'Preferred currency (base)',
-                  border: OutlineInputBorder(),
-                ),
-                items: _currencies
-                    .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                    .toList(),
-                onChanged: (value) {
-                  if (value == null) {
-                    return;
-                  }
-                  ref
-                      .read(preferredCurrencyControllerProvider.notifier)
-                      .setPreferredCurrency(value);
-                },
-              ),
+            child: ListTile(
+              leading: const Icon(Icons.person_outline),
+              title: Text(profileTitle),
+              subtitle: Text(profileSubtitle),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                if (!signedIn) {
+                  Navigator.of(context).push<void>(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const LoginScreen(),
+                    ),
+                  );
+                  return;
+                }
+                Navigator.of(context).push<void>(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const ProfileUpdateScreen(),
+                  ),
+                );
+              },
             ),
           ),
           const SizedBox(height: 14),

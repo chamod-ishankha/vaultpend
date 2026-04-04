@@ -38,6 +38,7 @@ service cloud.firestore {
     function isValidCategoryDoc() {
       return request.resource.data.keys().hasOnly([
           'name',
+          'description',
           'icon_key',
           'color',
           'updated_at',
@@ -45,6 +46,7 @@ service cloud.firestore {
         && request.resource.data.keys().hasAll(['name', 'updated_at'])
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
+        && isNullableString(request.resource.data.description)
         && isNullableString(request.resource.data.icon_key)
         && isNullableString(request.resource.data.color)
         && hasServerUpdatedAt();
