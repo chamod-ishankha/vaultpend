@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../fx/fx_providers.dart';
 
@@ -12,69 +12,95 @@ class FxReferenceStrip extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(fxRatesProvider);
     final scheme = Theme.of(context).colorScheme;
-    final dateFmt = DateFormat('MMM d, yyyy h:mm a');
 
-    return async.when(
-      data: (snap) {
-        if (snap == null || snap.rates.isEmpty) {
-          return _bar(
-            context,
-            scheme,
-            'FX: offline — pull to refresh when online',
-            isError: true,
-          );
-        }
-        final eur = snap.rates['EUR'];
-        final lkr = snap.rates['LKR'];
-        final parts = <String>[
-          if (eur != null) '1 ${snap.base} ≈ ${eur.toStringAsFixed(4)} EUR',
-          if (lkr != null) '1 ${snap.base} ≈ ${lkr.toStringAsFixed(2)} LKR',
-        ];
-        final stale = snap.isStale ? ' · cached' : '';
-        final line =
-            '${parts.join(' · ')} · ${dateFmt.format(snap.date)}$stale';
-        return _bar(context, scheme, line, isError: snap.isStale);
-      },
-      loading: () => _bar(context, scheme, 'FX: loading reference rates…'),
-      error: (err, _) => _bar(
-        context,
-        scheme,
-        'FX: unavailable — pull to refresh',
-        isError: true,
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLow,
+        border: Border(
+          bottom: BorderSide(
+            color: scheme.outlineVariant.withOpacity(0.1),
+            width: 1,
+          ),
+        ),
       ),
-    );
-  }
-
-  Widget _bar(
-    BuildContext context,
-    ColorScheme scheme,
-    String text, {
-    bool isError = false,
-  }) {
-    return Material(
-      color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         child: Row(
           children: [
-            Icon(
-              Icons.currency_exchange,
-              size: 18,
-              color: isError ? scheme.error : scheme.primary,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                text,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: isError ? scheme.error : scheme.onSurfaceVariant,
-                  height: 1.25,
+            Row(
+              children: [
+                Text(
+                  'FX RATES',
+                  style: GoogleFonts.manrope(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: scheme.outline,
+                    letterSpacing: 1.5,
+                  ),
                 ),
-              ),
+                const SizedBox(width: 8),
+                Container(
+                  width: 1,
+                  height: 12,
+                  color: scheme.outlineVariant.withOpacity(0.3),
+                ),
+                const SizedBox(width: 24),
+              ],
+            ),
+            async.when(
+              data: (snap) {
+                if (snap == null || snap.rates.isEmpty) {
+                  return _buildItem(context, scheme, 'OFFLINE', 'Pull to refresh', isError: true);
+                }
+
+                // If base is USD, we convert it to pairs like EUR/USD
+                final widgets = <Widget>[];
+                snap.rates.forEach((currency, rate) {
+                  widgets.add(_buildItem(context, scheme, '$currency/${snap.base}', rate.toStringAsFixed(4)));
+                  widgets.add(const SizedBox(width: 24));
+                });
+
+                if (snap.isStale) {
+                  widgets.add(_buildItem(context, scheme, 'CHCD', 'Cached Data', isError: true));
+                }
+
+                return Row(children: widgets);
+              },
+              loading: () => _buildItem(context, scheme, 'SYNC', 'Loading...'),
+              error: (err, _) => _buildItem(context, scheme, 'ERR', 'Unavailable', isError: true),
             ),
           ],
         ),
       ),
     );
   }
+
+  Widget _buildItem(BuildContext context, ColorScheme scheme, String label, String value, {bool isError = false}) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            color: isError ? scheme.error : scheme.onSurfaceVariant,
+            letterSpacing: 1.5,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          value,
+          style: GoogleFonts.manrope(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: isError ? scheme.error : scheme.primary,
+          ),
+        ),
+      ],
+    );
+  }
 }
+

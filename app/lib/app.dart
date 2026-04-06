@@ -13,6 +13,7 @@ import 'features/auth/auth_providers.dart';
 import 'features/auth/auth_session.dart';
 import 'features/auth/login_screen.dart';
 import 'features/home/shell_screen.dart';
+import 'features/splash/splash_screen.dart';
 import 'core/providers.dart';
 
 final _logger = Logger('VaultSpend.AppReminders');
@@ -240,23 +241,18 @@ class _VaultSpendAppState extends ConsumerState<VaultSpendApp>
       theme: buildVaultSpendTheme(brightness: Brightness.light),
       darkTheme: buildVaultSpendTheme(brightness: Brightness.dark),
       themeMode: ThemeMode.dark,
-      home: _showSplash ? const _VaultSpendSplashScreen() : resolvedHome,
-    );
-  }
-}
-
-class _VaultSpendSplashScreen extends StatelessWidget {
-  const _VaultSpendSplashScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      body: SizedBox.expand(
-        child: Image(
-          image: AssetImage('assets/branding/splash.png'),
-          fit: BoxFit.cover,
-        ),
+      home: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 600),
+        switchInCurve: Curves.easeIn,
+        switchOutCurve: Curves.easeOut,
+        child: _showSplash
+            ? const SplashScreen(key: ValueKey('splash'))
+            : KeyedSubtree(
+                key: const ValueKey('app_home'),
+                child: resolvedHome,
+              ),
       ),
     );
   }
 }
+
