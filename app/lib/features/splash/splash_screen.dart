@@ -20,6 +20,7 @@ class _SplashScreenState extends State<SplashScreen>
   late final Animation<double> _glowScale;
   late final AnimationController _progressController;
   late final Animation<double> _progressValue;
+  bool _assetsPrecached = false;
 
   static const _dwell = Duration(milliseconds: 3000);
 
@@ -29,7 +30,7 @@ class _SplashScreenState extends State<SplashScreen>
     // Setup glow animation
     _glowController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 3),
+      duration: const Duration(seconds: 30),
     )..repeat(reverse: true);
 
     _glowScale = Tween<double>(begin: 1.0, end: 1.3).animate(
@@ -62,12 +63,26 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_assetsPrecached) return;
+    _assetsPrecached = true;
+
+    // Ensure splash assets are warm before first frame transitions.
+    precacheImage(const AssetImage('assets/branding/splash_bg.png'), context);
+    precacheImage(
+      const AssetImage('assets/branding/logo_pattern.png'),
+      context,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final ext = Theme.of(context).extension<VaultSpendThemeExtension>()!;
 
     final _primary = scheme.primary;
-    final _surface = const Color(0xFF131317);
+    final _surface = scheme.surface;
     final _onSurface = scheme.onSurface;
     final _onSurfaceVariant = scheme.onSurfaceVariant;
     final _outlineVariant = scheme.outlineVariant;
@@ -79,28 +94,32 @@ class _SplashScreenState extends State<SplashScreen>
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Background Gradient (Digital Obsidian Gradient)
+          // Primary textured background from Stitch export.
+          Positioned.fill(
+            child: Image(
+              image: const AssetImage('assets/branding/splash_bg.png'),
+              fit: BoxFit.cover,
+              filterQuality: FilterQuality.medium,
+              opacity: const AlwaysStoppedAnimation<double>(1.0),
+              errorBuilder: (context, error, stackTrace) {
+                debugPrint('Failed to load splash_bg.png: $error');
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+
+          // Subtle tonal tint so text and glass layers remain legible.
           Container(
             decoration: BoxDecoration(
               gradient: RadialGradient(
                 center: Alignment.center,
                 radius: 1.2,
                 colors: [
-                  _primary.withOpacity(0.08), // approx 8%
-                  _surface,
+                  _primary.withOpacity(0.04),
+                  _surface.withOpacity(0.14),
                 ],
-                stops: [0.0, 0.7],
+                stops: const [0.0, 0.75],
               ),
-            ),
-          ),
-
-          // Abstract Asset Overlay
-          Opacity(
-            opacity: 0.4,
-            child: Image.network(
-              'https://lh3.googleusercontent.com/aida-public/AB6AXuChSSVOVIFYplPI0Wk1YPZtnqKd-GxSyPimELElIF0qhYr5axFuW8EOWVopbTtzdwQitd-isVEqZtTa6IpTgbZRS3qhCl8tBJ3f0Ca7XTG8Y9nSW0caVzT7WFSj5F6zf-BlQKorjb11g6nxwbUJIO19hkefe3P7lPeE9CnSLX3Brc6ccRZnGYwpnKwbHewb-ve7o7qZdxi6vUwwbeSvSP4Df4ES5CGfFitt4BjlpHOFmOneBL94PhTK7U0t-ly8OYmblmbV0v0MCKpv',
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
             ),
           ),
 
@@ -110,12 +129,12 @@ class _SplashScreenState extends State<SplashScreen>
             child: Container(
               width: 500,
               height: 500,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Color(0x0D6bd8cb), // primary/5
+                color: _primary.withOpacity(0.03), // primary/3
               ),
               child: BackdropFilter(
-                filter: ui.ImageFilter.blur(sigmaX: 60, sigmaY: 60),
+                filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
                 child: const SizedBox.shrink(),
               ),
             ),
@@ -126,7 +145,7 @@ class _SplashScreenState extends State<SplashScreen>
             bottom: 0,
             left: 0,
             right: 0,
-            height: MediaQuery.of(context).size.height / 2,
+            height: MediaQuery.of(context).size.height * 0.35,
             child: Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -189,9 +208,9 @@ class _SplashScreenState extends State<SplashScreen>
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.5),
-                              blurRadius: 24,
-                              offset: const Offset(0, 12),
+                              color: scheme.primary.withOpacity(0.04),
+                              blurRadius: 32,
+                              offset: Offset.zero,
                             ),
                           ],
                         ),
@@ -203,8 +222,8 @@ class _SplashScreenState extends State<SplashScreen>
                             // Inner Pattern
                             Opacity(
                               opacity: 0.1,
-                              child: Image.network(
-                                'https://lh3.googleusercontent.com/aida-public/AB6AXuAJnbFElppVIYdzO3n7glsDoWbtKCGtsiW2OFbFTN73FCPYD2G8o3YOfjhYSzkr_2bczFPc88AKKJcafqPeKKpRhBmzzO1dZmbleq8PFk8ZSf34OvYiuHGczDKYPP15w92T2a9LyoT23K6tIVlrfde-F7IdcORy77C6hG7E5bNWJmB1o2SCvHv2AL9RNEELATyLAq2V0DBofupOTPc5OnmCiYKcd1xN3uTziBmbksixHQSBYsUNaG7XjwVxv_hbqvM5nD2KBv-gcE-A',
+                              child: Image.asset(
+                                'assets/branding/logo_pattern.png',
                                 fit: BoxFit.cover,
                                 colorBlendMode: BlendMode.overlay,
                                 errorBuilder: (_, __, ___) =>
@@ -256,7 +275,7 @@ class _SplashScreenState extends State<SplashScreen>
                 const SizedBox(height: 12),
 
                 Text(
-                  'THE KINETI STANDARDHE IUNTECTICIC',
+                  'THE KINETIC STANDARD',
                   style: GoogleFonts.inter(
                     fontWeight: FontWeight.w600,
                     fontSize: 12,
@@ -386,14 +405,7 @@ class _SplashScreenState extends State<SplashScreen>
             ),
           ),
 
-          // Outer Glass Frame Overlay
-          Container(
-            decoration: BoxDecoration(
-              border: Border.all(color: _surface, width: 12),
-            ),
-            // pointer-events-none equivalent by default if it's hit-test invisible
-            // but we can just let it sit on top as IgnorePointer
-          ),
+          // Full-bleed background, no inset frame border.
         ],
       ),
     );
