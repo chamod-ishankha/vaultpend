@@ -410,7 +410,7 @@ class _ProfileUpdateScreenState extends ConsumerState<ProfileUpdateScreen> {
                           ),
                           const SizedBox(height: 16),
                           DropdownButtonFormField<String>(
-                            value: _selectedCurrency,
+                            initialValue: _selectedCurrency,
                             decoration: InputDecoration(
                               labelText: 'Preferred currency',
                               labelStyle: theme.textTheme.bodyMedium?.copyWith(
@@ -418,11 +418,15 @@ class _ProfileUpdateScreenState extends ConsumerState<ProfileUpdateScreen> {
                               ),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: scheme.outlineVariant),
+                                borderSide: BorderSide(
+                                  color: scheme.outlineVariant,
+                                ),
                               ),
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: scheme.outlineVariant),
+                                borderSide: BorderSide(
+                                  color: scheme.outlineVariant,
+                                ),
                               ),
                             ),
                             items: _currencies
@@ -489,8 +493,7 @@ class _ProfileUpdateScreenState extends ConsumerState<ProfileUpdateScreen> {
                             suffixIcon: IconButton(
                               onPressed: () {
                                 setState(() {
-                                  _obscureNewPassword =
-                                      !_obscureNewPassword;
+                                  _obscureNewPassword = !_obscureNewPassword;
                                 });
                               },
                               icon: Icon(
@@ -619,12 +622,10 @@ class _MessageBanner extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(
-                    color: foreground,
-                    fontWeight: FontWeight.w500,
-                  ),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: foreground,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ],

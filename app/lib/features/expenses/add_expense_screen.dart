@@ -86,9 +86,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       lastDate: DateTime(2100),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
-          colorScheme: Theme.of(context).colorScheme.copyWith(
-            surface: const Color(0xFF1B1B1F),
-          ),
+          colorScheme: Theme.of(
+            context,
+          ).colorScheme.copyWith(surface: const Color(0xFF1B1B1F)),
         ),
         child: child!,
       ),
@@ -135,10 +135,15 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     if (source == null || !mounted) return;
 
     final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(const SnackBar(content: Text('Scanning receipt...')));
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Scanning receipt...')),
+    );
 
     try {
-      final result = await _receiptOcrService.scanReceiptFromSource(source, logger: _logger);
+      final result = await _receiptOcrService.scanReceiptFromSource(
+        source,
+        logger: _logger,
+      );
       if (!mounted) return;
 
       if (result == null || result.rawText.trim().isEmpty) {
@@ -178,12 +183,19 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('Confirm Amount', style: Theme.of(context).textTheme.titleLarge),
+                Text(
+                  'Confirm Amount',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
                 const SizedBox(height: 16),
                 for (var i = 0; i < candidates.length; i++)
                   ListTile(
                     onTap: () => setSheetState(() => selectedIndex = i),
-                    leading: Icon(selectedIndex == i ? Icons.radio_button_checked : Icons.radio_button_unchecked),
+                    leading: Icon(
+                      selectedIndex == i
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_unchecked,
+                    ),
                     title: Text(candidates[i].amount.toStringAsFixed(2)),
                     subtitle: Text(candidates[i].line, maxLines: 1),
                   ),
@@ -191,7 +203,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
-                    onPressed: () => Navigator.of(ctx).pop(candidates[selectedIndex].amount),
+                    onPressed: () =>
+                        Navigator.of(ctx).pop(candidates[selectedIndex].amount),
                     child: const Text('Confirm'),
                   ),
                 ),
@@ -208,7 +221,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     final raw = _amountCtrl.text.trim().replaceAll(',', '.');
     final amount = double.tryParse(raw);
     if (amount == null || amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a valid amount')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Enter a valid amount')));
       return;
     }
     setState(() => _saving = true);
@@ -233,15 +248,22 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       await ref
           .read(activityLogServiceProvider)
           .add(
-            action: widget.expense == null ? 'Expense added' : 'Expense updated',
+            action: widget.expense == null
+                ? 'Expense added'
+                : 'Expense updated',
             details:
                 '$categoryName · ${e.currency} ${e.amount.toStringAsFixed(2)} · ${_recurring ? 'recurring' : 'one-time'}${e.note == null ? '' : ' · ${e.note}'}',
           );
-      await syncRemindersNow(ref, reason: widget.expense == null ? 'expense_added' : 'expense_updated');
+      await syncRemindersNow(
+        ref,
+        reason: widget.expense == null ? 'expense_added' : 'expense_updated',
+      );
       if (mounted) Navigator.of(context).pop();
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Save failed: $error')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Save failed: $error')));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -256,7 +278,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     return Scaffold(
       backgroundColor: scheme.surface,
       appBar: ObsidianAppBar(
-        title: Text(widget.expense != null ? 'Edit Transaction' : 'New Transaction'),
+        title: Text(
+          widget.expense != null ? 'Edit Transaction' : 'New Transaction',
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.document_scanner_rounded),
@@ -270,10 +294,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => Center(child: Text('$e')),
           data: (cats) {
-            final category = _categoryId != null 
-                ? cats.firstWhere((c) => c.id == _categoryId, orElse: () => cats.first)
+            final category = _categoryId != null
+                ? cats.firstWhere(
+                    (c) => c.id == _categoryId,
+                    orElse: () => cats.first,
+                  )
                 : (cats.isNotEmpty ? cats.first : null);
-            
+
             if (_categoryId == null && cats.isNotEmpty) {
               _categoryId = cats.first.id;
             }
@@ -283,9 +310,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               children: [
                 // Amount Hero (Digital Obsidian Style)
                 _buildAmountHero(theme, scheme),
-                
+
                 const SizedBox(height: 32),
-                
+
                 // Form Sections
                 _buildSectionHeader(theme, scheme, 'GENERAL'),
                 const SizedBox(height: 12),
@@ -300,13 +327,20 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                         label: 'Note',
                         child: TextField(
                           controller: _noteCtrl,
-                          style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
                           decoration: InputDecoration(
                             hintText: 'Add a description...',
-                            hintStyle: TextStyle(color: scheme.outline.withOpacity(0.3), fontWeight: FontWeight.w400),
+                            hintStyle: TextStyle(
+                              color: scheme.outline.withOpacity(0.3),
+                              fontWeight: FontWeight.w400,
+                            ),
                             border: InputBorder.none,
                             isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 8,
+                            ),
                           ),
                         ),
                       ),
@@ -321,9 +355,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     ],
                   ),
                 ),
-                
+
                 const SizedBox(height: 24),
-                
+
                 _buildSectionHeader(theme, scheme, 'CATEGORY'),
                 const SizedBox(height: 12),
                 ObsidianCard(
@@ -337,9 +371,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     onTap: () => _showCategoryPicker(cats),
                   ),
                 ),
-                
+
                 const SizedBox(height: 24),
-                
+
                 _buildSectionHeader(theme, scheme, 'ADVANCED'),
                 const SizedBox(height: 12),
                 ObsidianCard(
@@ -352,16 +386,18 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     trailing: Switch(
                       value: _recurring,
                       onChanged: (v) => setState(() => _recurring = v),
-                      activeColor: scheme.primary,
+                      activeThumbColor: scheme.primary,
                     ),
                   ),
                 ),
-                
+
                 const SizedBox(height: 48),
-                
+
                 ObsidianButton(
                   onPressed: _saving ? null : _save,
-                  text: widget.expense != null ? 'UPDATE TRANSACTION' : 'CONFIRM TRANSACTION',
+                  text: widget.expense != null
+                      ? 'UPDATE TRANSACTION'
+                      : 'CONFIRM TRANSACTION',
                   isLoading: _saving,
                   style: ObsidianButtonStyle.primary,
                 ),
@@ -397,7 +433,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               GestureDetector(
                 onTap: _showCurrencyPicker,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: scheme.surfaceContainerHighest.withOpacity(0.3),
                     borderRadius: BorderRadius.circular(8),
@@ -417,7 +456,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               IntrinsicWidth(
                 child: TextField(
                   controller: _amountCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   textAlign: TextAlign.center,
                   style: GoogleFonts.manrope(
                     fontWeight: FontWeight.w800,
@@ -429,7 +470,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     border: InputBorder.none,
                     contentPadding: EdgeInsets.zero,
                   ),
-                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[\d.,]')),
+                  ],
                 ),
               ),
             ],
@@ -439,7 +482,11 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     );
   }
 
-  Widget _buildSectionHeader(ThemeData theme, ColorScheme scheme, String title) {
+  Widget _buildSectionHeader(
+    ThemeData theme,
+    ColorScheme scheme,
+    String title,
+  ) {
     return Text(
       title,
       style: theme.textTheme.labelSmall?.copyWith(
@@ -492,19 +539,26 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  if (child != null) child
-                  else Text(
-                    value ?? '',
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: theme.colorScheme.onSurface,
+                  if (child != null)
+                    child
+                  else
+                    Text(
+                      value ?? '',
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: theme.colorScheme.onSurface,
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),
-            if (trailing != null) trailing
-            else if (onTap != null) Icon(Icons.chevron_right_rounded, color: theme.colorScheme.outline.withOpacity(0.5)),
+            if (trailing != null)
+              trailing
+            else if (onTap != null)
+              Icon(
+                Icons.chevron_right_rounded,
+                color: theme.colorScheme.outline.withOpacity(0.5),
+              ),
           ],
         ),
       ),
@@ -521,18 +575,31 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Text('Select Currency', style: Theme.of(context).textTheme.titleMedium),
+            child: Text(
+              'Select Currency',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
           ),
-          ..._currencies.map((c) => ListTile(
-            title: Text(c, textAlign: TextAlign.center, style: TextStyle(
-              fontWeight: _currency == c ? FontWeight.bold : FontWeight.normal,
-              color: _currency == c ? Theme.of(context).colorScheme.primary : null,
-            )),
-            onTap: () {
-              setState(() => _currency = c);
-              Navigator.pop(ctx);
-            },
-          )),
+          ..._currencies.map(
+            (c) => ListTile(
+              title: Text(
+                c,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontWeight: _currency == c
+                      ? FontWeight.bold
+                      : FontWeight.normal,
+                  color: _currency == c
+                      ? Theme.of(context).colorScheme.primary
+                      : null,
+                ),
+              ),
+              onTap: () {
+                setState(() => _currency = c);
+                Navigator.pop(ctx);
+              },
+            ),
+          ),
           const SizedBox(height: 32),
         ],
       ),
@@ -552,8 +619,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           final color = resolveCategoryColor(context, c.color);
           return ListTile(
             leading: Icon(resolveCategoryIcon(c.iconKey), color: color),
-            title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-            trailing: _categoryId == c.id ? Icon(Icons.check_circle_rounded, color: color) : null,
+            title: Text(
+              c.name,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            trailing: _categoryId == c.id
+                ? Icon(Icons.check_circle_rounded, color: color)
+                : null,
             onTap: () {
               setState(() => _categoryId = c.id);
               Navigator.pop(ctx);

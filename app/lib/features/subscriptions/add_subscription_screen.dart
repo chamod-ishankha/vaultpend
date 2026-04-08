@@ -73,9 +73,9 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
       lastDate: DateTime(2100),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
-          colorScheme: Theme.of(context).colorScheme.copyWith(
-            surface: const Color(0xFF1B1B1F),
-          ),
+          colorScheme: Theme.of(
+            context,
+          ).colorScheme.copyWith(surface: const Color(0xFF1B1B1F)),
         ),
         child: child!,
       ),
@@ -94,13 +94,17 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
     if (_saving) return;
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a name')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Enter a name')));
       return;
     }
     final raw = _amountCtrl.text.trim().replaceAll(',', '.');
     final amount = double.tryParse(raw);
     if (amount == null || amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a valid amount')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Enter a valid amount')));
       return;
     }
     setState(() => _saving = true);
@@ -121,18 +125,34 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
       await repo.put(s);
 
       final trialDetails = _trial
-          ? (_trialEnds == null ? 'trial active' : 'trial ends ${DateFormat('MMM d, yyyy').format(_trialEnds!)}')
+          ? (_trialEnds == null
+                ? 'trial active'
+                : 'trial ends ${DateFormat('MMM d, yyyy').format(_trialEnds!)}')
           : 'paid';
 
-      await ref.read(activityLogServiceProvider).add(
-            action: existing == null ? 'Subscription added' : 'Subscription updated',
-            details: '$name · ${s.currency} ${s.amount.toStringAsFixed(2)} · ${s.cycle} · $trialDetails',
+      await ref
+          .read(activityLogServiceProvider)
+          .add(
+            action: existing == null
+                ? 'Subscription added'
+                : 'Subscription updated',
+            details:
+                '$name · ${s.currency} ${s.amount.toStringAsFixed(2)} · ${s.cycle} · $trialDetails',
           );
 
-      await syncRemindersNow(ref, reason: existing == null ? 'subscription_added' : 'subscription_updated');
+      await syncRemindersNow(
+        ref,
+        reason: existing == null
+            ? 'subscription_added'
+            : 'subscription_updated',
+      );
       if (mounted) Navigator.of(context).pop();
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Save failed: $error')));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Save failed: $error')));
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -146,7 +166,11 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
     return Scaffold(
       backgroundColor: scheme.surface,
       appBar: ObsidianAppBar(
-        title: Text(widget.subscription != null ? 'Edit Subscription' : 'New Subscription'),
+        title: Text(
+          widget.subscription != null
+              ? 'Edit Subscription'
+              : 'New Subscription',
+        ),
       ),
       body: ResponsiveBody(
         child: Column(
@@ -184,7 +208,9 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
                       IntrinsicWidth(
                         child: TextField(
                           controller: _amountCtrl,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
                           textAlign: TextAlign.center,
                           style: theme.textTheme.displayLarge?.copyWith(
                             fontWeight: FontWeight.w900,
@@ -196,7 +222,11 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
                             border: InputBorder.none,
                             contentPadding: EdgeInsets.zero,
                           ),
-                          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(
+                              RegExp(r'[\d.,]'),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -232,10 +262,14 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
                             style: theme.textTheme.bodyLarge,
                             decoration: InputDecoration(
                               hintText: 'e.g. Netflix, Spotify',
-                              hintStyle: TextStyle(color: scheme.outline.withOpacity(0.5)),
+                              hintStyle: TextStyle(
+                                color: scheme.outline.withOpacity(0.5),
+                              ),
                               border: InputBorder.none,
                               isDense: true,
-                              contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 8,
+                              ),
                             ),
                           ),
                         ),
@@ -280,7 +314,7 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
                           trailing: Switch(
                             value: _trial,
                             onChanged: (v) => setState(() => _trial = v),
-                            activeColor: Colors.amberAccent,
+                            activeThumbColor: Colors.amberAccent,
                           ),
                         ),
                         if (_trial) ...[
@@ -289,7 +323,9 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
                             icon: Icons.alarm_on_rounded,
                             iconColor: Colors.amberAccent,
                             label: 'Trial Ends On',
-                            value: _trialEnds == null ? 'Not set' : _dateFmt.format(_trialEnds!),
+                            value: _trialEnds == null
+                                ? 'Not set'
+                                : _dateFmt.format(_trialEnds!),
                             onTap: () => _pickDate(true),
                           ),
                         ],
@@ -299,7 +335,9 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
                   const SizedBox(height: 32),
                   ObsidianButton(
                     onPressed: _saving ? null : _save,
-                    text: widget.subscription != null ? 'UPDATE SUBSCRIPTION' : 'SAVE SUBSCRIPTION',
+                    text: widget.subscription != null
+                        ? 'UPDATE SUBSCRIPTION'
+                        : 'SAVE SUBSCRIPTION',
                     isLoading: _saving,
                     style: ObsidianButtonStyle.primary,
                   ),
@@ -353,18 +391,25 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
                     ),
                   ),
                   const SizedBox(height: 2),
-                  if (child != null) child
-                  else Text(
-                    value ?? '',
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
+                  if (child != null)
+                    child
+                  else
+                    Text(
+                      value ?? '',
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),
-            if (trailing != null) trailing
-            else if (onTap != null) Icon(Icons.chevron_right_rounded, color: theme.colorScheme.outline.withOpacity(0.5)),
+            if (trailing != null)
+              trailing
+            else if (onTap != null)
+              Icon(
+                Icons.chevron_right_rounded,
+                color: theme.colorScheme.outline.withOpacity(0.5),
+              ),
           ],
         ),
       ),
@@ -379,13 +424,15 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
       builder: (ctx) => Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ..._currencies.map((c) => ListTile(
-            title: Text(c, textAlign: TextAlign.center),
-            onTap: () {
-              setState(() => _currency = c);
-              Navigator.pop(ctx);
-            },
-          )),
+          ..._currencies.map(
+            (c) => ListTile(
+              title: Text(c, textAlign: TextAlign.center),
+              onTap: () {
+                setState(() => _currency = c);
+                Navigator.pop(ctx);
+              },
+            ),
+          ),
           const SizedBox(height: 16),
         ],
       ),
@@ -400,13 +447,15 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
       builder: (ctx) => Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ..._cycles.map((c) => ListTile(
-            title: Text(c.toUpperCase(), textAlign: TextAlign.center),
-            onTap: () {
-              setState(() => _cycle = c);
-              Navigator.pop(ctx);
-            },
-          )),
+          ..._cycles.map(
+            (c) => ListTile(
+              title: Text(c.toUpperCase(), textAlign: TextAlign.center),
+              onTap: () {
+                setState(() => _cycle = c);
+                Navigator.pop(ctx);
+              },
+            ),
+          ),
           const SizedBox(height: 16),
         ],
       ),

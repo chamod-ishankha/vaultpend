@@ -81,16 +81,16 @@ class _SplashScreenState extends State<SplashScreen>
     final scheme = Theme.of(context).colorScheme;
     final ext = Theme.of(context).extension<VaultSpendThemeExtension>()!;
 
-    final _primary = scheme.primary;
-    final _surface = scheme.surface;
-    final _onSurface = scheme.onSurface;
-    final _onSurfaceVariant = scheme.onSurfaceVariant;
-    final _outlineVariant = scheme.outlineVariant;
-    final _surfaceContainerHighest = ext.surfaceContainerHighest;
-    final _surfaceContainerLow = ext.surfaceContainerLow;
+    final primary = scheme.primary;
+    final surface = scheme.surface;
+    final onSurface = scheme.onSurface;
+    final onSurfaceVariant = scheme.onSurfaceVariant;
+    final outlineVariant = scheme.outlineVariant;
+    final surfaceContainerHighest = ext.surfaceContainerHighest;
+    final surfaceContainerLow = ext.surfaceContainerLow;
 
     return Scaffold(
-      backgroundColor: _surface,
+      backgroundColor: surface,
       body: Stack(
         fit: StackFit.expand,
         children: [
@@ -114,10 +114,7 @@ class _SplashScreenState extends State<SplashScreen>
               gradient: RadialGradient(
                 center: Alignment.center,
                 radius: 1.2,
-                colors: [
-                  _primary.withOpacity(0.04),
-                  _surface.withOpacity(0.14),
-                ],
+                colors: [primary.withOpacity(0.04), surface.withOpacity(0.14)],
                 stops: const [0.0, 0.75],
               ),
             ),
@@ -131,7 +128,7 @@ class _SplashScreenState extends State<SplashScreen>
               height: 500,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: _primary.withOpacity(0.03), // primary/3
+                color: primary.withOpacity(0.03), // primary/3
               ),
               child: BackdropFilter(
                 filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
@@ -151,7 +148,7 @@ class _SplashScreenState extends State<SplashScreen>
                 gradient: LinearGradient(
                   begin: Alignment.bottomCenter,
                   end: Alignment.topCenter,
-                  colors: [_surface, Colors.transparent],
+                  colors: [surface, Colors.transparent],
                 ),
               ),
             ),
@@ -226,14 +223,14 @@ class _SplashScreenState extends State<SplashScreen>
                                 'assets/branding/logo_pattern.png',
                                 fit: BoxFit.cover,
                                 colorBlendMode: BlendMode.overlay,
-                                errorBuilder: (_, __, ___) =>
+                                errorBuilder: (_, _, _) =>
                                     const SizedBox.shrink(),
                               ),
                             ),
                             // Icon
                             Icon(
                               Icons.account_balance_wallet,
-                              color: _primary,
+                              color: primary,
                               size: 48,
                             ),
                           ],
@@ -255,7 +252,7 @@ class _SplashScreenState extends State<SplashScreen>
                         fontWeight: FontWeight.w900,
                         fontSize: 40,
                         height: 1,
-                        color: _onSurface,
+                        color: onSurface,
                         letterSpacing: -1.5,
                       ),
                     ),
@@ -265,7 +262,7 @@ class _SplashScreenState extends State<SplashScreen>
                         fontWeight: FontWeight.w900,
                         fontSize: 40,
                         height: 1,
-                        color: _primary,
+                        color: primary,
                         letterSpacing: -1.5,
                       ),
                     ),
@@ -279,7 +276,7 @@ class _SplashScreenState extends State<SplashScreen>
                   style: GoogleFonts.inter(
                     fontWeight: FontWeight.w600,
                     fontSize: 12,
-                    color: _onSurfaceVariant,
+                    color: onSurfaceVariant,
                     letterSpacing: 2.4, // 0.2em
                   ),
                 ),
@@ -293,7 +290,7 @@ class _SplashScreenState extends State<SplashScreen>
                       width: 192,
                       height: 2,
                       decoration: BoxDecoration(
-                        color: _surfaceContainerHighest,
+                        color: surfaceContainerHighest,
                         borderRadius: BorderRadius.circular(2),
                       ),
                       clipBehavior: Clip.hardEdge,
@@ -308,15 +305,15 @@ class _SplashScreenState extends State<SplashScreen>
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
                                     colors: [
-                                      _primary.withOpacity(0.2),
-                                      _primary,
-                                      _primary.withOpacity(0.2),
+                                      primary.withOpacity(0.2),
+                                      primary,
+                                      primary.withOpacity(0.2),
                                     ],
                                     stops: const [0.0, 0.5, 1.0],
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: _primary.withOpacity(0.5),
+                                      color: primary.withOpacity(0.5),
                                       blurRadius: 8,
                                     ),
                                   ],
@@ -336,10 +333,10 @@ class _SplashScreenState extends State<SplashScreen>
                         vertical: 8,
                       ),
                       decoration: BoxDecoration(
-                        color: _surfaceContainerLow.withOpacity(0.5),
+                        color: surfaceContainerLow.withOpacity(0.5),
                         borderRadius: BorderRadius.circular(24),
                         border: Border.all(
-                          color: _outlineVariant.withOpacity(0.1),
+                          color: outlineVariant.withOpacity(0.1),
                         ),
                       ),
                       child: ClipRRect(
@@ -349,14 +346,14 @@ class _SplashScreenState extends State<SplashScreen>
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.lock, color: _primary, size: 16),
+                              Icon(Icons.lock, color: primary, size: 16),
                               const SizedBox(width: 8),
                               Text(
                                 'ENCRYPTED CONNECTION',
                                 style: GoogleFonts.inter(
                                   fontWeight: FontWeight.w700,
                                   fontSize: 10,
-                                  color: _onSurfaceVariant,
+                                  color: onSurfaceVariant,
                                   letterSpacing: 1.5,
                                 ),
                               ),
@@ -383,14 +380,14 @@ class _SplashScreenState extends State<SplashScreen>
                 Container(
                   width: 32,
                   height: 1,
-                  color: _outlineVariant.withOpacity(0.3),
+                  color: outlineVariant.withOpacity(0.3),
                 ),
                 const SizedBox(width: 16),
                 Text(
                   'Fintech Obsidian Series',
                   style: GoogleFonts.manrope(
                     fontWeight: FontWeight.w700,
-                    color: _onSurface.withOpacity(0.4),
+                    color: onSurface.withOpacity(0.4),
                     fontSize: 14,
                     letterSpacing: -0.5,
                   ),
@@ -399,7 +396,7 @@ class _SplashScreenState extends State<SplashScreen>
                 Container(
                   width: 32,
                   height: 1,
-                  color: _outlineVariant.withOpacity(0.3),
+                  color: outlineVariant.withOpacity(0.3),
                 ),
               ],
             ),
