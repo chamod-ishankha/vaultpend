@@ -16,6 +16,8 @@ import '../../core/providers.dart';
 import '../../core/export/insights_csv_export_service.dart';
 import '../../core/export/insights_pdf_export_service.dart';
 import '../../core/logging/app_logging.dart';
+import '../../core/widgets/obsidian_app_bar.dart';
+import '../../core/widgets/obsidian_card.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../auth/auth_providers.dart';
 import '../../data/models/expense.dart';
@@ -145,15 +147,17 @@ class InsightsScreen extends ConsumerWidget {
     final async = ref.watch(insightsDataProvider);
 
     return Scaffold(
-      appBar: AppBar(
+      backgroundColor: Colors.transparent,
+      extendBodyBehindAppBar: true,
+      appBar: ObsidianAppBar(
+        title: const Text('Insights'),
         leading: onOpenDrawer != null
             ? IconButton(icon: const Icon(Icons.menu), onPressed: onOpenDrawer)
             : null,
-        title: const Text('Insights'),
         actions: [
           PopupMenuButton<String>(
             tooltip: 'Export report',
-            icon: const Icon(Icons.download_outlined),
+            icon: const Icon(Icons.download_rounded),
             onSelected: (value) {
               if (value == 'csv') {
                 _exportInsightsCsv(context, ref);
@@ -184,6 +188,7 @@ class InsightsScreen extends ConsumerWidget {
               ),
             ],
           ),
+          const SizedBox(width: 8),
         ],
       ),
       body: ResponsiveBody(
@@ -604,7 +609,12 @@ class _InsightsDashboardState extends ConsumerState<_InsightsDashboard> {
     ];
 
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        72 + MediaQuery.paddingOf(context).top,
+        16,
+        120,
+      ),
       children: [
         _ReportViewSelector(
           value: _reportView,
@@ -1103,6 +1113,8 @@ class _RangeSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final label = switch (value) {
       _InsightsRange.sevenDays => '7D',
       _InsightsRange.thirtyDays => '30D',
@@ -1122,39 +1134,37 @@ class _RangeSelector extends StatelessWidget {
       children: [
         Text(
           'Date range',
-          style: Theme.of(
-            context,
-          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+          style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 6),
         InkWell(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
           onTap: () => _openPicker(context),
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(14),
+              color: scheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: Theme.of(context).colorScheme.outlineVariant,
+                color: scheme.outlineVariant.withOpacity(0.5),
               ),
             ),
             child: Row(
               children: [
                 Container(
-                  width: 34,
-                  height: 34,
+                  width: 32,
+                  height: 32,
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary,
-                    borderRadius: BorderRadius.circular(10),
+                    color: scheme.primary,
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   alignment: Alignment.center,
                   child: Text(
                     label,
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: Theme.of(context).colorScheme.onPrimary,
-                      fontWeight: FontWeight.w700,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: scheme.onPrimary,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
@@ -1162,14 +1172,15 @@ class _RangeSelector extends StatelessWidget {
                 Expanded(
                   child: Text(
                     hint,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
                     ),
                   ),
                 ),
                 Icon(
-                  Icons.keyboard_arrow_down,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  Icons.unfold_more_rounded,
+                  size: 18,
+                  color: scheme.onSurfaceVariant,
                 ),
               ],
             ),
@@ -1341,52 +1352,52 @@ class _ReportViewSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Report view',
-          style: Theme.of(
-            context,
-          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+          'Report focus',
+          style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 6),
         InkWell(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
           onTap: () => _openPicker(context),
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(14),
+              color: scheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: Theme.of(context).colorScheme.outlineVariant,
+                color: scheme.outlineVariant.withOpacity(0.5),
               ),
             ),
             child: Row(
               children: [
                 Container(
-                  width: 34,
-                  height: 34,
+                  width: 32,
+                  height: 32,
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary,
-                    borderRadius: BorderRadius.circular(10),
+                    color: scheme.primary,
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
                     switch (value) {
-                      _InsightsReportView.overview => Icons.dashboard_outlined,
+                      _InsightsReportView.overview => Icons.grid_view_rounded,
                       _InsightsReportView.spendingFocus =>
-                        Icons.trending_up_outlined,
+                        Icons.insights_rounded,
                       _InsightsReportView.subscriptionFocus =>
-                        Icons.subscriptions_outlined,
+                        Icons.auto_awesome_motion_rounded,
                       _InsightsReportView.billingWatch =>
-                        Icons.event_note_outlined,
+                        Icons.event_note_rounded,
                       _InsightsReportView.currencyBreakdown =>
-                        Icons.currency_exchange,
+                        Icons.currency_exchange_rounded,
                     },
-                    size: 18,
-                    color: Theme.of(context).colorScheme.onPrimary,
+                    size: 16,
+                    color: scheme.onPrimary,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -1404,7 +1415,7 @@ class _ReportViewSelector extends StatelessWidget {
                           _InsightsReportView.billingWatch => 'Billing Watch',
                           _InsightsReportView.currencyBreakdown => 'Currencies',
                         },
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        style: theme.textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -1421,16 +1432,17 @@ class _ReportViewSelector extends StatelessWidget {
                           _InsightsReportView.currencyBreakdown =>
                             'Currency-wise breakdown',
                         },
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
                         ),
                       ),
                     ],
                   ),
                 ),
                 Icon(
-                  Icons.keyboard_arrow_down,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  Icons.unfold_more_rounded,
+                  size: 18,
+                  color: scheme.onSurfaceVariant,
                 ),
               ],
             ),
@@ -1458,66 +1470,57 @@ class _TrendChartCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return ObsidianCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 12),
+          if (points.isEmpty)
+            const Text('No trend data yet')
+          else ...[
             Text(
-              '$title Trend',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              '${numberFmt.format(points.last.amount)} $valueSuffix',
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: scheme.primary,
+              ),
             ),
             const SizedBox(height: 16),
-            if (points.isEmpty)
-              const Text('No expense data in this range yet')
-            else ...[
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Peak: ${numberFmt.format(peakValue)}${valueSuffix == null ? '' : ' $valueSuffix'}',
-                    style: Theme.of(context).textTheme.labelMedium,
-                  ),
-                  Text(
-                    'Days: ${points.length}',
-                    style: Theme.of(context).textTheme.labelMedium,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                height: 190,
-                child: CustomPaint(
-                  painter: _TrendLineChartPainter(
-                    points: points,
-                    maxValue: peakValue,
-                    lineColor: _insightPalette.first,
-                    fillColor: _insightPalette.first.withValues(alpha: 0.16),
-                    gridColor: Theme.of(context).colorScheme.outlineVariant,
-                  ),
+            SizedBox(
+              height: 140,
+              width: double.infinity,
+              child: CustomPaint(
+                painter: _TrendLineChartPainter(
+                  points: points,
+                  maxValue: peakValue,
+                  lineColor: scheme.primary,
+                  fillColor: scheme.primary.withOpacity(0.1),
+                  gridColor: scheme.outlineVariant,
                 ),
               ),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    DateFormat('MMM d, yyyy h:mm a').format(points.first.day),
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-                  Text(
-                    DateFormat('MMM d, yyyy h:mm a').format(points.last.day),
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-                ],
-              ),
-            ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  DateFormat('MMM d').format(points.first.day),
+                  style: theme.textTheme.labelSmall,
+                ),
+                Text(
+                  DateFormat('MMM d').format(points.last.day),
+                  style: theme.textTheme.labelSmall,
+                ),
+              ],
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -1661,27 +1664,24 @@ class _MetricTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              value,
-              style: Theme.of(
-                context,
-              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+    final theme = Theme.of(context);
+    return ObsidianCard(
+      level: ObsidianCardTonalLevel.low,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value,
+            style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
             ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1698,78 +1698,74 @@ class _MonthOverMonthCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Month-over-Month Spend',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 12),
-            if (comparison.rows.isEmpty)
-              const Text('Not enough expense data yet')
-            else
-              ...comparison.rows.map((row) {
-                final isNew = row.pct == null;
-                final isUp = row.delta > 0;
-                final isDown = row.delta < 0;
-                final directionIcon = isNew
-                    ? Icons.fiber_new
-                    : isUp
-                    ? Icons.trending_up
-                    : isDown
-                    ? Icons.trending_down
-                    : Icons.trending_flat;
-                final directionColor = isNew
-                    ? Theme.of(context).colorScheme.secondary
-                    : isUp
-                    ? Theme.of(context).colorScheme.error
-                    : isDown
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).colorScheme.outline;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return ObsidianCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Month-over-Month Spend',
+            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 12),
+          if (comparison.rows.isEmpty)
+            const Text('Not enough expense data yet')
+          else
+            ...comparison.rows.map((row) {
+              final isNew = row.pct == null;
+              final isUp = row.delta > 0;
+              final isDown = row.delta < 0;
+              final directionIcon = isNew
+                  ? Icons.fiber_new
+                  : isUp
+                  ? Icons.trending_up
+                  : isDown
+                  ? Icons.trending_down
+                  : Icons.trending_flat;
+              final directionColor = isNew
+                  ? scheme.secondary
+                  : isUp
+                  ? scheme.error
+                  : isDown
+                  ? scheme.primary
+                  : scheme.outline;
 
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 46,
-                        child: Text(
-                          row.currency,
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 46,
+                      child: Text(
+                        row.currency,
+                        style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${numberFmt.format(row.previous)} → ${numberFmt.format(row.current)}',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(directionIcon, size: 18, color: directionColor),
+                    if (!isNew) ...[
+                      const SizedBox(width: 4),
+                      Text(
+                        '${row.delta >= 0 ? '+' : ''}${row.pct!.toStringAsFixed(1)}%',
+                        style: TextStyle(
+                          color: directionColor,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          '${numberFmt.format(row.previous)} -> ${numberFmt.format(row.current)}',
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(directionIcon, size: 18, color: directionColor),
-                      if (!isNew) ...[
-                        const SizedBox(width: 4),
-                        Text(
-                          '${row.delta >= 0 ? '+' : ''}${row.pct!.toStringAsFixed(1)}%',
-                          style: TextStyle(
-                            color: directionColor,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
                     ],
-                  ),
-                );
-              }),
-          ],
-        ),
+                  ],
+                ),
+              );
+            }),
+        ],
       ),
     );
   }
@@ -1788,124 +1784,113 @@ class _CategoryDistributionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final peak = entries.isEmpty ? 0.0 : entries.first.value;
     final topEntries = entries.take(6).toList();
     final total = topEntries.fold<double>(0, (sum, entry) => sum + entry.value);
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 32),
-            if (entries.isEmpty)
-              const Text('No category spend yet')
-            else ...[
-              Center(
-                child: SizedBox(
-                  width: 168,
-                  height: 168,
-                  child: CustomPaint(
-                    painter: _DonutChartPainter(
-                      values: [for (final entry in topEntries) entry.value],
-                      colors: [
-                        for (var i = 0; i < topEntries.length; i++)
-                          _insightPalette[i % _insightPalette.length],
+    return ObsidianCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 32),
+          if (entries.isEmpty)
+            const Text('No category spend yet')
+          else ...[
+            Center(
+              child: SizedBox(
+                width: 168,
+                height: 168,
+                child: CustomPaint(
+                  painter: _DonutChartPainter(
+                    values: [for (final entry in topEntries) entry.value],
+                    colors: [
+                      for (var i = 0; i < topEntries.length; i++)
+                        _insightPalette[i % _insightPalette.length],
+                    ],
+                    trackColor: scheme.surfaceContainerHighest,
+                  ),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Total',
+                          style: theme.textTheme.labelLarge,
+                        ),
+                        Text(
+                          numberFmt.format(total),
+                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                        ),
                       ],
-                      trackColor: Theme.of(
-                        context,
-                      ).colorScheme.surfaceContainerHighest,
-                    ),
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'Total',
-                            style: Theme.of(context).textTheme.labelLarge,
-                          ),
-                          Text(
-                            numberFmt.format(total),
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                        ],
-                      ),
                     ),
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
-              ...topEntries.asMap().entries.map((mapped) {
-                final index = mapped.key;
-                final entry = mapped.value;
-                final color = _insightPalette[index % _insightPalette.length];
-                final pct = total == 0 ? 0 : (entry.value / total) * 100;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 12,
-                            height: 12,
-                            decoration: BoxDecoration(
-                              color: color,
-                              borderRadius: BorderRadius.circular(99),
+            ),
+            const SizedBox(height: 12),
+            ...topEntries.asMap().entries.map((mapped) {
+              final index = mapped.key;
+              final entry = mapped.value;
+              final color = _insightPalette[index % _insightPalette.length];
+              final pct = total == 0 ? 0 : (entry.value / total) * 100;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: color,
+                            borderRadius: BorderRadius.circular(99),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            entry.key,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text('${pct.toStringAsFixed(1)}%'),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(999),
+                            child: LinearProgressIndicator(
+                              minHeight: 8,
+                              value: peak == 0 ? 0 : entry.value / peak,
+                              backgroundColor: scheme.surfaceContainerHighest,
+                              valueColor: AlwaysStoppedAnimation<Color>(color),
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              entry.key,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text('${pct.toStringAsFixed(1)}%'),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(999),
-                              child: LinearProgressIndicator(
-                                minHeight: 8,
-                                value: peak == 0 ? 0 : entry.value / peak,
-                                backgroundColor: Theme.of(
-                                  context,
-                                ).colorScheme.surfaceContainerHighest,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  color,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(numberFmt.format(entry.value)),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-              }),
-            ],
+                        ),
+                        const SizedBox(width: 8),
+                        Text(numberFmt.format(entry.value)),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -1979,76 +1964,70 @@ class _CurrencyBreakdownCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final peak = entries.isEmpty ? 0.0 : entries.first.value;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 12),
-            if (entries.isEmpty)
-              const Text('No expense currency data yet')
-            else
-              ...entries.asMap().entries.map((mapped) {
-                final index = mapped.key;
-                final entry = mapped.value;
-                final color = _insightPalette[index % _insightPalette.length];
+    return ObsidianCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 12),
+          if (entries.isEmpty)
+            const Text('No expense currency data yet')
+          else
+            ...entries.asMap().entries.map((mapped) {
+              final index = mapped.key;
+              final entry = mapped.value;
+              final color = _insightPalette[index % _insightPalette.length];
 
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                width: 10,
-                                height: 10,
-                                decoration: BoxDecoration(
-                                  color: color,
-                                  borderRadius: BorderRadius.circular(99),
-                                ),
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(
+                                color: color,
+                                borderRadius: BorderRadius.circular(99),
                               ),
-                              const SizedBox(width: 8),
-                              Text(
-                                entry.key,
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(fontWeight: FontWeight.w600),
-                              ),
-                            ],
-                          ),
-                          Text(numberFmt.format(entry.value)),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(999),
-                        child: LinearProgressIndicator(
-                          minHeight: 8,
-                          value: peak == 0 ? 0 : entry.value / peak,
-                          backgroundColor: Theme.of(
-                            context,
-                          ).colorScheme.surfaceContainerHighest,
-                          valueColor: AlwaysStoppedAnimation<Color>(color),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              entry.key,
+                              style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                            ),
+                          ],
                         ),
+                        Text(numberFmt.format(entry.value)),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(999),
+                      child: LinearProgressIndicator(
+                        minHeight: 8,
+                        value: peak == 0 ? 0 : entry.value / peak,
+                        backgroundColor: scheme.surfaceContainerHighest,
+                        valueColor: AlwaysStoppedAnimation<Color>(color),
                       ),
-                    ],
-                  ),
-                );
-              }),
-          ],
-        ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+        ],
       ),
     );
   }
@@ -2065,85 +2044,68 @@ class _LargeSubscriptionsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final today = DateTime.now();
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Largest Subscriptions',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 12),
-            if (subscriptions.isEmpty)
-              const Text('No subscriptions yet')
-            else
-              ...subscriptions.take(5).map((subscription) {
-                final trialStatus = _trialStatusText(subscription, today);
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    subscription.name,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(fontWeight: FontWeight.w600),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if (subscription.isTrial) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                trialStatus ?? 'Trial',
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(
-                                      color:
-                                          subscription.trialEndsAt != null &&
-                                              subscription.trialEndsAt!
-                                                  .isBefore(today)
-                                          ? Theme.of(context).colorScheme.error
-                                          : Theme.of(
-                                              context,
-                                            ).colorScheme.onSurfaceVariant,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                              ),
-                            ],
-                            const SizedBox(height: 2),
+    return ObsidianCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Largest Subscriptions',
+            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 12),
+          if (subscriptions.isEmpty)
+            const Text('No subscriptions yet')
+          else
+            ...subscriptions.take(5).map((subscription) {
+              final trialStatus = _trialStatusText(subscription, today);
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            subscription.name,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                          if (subscription.isTrial) ...[
+                            const SizedBox(height: 4),
                             Text(
-                              '${subscription.currency} ${numberFmt.format(subscription.amount)} · ${subscription.cycle}',
-                              style: Theme.of(context).textTheme.bodySmall,
+                              trialStatus ?? 'Trial',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: subscription.trialEndsAt != null &&
+                                        subscription.trialEndsAt!.isBefore(today)
+                                    ? scheme.error
+                                    : scheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ],
-                        ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${subscription.currency} ${numberFmt.format(subscription.amount)} · ${subscription.cycle}',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Next ${DateFormat('MMM d, yyyy h:mm a').format(subscription.nextBillingDate)}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                );
-              }),
-          ],
-        ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Next ${DateFormat('MMM d').format(subscription.nextBillingDate)}',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              );
+            }),
+        ],
       ),
     );
   }
@@ -2281,9 +2243,11 @@ class _UpcomingBillingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final entries = totalsByCurrency.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-    final dateFmt = DateFormat('MMM d, yyyy h:mm a');
+    final dateFmt = DateFormat('MMM d');
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final displayedSubscriptions = [...subscriptions]
@@ -2313,32 +2277,12 @@ class _UpcomingBillingCard extends StatelessWidget {
       _BillingWindow.thirtyDays => '30D',
       _BillingWindow.sixtyDays => '60D',
     };
-    final windowHint = switch (window) {
-      _BillingWindow.sevenDays => 'Next 7 days',
-      _BillingWindow.thirtyDays => 'Next 30 days',
-      _BillingWindow.sixtyDays => 'Next 60 days',
-    };
     final overdueCount = subscriptions
         .where(
           (subscription) =>
               _dayDifferenceFromToday(subscription.nextBillingDate, today) < 0,
         )
         .length;
-    final dueSoonCount = subscriptions.where((subscription) {
-      final daysAway = _dayDifferenceFromToday(
-        subscription.nextBillingDate,
-        today,
-      );
-      return daysAway >= 0 && daysAway <= 3;
-    }).length;
-    final dueWithin24hCount = subscriptions.where((subscription) {
-      final diff = subscription.nextBillingDate.difference(now);
-      return !diff.isNegative && diff.inHours <= 24;
-    }).length;
-    final dueWithin48hCount = subscriptions.where((subscription) {
-      final diff = subscription.nextBillingDate.difference(now);
-      return !diff.isNegative && diff.inHours > 24 && diff.inHours <= 48;
-    }).length;
     final expiredTrialCount = subscriptions.where((subscription) {
       if (!subscription.isTrial || subscription.trialEndsAt == null) {
         return false;
@@ -2346,161 +2290,113 @@ class _UpcomingBillingCard extends StatelessWidget {
       return _dayDifferenceFromToday(subscription.trialEndsAt!, today) < 0;
     }).length;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 8),
-            InkWell(
-              borderRadius: BorderRadius.circular(14),
-              onTap: () => _openWindowPicker(context),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.outlineVariant,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primary,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        windowLabel,
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: Theme.of(context).colorScheme.onPrimary,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        windowHint,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                    Icon(
-                      Icons.keyboard_arrow_down,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ],
+    return ObsidianCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
                 ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text('Scheduled payments: ${subscriptions.length}'),
-            Text('Trial renewals in window: $trialCount'),
-            Text('Overdue: $overdueCount · Due soon: $dueSoonCount'),
-            Text('Due <24h: $dueWithin24hCount · Due <48h: $dueWithin48hCount'),
-            if (expiredTrialCount > 0)
-              Text(
-                'Expired trials: $expiredTrialCount',
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              const SizedBox(width: 8),
+              _WindowSelector(
+                label: windowLabel,
+                onTap: () => _openWindowPicker(context),
               ),
-            const SizedBox(height: 8),
-            if (entries.isEmpty)
-              const Text('No upcoming billings in this window')
-            else ...[
-              if (trialCount > 0) ...[
-                const SizedBox(height: 4),
-                _UpcomingTrialSummaryRow(
-                  trialCount: trialCount,
-                  expiredTrialCount: expiredTrialCount,
-                  dueWithin24hCount: dueWithin24hCount,
-                ),
-                const SizedBox(height: 8),
-              ],
-              ...entries.map(
-                (entry) => Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Text('${entry.key}: ${numberFmt.format(entry.value)}'),
-                ),
-              ),
-              ...displayedSubscriptions.take(5).map((subscription) {
-                final daysAway = _dayDifferenceFromToday(
-                  subscription.nextBillingDate,
-                  today,
-                );
-                final isOverdue = daysAway < 0;
-                final dueToday = daysAway == 0;
-                final dueSoon = daysAway > 0 && daysAway <= 3;
-                final urgent = isOverdue || dueToday || dueSoon;
-                final billingStatus = isOverdue || dueToday || dueSoon
-                    ? formatDueStatusLabel(
-                        subscription.nextBillingDate,
-                        now: today,
-                      )
-                    : null;
-                final trialStatus = _trialStatusText(subscription, today);
-                final subtitleParts = <String>[
-                  '${dateFmt.format(subscription.nextBillingDate)} · ${subscription.currency} ${numberFmt.format(subscription.amount)}',
-                  ?trialStatus,
-                  ?billingStatus,
-                ];
-
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(
-                      subscription.isTrial
-                          ? Icons.hourglass_bottom
-                          : isOverdue
-                          ? Icons.warning_rounded
-                          : urgent
-                          ? Icons.notifications_active
-                          : Icons.receipt_long,
-                      color: subscription.isTrial
-                          ? Theme.of(context).colorScheme.tertiary
-                          : isOverdue
-                          ? Theme.of(context).colorScheme.error
-                          : urgent
-                          ? Theme.of(context).colorScheme.error
-                          : Theme.of(context).colorScheme.primary,
-                    ),
-                    title: Text(subscription.name),
-                    subtitle: Text(subtitleParts.join(' · ')),
-                    trailing: subscription.isTrial
-                        ? _TrialStatusChip(
-                            label: trialStatus ?? 'Trial',
-                            isExpired: _isTrialExpired(subscription, today),
-                            isEndingSoon: _isTrialEndingSoon(
-                              subscription,
-                              today,
-                            ),
-                          )
-                        : const Icon(Icons.chevron_right),
-                    onTap: () => onSubscriptionTap(subscription),
-                  ),
-                );
-              }),
             ],
+          ),
+          const SizedBox(height: 16),
+          if (overdueCount > 0 || expiredTrialCount > 0)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _UrgentAlert(
+                overdueCount: overdueCount,
+                expiredTrialCount: expiredTrialCount,
+              ),
+            ),
+          if (entries.isEmpty)
+            const Text('No upcoming billings in this window')
+          else ...[
+            ...entries.map(
+              (entry) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  '${entry.key}: ${numberFmt.format(entry.value)}',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: scheme.primary,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...displayedSubscriptions.take(5).map((subscription) {
+              final daysAway = _dayDifferenceFromToday(
+                subscription.nextBillingDate,
+                today,
+              );
+              final isOverdue = daysAway < 0;
+              final dueToday = daysAway == 0;
+              final dueSoon = daysAway > 0 && daysAway <= 3;
+              final urgent = isOverdue || dueToday || dueSoon;
+              final trialStatus = _trialStatusText(subscription, today);
+
+              return ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: (subscription.isTrial
+                            ? scheme.tertiary
+                            : urgent
+                                ? scheme.error
+                                : scheme.primary)
+                        .withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    subscription.isTrial
+                        ? Icons.hourglass_bottom
+                        : isOverdue
+                            ? Icons.warning_rounded
+                            : urgent
+                                ? Icons.notifications_active
+                                : Icons.receipt_long,
+                    size: 20,
+                    color: subscription.isTrial
+                        ? scheme.tertiary
+                        : urgent
+                            ? scheme.error
+                            : scheme.primary,
+                  ),
+                ),
+                title: Text(
+                  subscription.name,
+                  style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text(
+                  '${dateFmt.format(subscription.nextBillingDate)} · ${subscription.currency} ${numberFmt.format(subscription.amount)}',
+                  style: theme.textTheme.bodySmall,
+                ),
+                trailing: subscription.isTrial
+                    ? _TrialStatusChip(
+                        label: trialStatus ?? 'Trial',
+                        isExpired: _isTrialExpired(subscription, today),
+                        isEndingSoon: _isTrialEndingSoon(subscription, today),
+                      )
+                    : Icon(Icons.chevron_right, size: 16, color: scheme.onSurfaceVariant),
+                onTap: () => onSubscriptionTap(subscription),
+              );
+            }),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -2530,37 +2426,6 @@ class _UpcomingBillingCard extends StatelessWidget {
     }
     final days = _dayDifferenceFromToday(trialEnds, today);
     return days >= 0 && days <= 7;
-  }
-}
-
-class _UpcomingTrialSummaryRow extends StatelessWidget {
-  const _UpcomingTrialSummaryRow({
-    required this.trialCount,
-    required this.expiredTrialCount,
-    required this.dueWithin24hCount,
-  });
-
-  final int trialCount;
-  final int expiredTrialCount;
-  final int dueWithin24hCount;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: scheme.secondaryContainer.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        'Trials in window: $trialCount · Expired: $expiredTrialCount · Due <24h: $dueWithin24hCount',
-        style: Theme.of(
-          context,
-        ).textTheme.bodySmall?.copyWith(color: scheme.onSecondaryContainer),
-      ),
-    );
   }
 }
 
@@ -2612,70 +2477,61 @@ class _RecentActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dateFmt = DateFormat('MMM d, yyyy h:mm a');
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final dateFmt = DateFormat('MMM d');
     final today = DateTime.now();
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Recent Activity',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 12),
-            if (recentExpenses.isEmpty && recentSubscriptions.isEmpty)
-              const Text('No recent activity yet')
-            else ...[
-              if (recentExpenses.isNotEmpty) ...[
+    return ObsidianCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Recent Activity',
+            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 12),
+          if (recentExpenses.isEmpty && recentSubscriptions.isEmpty)
+            const Text('No recent activity yet')
+          else ...[
+            if (recentExpenses.isNotEmpty) ...[
+              Text(
+                'Latest expense',
+                style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '${recentExpenses.first.currency} ${numberFmt.format(recentExpenses.first.amount)} · ${dateFmt.format(recentExpenses.first.occurredAt)}',
+                style: theme.textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (recentSubscriptions.isNotEmpty) ...[
+              Text(
+                'Next billing',
+                style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '${recentSubscriptions.first.name} · ${dateFmt.format(recentSubscriptions.first.nextBillingDate)}',
+                style: theme.textTheme.bodyMedium,
+              ),
+              if (_trialStatusText(recentSubscriptions.first, today) != null) ...[
+                const SizedBox(height: 2),
                 Text(
-                  'Latest expense',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '${recentExpenses.first.currency} ${numberFmt.format(recentExpenses.first.amount)} · ${dateFmt.format(recentExpenses.first.occurredAt)}',
-                ),
-                const SizedBox(height: 12),
-              ],
-              if (recentSubscriptions.isNotEmpty) ...[
-                Text(
-                  'Next billing',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '${recentSubscriptions.first.name} · ${dateFmt.format(recentSubscriptions.first.nextBillingDate)}',
-                ),
-                if (_trialStatusText(recentSubscriptions.first, today) !=
-                    null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    _trialStatusText(recentSubscriptions.first, today)!,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color:
-                          recentSubscriptions.first.trialEndsAt != null &&
-                              recentSubscriptions.first.trialEndsAt!.isBefore(
-                                today,
-                              )
-                          ? Theme.of(context).colorScheme.error
-                          : Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  _trialStatusText(recentSubscriptions.first, today)!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: recentSubscriptions.first.trialEndsAt != null &&
+                            recentSubscriptions.first.trialEndsAt!.isBefore(today)
+                        ? scheme.error
+                        : scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
                   ),
-                ],
+                ),
               ],
             ],
           ],
-        ),
+        ],
       ),
     );
   }
@@ -2696,27 +2552,95 @@ class _InfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+    final theme = Theme.of(context);
+    return ObsidianCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          ...lines.map(
+            (line) => Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(line, style: theme.textTheme.bodyMedium),
             ),
-            const SizedBox(height: 8),
-            ...lines.map(
-              (line) => Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text(line),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WindowSelector extends StatelessWidget {
+  const _WindowSelector({required this.label, required this.onTap});
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Material(
+      color: scheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: scheme.primary,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(Icons.keyboard_arrow_down, size: 16, color: scheme.primary),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _UrgentAlert extends StatelessWidget {
+  const _UrgentAlert({required this.overdueCount, required this.expiredTrialCount});
+  final int overdueCount;
+  final int expiredTrialCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.errorContainer.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: scheme.error.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, size: 20, color: scheme.error),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '${overdueCount > 0 ? '$overdueCount overdue billings' : ''}${overdueCount > 0 && expiredTrialCount > 0 ? ' & ' : ''}${expiredTrialCount > 0 ? '$expiredTrialCount expired trials' : ''}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.error,
+                fontWeight: FontWeight.w600,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

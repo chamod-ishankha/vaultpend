@@ -7,7 +7,8 @@ import '../../core/theme/app_theme.dart';
 
 /// Redesigned Splash Screen matching "The Kinetic Standard / Obsidian Digital" theme
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
+  final VoidCallback? onComplete;
+  const SplashScreen({super.key, this.onComplete});
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -22,7 +23,6 @@ class _SplashScreenState extends State<SplashScreen>
 
   static const _dwell = Duration(milliseconds: 3000);
 
-
   @override
   void initState() {
     super.initState();
@@ -32,21 +32,24 @@ class _SplashScreenState extends State<SplashScreen>
       duration: const Duration(seconds: 3),
     )..repeat(reverse: true);
 
-    _glowScale = Tween<double>(begin: 1.0, end: 1.3).animate(CurvedAnimation(
-      parent: _glowController,
-      curve: Curves.easeInOut,
-    ));
+    _glowScale = Tween<double>(begin: 1.0, end: 1.3).animate(
+      CurvedAnimation(parent: _glowController, curve: Curves.easeInOut),
+    );
 
     // Setup progress animation
-    _progressController = AnimationController(
-      vsync: this,
-      duration: _dwell,
-    )..forward();
+    _progressController = AnimationController(vsync: this, duration: _dwell)
+      ..forward();
 
     _progressValue = CurvedAnimation(
       parent: _progressController,
       curve: Curves.easeInOut,
     );
+
+    _progressController.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        widget.onComplete?.call();
+      }
+    });
 
     // Routing is handled natively by app.dart evaluating Auth state
   }
@@ -62,15 +65,14 @@ class _SplashScreenState extends State<SplashScreen>
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final ext = Theme.of(context).extension<VaultSpendThemeExtension>()!;
-    
+
     final _primary = scheme.primary;
-    final _surface = scheme.surface;
+    final _surface = const Color(0xFF131317);
     final _onSurface = scheme.onSurface;
     final _onSurfaceVariant = scheme.onSurfaceVariant;
-    final _surfaceContainerHigh = ext.surfaceContainerHigh;
+    final _outlineVariant = scheme.outlineVariant;
     final _surfaceContainerHighest = ext.surfaceContainerHighest;
     final _surfaceContainerLow = ext.surfaceContainerLow;
-    final _outlineVariant = scheme.outlineVariant;
 
     return Scaffold(
       backgroundColor: _surface,
@@ -161,12 +163,15 @@ class _SplashScreenState extends State<SplashScreen>
                         child: Container(
                           width: 110,
                           height: 110,
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: Color(0x336bd8cb), // bg-primary/20
+                            color: scheme.primary.withOpacity(0.2),
                           ),
                           child: BackdropFilter(
-                            filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                            filter: ui.ImageFilter.blur(
+                              sigmaX: ext.glassBlur,
+                              sigmaY: ext.glassBlur,
+                            ),
                             child: const SizedBox.shrink(),
                           ),
                         ),
@@ -177,18 +182,16 @@ class _SplashScreenState extends State<SplashScreen>
                         width: 96,
                         height: 96,
                         decoration: BoxDecoration(
-                          color: _surfaceContainerHigh,
+                          color: ext.surfaceContainerHigh,
                           borderRadius: BorderRadius.circular(32),
-                          border: const Border(
-                            top: BorderSide(
-                              color: Color(0x333d4947), // outline-variant/20
-                            ),
+                          border: Border(
+                            top: BorderSide(color: scheme.outlineVariant),
                           ),
-                          boxShadow: const [
+                          boxShadow: [
                             BoxShadow(
-                              color: Colors.black54,
+                              color: Colors.black.withOpacity(0.5),
                               blurRadius: 24,
-                              offset: Offset(0, 12),
+                              offset: const Offset(0, 12),
                             ),
                           ],
                         ),
@@ -253,7 +256,7 @@ class _SplashScreenState extends State<SplashScreen>
                 const SizedBox(height: 12),
 
                 Text(
-                  'THE KINETIC STANDARD',
+                  'THE KINETI STANDARDHE IUNTECTICIC',
                   style: GoogleFonts.inter(
                     fontWeight: FontWeight.w600,
                     fontSize: 12,

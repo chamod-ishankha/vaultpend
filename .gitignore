@@ -16,6 +16,7 @@
 *.iml
 .vscode/
 *.swp
+.vscode/mcp.json
 
 # OS
 Thumbs.db

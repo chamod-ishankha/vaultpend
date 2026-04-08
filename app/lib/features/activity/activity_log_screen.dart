@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/widgets/obsidian_app_bar.dart';
+import '../../core/widgets/obsidian_button.dart';
+import '../../core/widgets/obsidian_card.dart';
 import '../../core/logging/activity_log_service.dart';
 import '../../core/logging/app_logging.dart';
 
@@ -96,7 +99,7 @@ class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      appBar: ObsidianAppBar(
         title: const Text('Activity Log'),
         actions: [
           IconButton(
@@ -105,6 +108,11 @@ class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
               final confirmed = await showDialog<bool>(
                 context: context,
                 builder: (ctx) => AlertDialog(
+                  backgroundColor: Theme.of(context).colorScheme.surface,
+                  surfaceTintColor: Colors.transparent,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
                   title: const Text('Clear activity log?'),
                   content: const Text(
                     'This removes all activity records for this account.',
@@ -114,9 +122,10 @@ class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
                       onPressed: () => Navigator.pop(ctx, false),
                       child: const Text('Cancel'),
                     ),
-                    FilledButton(
+                    ObsidianButton(
                       onPressed: () => Navigator.pop(ctx, true),
-                      child: const Text('Clear'),
+                      text: 'Clear',
+                      style: ObsidianButtonStyle.primary,
                     ),
                   ],
                 ),
@@ -179,10 +188,28 @@ class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
                   }
 
                   final item = _entries[index];
-                  return Card(
+                  return ObsidianCard(
+                    level: ObsidianCardTonalLevel.low,
                     child: ListTile(
-                      leading: const Icon(Icons.history),
-                      title: Text(item.action),
+                      contentPadding: EdgeInsets.zero,
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          Icons.history_rounded,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: 20,
+                        ),
+                      ),
+                      title: Text(
+                        item.action,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
                       subtitle: Text(
                         [
                           _dateFmt.format(item.timestamp.toLocal()),
@@ -190,6 +217,9 @@ class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
                               item.details!.trim().isNotEmpty)
                             item.details!.trim(),
                         ].join(' · '),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
                       ),
                     ),
                   );

@@ -2,17 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
+import '../../core/widgets/obsidian_app_bar.dart';
+import '../../core/widgets/obsidian_button.dart';
+import '../../core/widgets/obsidian_card.dart';
+import '../../core/widgets/obsidian_text_field.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../data/models/category.dart';
-import 'category_color_catalog.dart';
 import 'category_color_resolver.dart';
-import 'category_icon_catalog.dart';
 import 'category_icon_resolver.dart';
 
 class EditCategoryScreen extends ConsumerStatefulWidget {
   const EditCategoryScreen({super.key, this.category});
 
-  /// Null = create; non-null = rename.
   final Category? category;
 
   @override
@@ -26,6 +27,7 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
   bool _saving = false;
   String _selectedIconKey = '';
   String _selectedColorKey = '';
+  bool _isVisible = true;
 
   @override
   void initState() {
@@ -36,200 +38,8 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
       _descriptionCtrl.text = c.description ?? '';
       _selectedIconKey = c.iconKey ?? '';
       _selectedColorKey = c.color ?? '';
+      _isVisible = c.isVisible;
     }
-  }
-
-  Color _previewColor(BuildContext context) {
-    return resolveCategoryColor(context, _selectedColorKey);
-  }
-
-  Color _idealForeground(Color background) {
-    final luminance = background.computeLuminance();
-    return luminance < 0.5 ? Colors.white : Colors.black87;
-  }
-
-  Future<void> _pickIcon() async {
-    final catalog = await ref.read(categoryIconCatalogProvider.future);
-    if (!mounted) {
-      return;
-    }
-    final picked = await showModalBottomSheet<String?>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        var search = '';
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            final query = search.trim().toLowerCase();
-            final filtered = catalog.where((option) {
-              if (query.isEmpty) return true;
-              return option.key.contains(query) ||
-                  option.label.toLowerCase().contains(query);
-            }).toList();
-
-            return SafeArea(
-              child: Padding(
-                padding: EdgeInsets.only(
-                  left: 16,
-                  right: 16,
-                  top: 8,
-                  bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Choose an icon',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      decoration: const InputDecoration(
-                        labelText: 'Search icons',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.search),
-                      ),
-                      onChanged: (value) {
-                        setSheetState(() {
-                          search = value;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextButton.icon(
-                      onPressed: () => Navigator.pop(sheetContext, ''),
-                      icon: const Icon(Icons.block_outlined),
-                      label: const Text('No icon'),
-                    ),
-                    const SizedBox(height: 8),
-                    Flexible(
-                      child: ListView.separated(
-                        shrinkWrap: true,
-                        itemCount: filtered.length,
-                        separatorBuilder: (context, _) =>
-                            const Divider(height: 1),
-                        itemBuilder: (context, index) {
-                          final option = filtered[index];
-                          final isSelected = option.key == _selectedIconKey;
-                          return ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: Theme.of(
-                                context,
-                              ).colorScheme.surfaceContainerHighest,
-                              child: Icon(
-                                option.icon,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                            title: Text(option.label),
-                            subtitle: Text(option.key),
-                            trailing: isSelected
-                                ? const Icon(Icons.check_circle)
-                                : null,
-                            onTap: () =>
-                                Navigator.pop(sheetContext, option.key),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-
-    if (picked == null || !mounted) {
-      return;
-    }
-
-    setState(() {
-      _selectedIconKey = picked;
-    });
-  }
-
-  Future<void> _pickColor() async {
-    final catalog = await ref.read(categoryColorCatalogProvider.future);
-    if (!mounted) {
-      return;
-    }
-    final picked = await showModalBottomSheet<String?>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Choose a color',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextButton.icon(
-                  onPressed: () => Navigator.pop(sheetContext, ''),
-                  icon: const Icon(Icons.block_outlined),
-                  label: const Text('No color'),
-                ),
-                const SizedBox(height: 8),
-                Flexible(
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: catalog.length,
-                    separatorBuilder: (context, _) => const Divider(height: 1),
-                    itemBuilder: (context, index) {
-                      final option = catalog[index];
-                      final isSelected = option.key == _selectedColorKey;
-                      final optionColor = resolveCategoryColor(
-                        context,
-                        option.key,
-                      );
-                      return ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: optionColor,
-                          child: Icon(
-                            Icons.palette_outlined,
-                            color: _idealForeground(optionColor),
-                          ),
-                        ),
-                        title: Text(option.label),
-                        subtitle: Text(option.key),
-                        trailing: isSelected
-                            ? const Icon(Icons.check_circle)
-                            : null,
-                        onTap: () => Navigator.pop(sheetContext, option.key),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-
-    if (picked == null || !mounted) {
-      return;
-    }
-
-    setState(() {
-      _selectedColorKey = picked;
-    });
   }
 
   @override
@@ -254,236 +64,276 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
     }
     final repo = ref.read(categoryRepositoryProvider);
     final existing = widget.category;
-    final ok = await repo.isNameAvailable(name, excludingId: existing?.id);
-    if (!ok) {
+    final available = await repo.isNameAvailable(name, excludingId: existing?.id);
+    if (!available) {
       setState(() {
-        _error = 'You already have a category with this name';
+        _error = 'Category name already exists';
         _saving = false;
       });
       return;
     }
-    final c = existing ?? Category();
-    c.name = name;
-    c.description = _descriptionCtrl.text.trim().isEmpty
-        ? null
-        : _descriptionCtrl.text.trim();
-    c.iconKey = _selectedIconKey.trim().isEmpty
-        ? null
-        : _selectedIconKey.trim();
-    c.color = _selectedColorKey.trim().isEmpty
-        ? null
-        : _selectedColorKey.trim();
-    await repo.put(c);
-    ref.invalidate(categoryListProvider);
-    if (mounted) Navigator.of(context).pop();
+
+    try {
+      final c = existing ?? Category();
+      c.name = name;
+      c.description = _descriptionCtrl.text.trim().isEmpty ? null : _descriptionCtrl.text.trim();
+      c.iconKey = _selectedIconKey.isEmpty ? null : _selectedIconKey;
+      c.color = _selectedColorKey.isEmpty ? null : _selectedColorKey;
+      c.isVisible = _isVisible;
+
+      await repo.put(c);
+      ref.invalidate(categoryListProvider);
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      setState(() {
+        _error = 'Failed to save: $e';
+        _saving = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final isEdit = widget.category != null;
-    final iconCatalogAsync = ref.watch(categoryIconCatalogProvider);
-    final iconCatalog = iconCatalogAsync.value ?? const <CategoryIconOption>[];
-    final selectedLabel = _iconLabelForKey(iconCatalog, _selectedIconKey);
-    final colorCatalogAsync = ref.watch(categoryColorCatalogProvider);
-    final colorCatalog =
-        colorCatalogAsync.value ?? const <CategoryColorOption>[];
-    final selectedColorLabel = _colorLabelForKey(
-      colorCatalog,
-      _selectedColorKey,
-    );
+    final previewColor = resolveCategoryColor(context, _selectedColorKey);
+    final previewIcon = resolveCategoryIcon(_selectedIconKey);
 
     return Scaffold(
-      appBar: AppBar(title: Text(isEdit ? 'Edit category' : 'New category')),
+      backgroundColor: scheme.surface,
+      appBar: ObsidianAppBar(
+        title: Text(isEdit ? 'Edit Category' : 'New Category'),
+      ),
       body: ResponsiveBody(
-        maxWidth: 680,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           children: [
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: Material(
-                  color: Theme.of(context).colorScheme.errorContainer,
-                  borderRadius: BorderRadius.circular(8),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Text(
-                      _error!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onErrorContainer,
+            // Hero Preview
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 32),
+              child: Center(
+                child: Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    color: previewColor.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: previewColor.withOpacity(0.3), width: 3),
+                    boxShadow: [
+                      BoxShadow(
+                        color: previewColor.withOpacity(0.1),
+                        blurRadius: 20,
+                        spreadRadius: 5,
                       ),
-                    ),
+                    ],
+                  ),
+                  child: Center(
+                    child: Icon(previewIcon, size: 40, color: previewColor),
                   ),
                 ),
               ),
-            TextField(
-              controller: _nameCtrl,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
-                labelText: 'Name',
-                border: OutlineInputBorder(),
-              ),
-              autofocus: true,
-              onSubmitted: (_) => _saving ? null : _save(),
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _descriptionCtrl,
-              minLines: 2,
-              maxLines: 3,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                labelText: 'Description (optional)',
-                border: OutlineInputBorder(),
+
+            if (_error != null) _buildErrorCard(scheme, _error!),
+
+            Text(
+              'GENERAL',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: scheme.outline,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.5,
               ),
             ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: Theme.of(context).colorScheme.outlineVariant,
-                ),
+            const SizedBox(height: 12),
+            ObsidianCard(
+              level: ObsidianCardTonalLevel.low,
+              padding: const EdgeInsets.all(16),
+              child: ObsidianTextField(
+                controller: _nameCtrl,
+                label: 'Category Name',
+                hintText: 'e.g. Groceries',
+                autofocus: !isEdit,
               ),
+            ),
+
+            const SizedBox(height: 32),
+            Text(
+              'CUSTOMIZATION',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: scheme.outline,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.5,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ObsidianCard(
+              level: ObsidianCardTonalLevel.low,
+              padding: EdgeInsets.zero,
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Icon (optional)',
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                  _buildSelectionRow(
+                    label: 'Category Icon',
+                    value: _selectedIconKey.isEmpty ? 'DEFAULT' : _selectedIconKey.toUpperCase(),
+                    onTap: _showIconPicker,
+                    icon: previewIcon,
+                    accentColor: previewColor,
                   ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 18,
-                        backgroundColor: _previewColor(context),
-                        child: Icon(
-                          resolveCategoryIcon(_selectedIconKey),
-                          size: 18,
-                          color: _idealForeground(_previewColor(context)),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          _selectedIconKey.trim().isEmpty
-                              ? 'No icon selected'
-                              : selectedLabel == null
-                              ? normalizeIconKey(_selectedIconKey)
-                              : '$selectedLabel · ${normalizeIconKey(_selectedIconKey)}',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.outlineVariant,
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Color (optional)',
-                          style: Theme.of(context).textTheme.labelLarge
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            CircleAvatar(
-                              radius: 18,
-                              backgroundColor: _previewColor(context),
-                              child: Icon(
-                                Icons.color_lens_outlined,
-                                size: 18,
-                                color: _idealForeground(_previewColor(context)),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                _selectedColorKey.trim().isEmpty
-                                    ? 'No color selected'
-                                    : selectedColorLabel == null
-                                    ? _selectedColorKey
-                                    : '$selectedColorLabel · ${normalizeCategoryColorKey(_selectedColorKey)}',
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            FilledButton.tonalIcon(
-                              onPressed: _saving ? null : _pickColor,
-                              icon: const Icon(Icons.palette_outlined),
-                              label: const Text('Choose color'),
-                            ),
-                            const SizedBox(width: 12),
-                            TextButton(
-                              onPressed: _saving
-                                  ? null
-                                  : () {
-                                      setState(() {
-                                        _selectedColorKey = '';
-                                      });
-                                    },
-                              child: const Text('Clear'),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      FilledButton.tonalIcon(
-                        onPressed: _saving ? null : _pickIcon,
-                        icon: const Icon(Icons.grid_view_outlined),
-                        label: const Text('Choose icon'),
-                      ),
-                      const SizedBox(width: 12),
-                      TextButton(
-                        onPressed: _saving
-                            ? null
-                            : () {
-                                setState(() {
-                                  _selectedIconKey = '';
-                                });
-                              },
-                        child: const Text('Clear'),
-                      ),
-                    ],
+                  const Divider(height: 1, indent: 56),
+                  _buildSelectionRow(
+                    label: 'Category Color',
+                    value: _selectedColorKey.isEmpty ? 'DEFAULT' : _selectedColorKey.toUpperCase(),
+                    onTap: _showColorPicker,
+                    icon: Icons.palette_rounded,
+                    accentColor: previewColor,
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 24),
-            FilledButton(
+
+            const SizedBox(height: 32),
+            Text(
+              'VISIBILITY',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: scheme.outline,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.5,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ObsidianCard(
+              level: ObsidianCardTonalLevel.low,
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Icon(
+                    _isVisible ? Icons.visibility_rounded : Icons.visibility_off_rounded,
+                    size: 20,
+                    color: _isVisible ? scheme.primary : scheme.outline,
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(child: Text('Show in Transaction Pipeline')),
+                  Switch(
+                    value: _isVisible,
+                    onChanged: (v) => setState(() => _isVisible = v),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 48),
+            ObsidianButton(
               onPressed: _saving ? null : _save,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: _saving
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Text(isEdit ? 'Save' : 'Add category'),
+              text: isEdit ? 'UPDATE CATEGORY' : 'CREATE CATEGORY',
+              isLoading: _saving,
+              style: ObsidianButtonStyle.primary,
+            ),
+            const SizedBox(height: 48),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSelectionRow({
+    required String label,
+    required String value,
+    required VoidCallback onTap,
+    required IconData icon,
+    required Color accentColor,
+  }) {
+    final theme = Theme.of(context);
+    return ListTile(
+      onTap: onTap,
+      leading: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: accentColor.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, color: accentColor, size: 18),
+      ),
+      title: Text(
+        label.toUpperCase(),
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: theme.colorScheme.outline,
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1,
+        ),
+      ),
+      subtitle: Text(
+        value,
+        style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+      ),
+      trailing: Icon(Icons.chevron_right_rounded, color: theme.colorScheme.outline.withOpacity(0.5)),
+    );
+  }
+
+  Widget _buildErrorCard(ColorScheme scheme, String error) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 24),
+      child: ObsidianCard(
+        level: ObsidianCardTonalLevel.low,
+        child: Row(
+          children: [
+            Icon(Icons.error_outline_rounded, color: scheme.error),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(error, style: TextStyle(color: scheme.error, fontWeight: FontWeight.w500)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showIconPicker() async {
+    final catalog = await ref.read(categoryIconCatalogProvider.future);
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF131317),
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        height: MediaQuery.of(context).size.height * 0.7,
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Text('SELECT ICON', style: Theme.of(context).textTheme.labelSmall),
+            const SizedBox(height: 16),
+            Expanded(
+              child: GridView.builder(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 5,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                ),
+                itemCount: catalog.length,
+                itemBuilder: (ctx, i) {
+                  final option = catalog[i];
+                  final isSelected = option.key == _selectedIconKey;
+                  return InkWell(
+                    onTap: () {
+                      setState(() => _selectedIconKey = option.key);
+                      Navigator.pop(ctx);
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isSelected ? Theme.of(context).colorScheme.primary.withOpacity(0.1) : null,
+                        borderRadius: BorderRadius.circular(12),
+                        border: isSelected ? Border.all(color: Theme.of(context).colorScheme.primary) : null,
+                      ),
+                      child: Icon(
+                        option.icon,
+                        color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.outline,
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ],
@@ -491,30 +341,50 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
       ),
     );
   }
-}
 
-String? _iconLabelForKey(List<CategoryIconOption> catalog, String? iconKey) {
-  final normalized = normalizeIconKey(iconKey ?? '');
-  if (normalized.isEmpty) {
-    return null;
-  }
-  for (final option in catalog) {
-    if (option.key == normalized) {
-      return option.label;
-    }
-  }
-  return null;
-}
+  void _showColorPicker() async {
+    final catalog = await ref.read(categoryColorCatalogProvider.future);
+    if (!mounted) return;
 
-String? _colorLabelForKey(List<CategoryColorOption> catalog, String? colorKey) {
-  final normalized = normalizeCategoryColorKey(colorKey ?? '');
-  if (normalized.isEmpty) {
-    return null;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF131317),
+      showDragHandle: true,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('SELECT COLOR', style: Theme.of(context).textTheme.labelSmall),
+            const SizedBox(height: 24),
+            Wrap(
+              spacing: 16,
+              runSpacing: 16,
+              children: catalog.map((option) {
+                final color = resolveCategoryColor(context, option.key);
+                final isSelected = option.key == _selectedColorKey;
+                return InkWell(
+                  onTap: () {
+                    setState(() => _selectedColorKey = option.key);
+                    Navigator.pop(ctx);
+                  },
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                      border: isSelected ? Border.all(color: Colors.white, width: 3) : null,
+                    ),
+                    child: isSelected ? const Icon(Icons.check, color: Colors.white) : null,
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 32),
+          ],
+        ),
+      ),
+    );
   }
-  for (final option in catalog) {
-    if (option.key == normalized) {
-      return option.label;
-    }
-  }
-  return null;
 }

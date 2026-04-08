@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/widgets/obsidian_app_bar.dart';
+import '../../core/widgets/obsidian_button.dart';
+import '../../core/widgets/obsidian_card.dart';
 import '../../core/logging/app_logging.dart';
 import '../../core/logging/sync_incident_service.dart';
 
@@ -107,6 +110,11 @@ class _SyncIncidentScreenState extends ConsumerState<SyncIncidentScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+        ),
         title: const Text('Clear sync incidents?'),
         content: const Text(
           'This removes all recorded sync incidents for this account.',
@@ -116,9 +124,10 @@ class _SyncIncidentScreenState extends ConsumerState<SyncIncidentScreen> {
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('Cancel'),
           ),
-          FilledButton(
+          ObsidianButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Clear'),
+            text: 'Clear',
+            style: ObsidianButtonStyle.primary,
           ),
         ],
       ),
@@ -141,7 +150,7 @@ class _SyncIncidentScreenState extends ConsumerState<SyncIncidentScreen> {
   Widget build(BuildContext context) {
     final summaryFuture = _summaryFuture;
     return Scaffold(
-      appBar: AppBar(
+      appBar: ObsidianAppBar(
         title: const Text('Sync Incidents'),
         actions: [
           IconButton(
@@ -152,7 +161,7 @@ class _SyncIncidentScreenState extends ConsumerState<SyncIncidentScreen> {
           IconButton(
             tooltip: 'Clear incidents',
             onPressed: _clearAll,
-            icon: const Icon(Icons.delete_outline),
+            icon: const Icon(Icons.delete_sweep_rounded),
           ),
         ],
       ),
@@ -191,14 +200,12 @@ class _SyncIncidentScreenState extends ConsumerState<SyncIncidentScreen> {
                       }
 
                       if (incidents.isEmpty) {
-                        return Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Text(
-                              _error == null
-                                  ? 'No sync incidents recorded.'
-                                  : 'Failed to load incidents: $_error',
-                            ),
+                        return ObsidianCard(
+                          level: ObsidianCardTonalLevel.low,
+                          child: Text(
+                            _error == null
+                                ? 'No sync incidents recorded.'
+                                : 'Failed to load incidents: $_error',
                           ),
                         );
                       }
@@ -224,14 +231,22 @@ class _SyncIncidentScreenState extends ConsumerState<SyncIncidentScreen> {
                   ..._entries.map((item) {
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 8),
-                      child: Card(
+                      child: ObsidianCard(
+                        level: ObsidianCardTonalLevel.low,
                         child: ListTile(
-                          leading: const Icon(Icons.sync_problem_outlined),
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.sync_problem_rounded),
                           title: Text(
                             '${item.entity} ${item.operation} failed',
+                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
                           ),
                           subtitle: Text(
                             '${_dateFmt.format(item.timestamp.toLocal())}\nStage: ${item.stage}\nError: ${item.error}',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
                           ),
                         ),
                       ),
@@ -305,68 +320,87 @@ class _SyncIncidentSummaryCard extends StatelessWidget {
     final peak = values.fold<int>(0, (max, value) => value > max ? value : max);
     final latest = incidents.first;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Incident summary',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 8),
-            Text('Total incidents: ${incidents.length}'),
-            Text('Latest: ${dateFmt.format(latest.timestamp.toLocal())}'),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 88,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  for (var i = 0; i < daySlots.length; i++) ...[
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          Text(
-                            '${values[i]}',
-                            style: Theme.of(context).textTheme.labelSmall,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+    return ObsidianCard(
+      level: ObsidianCardTonalLevel.high,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Incident summary',
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Total incidents: ${incidents.length}',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          Text(
+            'Latest: ${dateFmt.format(latest.timestamp.toLocal())}',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 100,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                for (var i = 0; i < daySlots.length; i++) ...[
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Text(
+                          '${values[i]}',
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: values[i] > 0
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          width: 16,
+                          height: peak == 0 ? 4 : 50 * (values[i] / peak),
+                          decoration: BoxDecoration(
+                            color: values[i] > 0
+                                ? Theme.of(context).colorScheme.primary
+                                : Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant
+                                    .withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(4),
                           ),
-                          const SizedBox(height: 2),
-                          Container(
-                            width: 14,
-                            height: peak == 0 ? 4 : 42 * (values[i] / peak),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.primary,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            DateFormat('E').format(daySlots[i]),
-                            style: Theme.of(context).textTheme.labelSmall,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          DateFormat('E').format(daySlots[i]),
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ),
-                    if (i != daySlots.length - 1) const SizedBox(width: 6),
-                  ],
+                  ),
+                  if (i != daySlots.length - 1) const SizedBox(width: 6),
                 ],
-              ),
+              ],
             ),
-            const SizedBox(height: 12),
-            _CountChip(label: 'Entity', counts: countByEntity),
-            const SizedBox(height: 8),
-            _CountChip(label: 'Operation', counts: countByOperation),
-          ],
-        ),
+          ),
+          const SizedBox(height: 20),
+          _CountChip(label: 'Entity impact', counts: countByEntity),
+          const SizedBox(height: 12),
+          _CountChip(label: 'Operation failures', counts: countByOperation),
+        ],
       ),
     );
   }
@@ -440,10 +474,6 @@ class _EntityTrendSummaryCard extends StatelessWidget {
     final total = incidents.length;
     final topEntity = countByEntity.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-    final topOperation = countByOperation.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    final topStage = countByStage.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
 
     final displayEntities = entityOrder
         .where(countByEntity.containsKey)
@@ -454,49 +484,41 @@ class _EntityTrendSummaryCard extends StatelessWidget {
       }
     }
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+    return ObsidianCard(
+      level: ObsidianCardTonalLevel.low,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Entity conflict trends',
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Total incidents: $total',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 4),
+          if (topEntity.isNotEmpty)
             Text(
-              'Entity conflict trends',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              'Most affected: ${topEntity.first.key} (${topEntity.first.value})',
+              style: Theme.of(context).textTheme.bodySmall,
             ),
-            const SizedBox(height: 8),
-            Text('Total incidents: $total'),
-            Text('Tracked entities: ${countByEntity.length}'),
-            if (topEntity.isNotEmpty)
-              Text(
-                'Most affected: ${topEntity.first.key} (${topEntity.first.value})',
-              ),
-            if (topOperation.isNotEmpty)
-              Text(
-                'Top operation: ${topOperation.first.key} (${topOperation.first.value})',
-              ),
-            if (topStage.isNotEmpty)
-              Text(
-                'Top stage: ${topStage.first.key} (${topStage.first.value})',
-              ),
-            const SizedBox(height: 12),
-            for (final entity in displayEntities) ...[
-              _EntityTrendRow(
-                label: entityLabels[entity] ?? entity,
-                count: countByEntity[entity] ?? 0,
-                days: daySlots,
-                dayCounts: trendByEntity[entity] ?? const {},
-                latest: latestByEntity[entity],
-              ),
-              const SizedBox(height: 10),
-            ],
-            _CountChip(label: 'Stage', counts: countByStage),
-            const SizedBox(height: 8),
-            _CountChip(label: 'Operation', counts: countByOperation),
+          const SizedBox(height: 16),
+          for (final entity in displayEntities) ...[
+            _EntityTrendRow(
+              label: entityLabels[entity] ?? entity,
+              count: countByEntity[entity] ?? 0,
+              days: daySlots,
+              dayCounts: trendByEntity[entity] ?? const {},
+              latest: latestByEntity[entity],
+            ),
+            const SizedBox(height: 16),
           ],
-        ),
+          _CountChip(label: 'Processing stage', counts: countByStage),
+        ],
       ),
     );
   }
@@ -542,7 +564,9 @@ class _EntityTrendRow extends StatelessWidget {
             ),
             Text(
               'Last: $lastSeen',
-              style: Theme.of(context).textTheme.bodySmall,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
             ),
           ],
         ),
@@ -577,7 +601,9 @@ class _EntityTrendRow extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         DateFormat('E').format(days[i]),
-                        style: Theme.of(context).textTheme.labelSmall,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -609,7 +635,7 @@ class _CountChip extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.5),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -619,7 +645,10 @@ class _CountChip extends StatelessWidget {
             label,
             style: Theme.of(
               context,
-            ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
+            ).textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
           ),
           const SizedBox(height: 8),
           if (entries.isEmpty)

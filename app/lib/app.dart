@@ -27,7 +27,7 @@ class VaultSpendApp extends ConsumerStatefulWidget {
 
 class _VaultSpendAppState extends ConsumerState<VaultSpendApp>
     with WidgetsBindingObserver {
-  bool _showSplash = true;
+  bool _animationComplete = false;
   final _reminderService = SubscriptionReminderService();
   Timer? _reminderSyncTicker;
   String _lastGlobalReminderSignature = '';
@@ -97,13 +97,6 @@ class _VaultSpendAppState extends ConsumerState<VaultSpendApp>
       },
       fireImmediately: true,
     );
-
-    Timer(const Duration(seconds: 3), () {
-      if (!mounted) return;
-      setState(() {
-        _showSplash = false;
-      });
-    });
   }
 
   @override
@@ -225,6 +218,13 @@ class _VaultSpendAppState extends ConsumerState<VaultSpendApp>
       return const LoginScreen();
     }
 
+    // Logic: Only hide splash when:
+    // 1. Animation is complete
+    // 2. Auth state is decided (not loading)
+    // 3. GuestMode state is decided (not loading)
+    final bool authLoaded = !auth.isLoading && !guestMode.isLoading;
+    final bool showSplash = !_animationComplete || !authLoaded;
+
     Widget resolvedHome = auth.when(
       data: (session) => guestMode.when(
         data: (isGuest) => homeFor(session, isGuest),
@@ -238,6 +238,7 @@ class _VaultSpendAppState extends ConsumerState<VaultSpendApp>
     return MaterialApp(
       title: 'VaultSpend',
       debugShowCheckedModeBanner: false,
+      color: const Color(0xFF131317), // Prevents white flash before theme init
       theme: buildVaultSpendTheme(brightness: Brightness.light),
       darkTheme: buildVaultSpendTheme(brightness: Brightness.dark),
       themeMode: ThemeMode.dark,
@@ -245,8 +246,13 @@ class _VaultSpendAppState extends ConsumerState<VaultSpendApp>
         duration: const Duration(milliseconds: 600),
         switchInCurve: Curves.easeIn,
         switchOutCurve: Curves.easeOut,
-        child: _showSplash
-            ? const SplashScreen(key: ValueKey('splash'))
+        child: showSplash
+            ? SplashScreen(
+                key: const ValueKey('splash'),
+                onComplete: () {
+                  if (mounted) setState(() => _animationComplete = true);
+                },
+              )
             : KeyedSubtree(
                 key: const ValueKey('app_home'),
                 child: resolvedHome,

@@ -10,6 +10,7 @@ import '../../core/logging/app_logging.dart';
 import '../../core/network/network_providers.dart';
 import '../../core/providers.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/obsidian_card.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../auth/auth_providers.dart';
 import '../auth/sync_status.dart';
@@ -197,54 +198,52 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
           children: [
             // Drawer Header
             Padding(
-              padding: const EdgeInsets.only(left: 16, right: 16, top: 24, bottom: 40),
-              child: Row(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: scheme.primary.withOpacity(0.3), width: 2),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(2.0),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: scheme.surfaceContainerHighest,
+              padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+              child: ObsidianCard(
+                level: ObsidianCardTonalLevel.high,
+                child: Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [scheme.primary, scheme.primaryContainer],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                         ),
-                        child: Icon(Icons.person, color: scheme.primary, size: 24),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(Icons.person_rounded, color: scheme.onPrimary, size: 24),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            email?.split('@').first ?? 'User',
+                            style: GoogleFonts.manrope(
+                              fontWeight: FontWeight.w700,
+                              color: scheme.onSurface,
+                              fontSize: 16,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            subtitle,
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w500,
+                              color: scheme.onSurface.withValues(alpha: 0.5),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          email?.split('@').first ?? 'User',
-                          style: GoogleFonts.manrope(
-                            fontWeight: FontWeight.w700,
-                            color: scheme.primary,
-                            fontSize: 16,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        Text(
-                          subtitle,
-                          style: GoogleFonts.inter(
-                            fontWeight: FontWeight.w500,
-                            color: scheme.onSurface.withOpacity(0.5),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             
@@ -283,7 +282,13 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
                     },
                   ),
                   const SizedBox(height: 16),
-                  const Divider(height: 1),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Divider(
+                      height: 1,
+                      color: scheme.outlineVariant.withValues(alpha: 0.5),
+                    ),
+                  ),
                   const SizedBox(height: 16),
                   if (signedIn) ...[
                     _buildDrawerItem(
@@ -367,7 +372,7 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
             Text(
               label,
               style: GoogleFonts.manrope(
-                fontWeight: FontWeight.w500,
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
                 color: isActive ? scheme.primary : scheme.onSurfaceVariant,
               ),
             ),
@@ -488,11 +493,10 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
   Widget _buildBottomNavItem(int index, IconData activeIcon, IconData inactiveIcon, String label, ColorScheme scheme) {
     final isActive = _index == index;
     final color = isActive ? scheme.primary : scheme.outline;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => setState(() => _index = index),
-      child: SizedBox(
-        width: 100,
+    return Expanded(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => setState(() => _index = index),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -504,7 +508,7 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
                 fontSize: 10,
                 fontWeight: FontWeight.w700,
                 color: color,
-                letterSpacing: 1.5,
+                letterSpacing: 0.8,
               ),
             ),
             const SizedBox(height: 4),
@@ -515,7 +519,7 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
                 shape: BoxShape.circle,
                 color: isActive ? scheme.primary : Colors.transparent,
               ),
-            )
+            ),
           ],
         ),
       ),
@@ -557,69 +561,182 @@ class _ShellStatusBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final ext = theme.vaultSpend;
 
     if (!signedIn && !isGuest) return const SizedBox.shrink();
 
-    final IconData icon = signedIn ? (syncing ? Icons.sync : Icons.cloud_done) : Icons.person_outline;
-    final String title = signedIn ? (syncing ? 'Syncing...' : 'Account sync active') : 'Guest mode active';
-    final String? actionLabel = signedIn ? (online ? (syncing ? null : 'SYNC NOW') : 'OFFLINE') : null;
+    final IconData icon = signedIn
+        ? (syncing ? Icons.sync_rounded : Icons.check_circle_rounded)
+        : Icons.person_outline_rounded;
+    final String title = signedIn
+        ? (syncing ? 'SYNCING DATA' : 'HEALTHY SYNC STATUS')
+        : 'GUEST MODE ACTIVE';
+    final String? actionLabel =
+        signedIn ? (online ? (syncing ? null : 'REFRESH') : 'OFFLINE') : null;
+
+    final bgColor = signedIn
+        ? scheme.primary.withValues(alpha: 0.1)
+        : scheme.surfaceContainerHighest.withValues(alpha: 0.5);
+    final fgColor = signedIn ? scheme.primary : scheme.onSurfaceVariant;
 
     return SafeArea(
       bottom: false,
-      child: Container(
-        decoration: BoxDecoration(
-          color: signedIn ? scheme.primary : scheme.surfaceContainerHighest,
-          boxShadow: const [
-            BoxShadow(
-              color: Colors.black26,
-              blurRadius: 10,
-              offset: Offset(0, 4),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: BackdropFilter(
+            filter: ui.ImageFilter.blur(
+              sigmaX: ext.glassBlur,
+              sigmaY: ext.glassBlur,
             ),
-          ],
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: [
-              Icon(icon, color: signedIn ? scheme.onPrimaryContainer : scheme.onSurfaceVariant, size: 20),
-              const SizedBox(width: 12),
-              Text(
-                title,
-                style: GoogleFonts.manrope(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: signedIn ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
-                  letterSpacing: -0.2,
+            child: Container(
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: fgColor.withValues(alpha: 0.1),
                 ),
               ),
-            ],
-          ),
-          if (actionLabel != null)
-            GestureDetector(
-              onTap: onSyncNow,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                decoration: BoxDecoration(
-                  color: scheme.onPrimaryContainer,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  actionLabel,
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.5,
-                    color: scheme.primary,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Row(
+                      children: [
+                        _PulseIcon(
+                          icon: icon,
+                          color: fgColor,
+                          active: syncing,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                style: GoogleFonts.manrope(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  color: fgColor,
+                                  letterSpacing: 1.2,
+                                ),
+                              ),
+                              if (cloudSubtitle != null) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  cloudSubtitle!,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w500,
+                                    color: fgColor.withOpacity(0.7),
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                  if (actionLabel != null)
+                    GestureDetector(
+                      onTap: onSyncNow,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: syncing
+                              ? Colors.transparent
+                              : fgColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: fgColor.withValues(alpha: 0.2),
+                          ),
+                        ),
+                        child: Text(
+                          actionLabel,
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.2,
+                            color: fgColor,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
-        ],
+          ),
+        ),
       ),
-    ),
+    );
+  }
+}
+
+class _PulseIcon extends StatefulWidget {
+  const _PulseIcon({
+    required this.icon,
+    required this.color,
+    required this.active,
+  });
+
+  final IconData icon;
+  final Color color;
+  final bool active;
+
+  @override
+  State<_PulseIcon> createState() => _PulseIconState();
+}
+
+class _PulseIconState extends State<_PulseIcon> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    );
+    if (widget.active) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void didUpdateWidget(_PulseIcon oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !_controller.isAnimating) {
+      _controller.repeat();
+    } else if (!widget.active && _controller.isAnimating) {
+      _controller.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.active) return Icon(widget.icon, color: widget.color, size: 18);
+
+    return RotationTransition(
+      turns: _controller,
+      child: Icon(widget.icon, color: widget.color, size: 18),
     );
   }
 }

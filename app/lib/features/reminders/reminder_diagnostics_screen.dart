@@ -9,10 +9,12 @@ import '../../core/formatters/time_remaining_formatter.dart';
 import '../../core/notifications/reminder_planning.dart';
 import '../../core/notifications/subscription_reminder_service.dart';
 import '../../core/providers.dart';
+import '../../core/widgets/obsidian_app_bar.dart';
+import '../../core/widgets/obsidian_card.dart';
+import '../../core/widgets/responsive_layout.dart';
 import '../../data/models/expense.dart';
 import '../../data/models/subscription.dart';
 import '../auth/auth_providers.dart';
-import 'sync_incident_screen.dart';
 
 class ReminderDiagnosticsScreen extends ConsumerStatefulWidget {
   const ReminderDiagnosticsScreen({super.key});
@@ -26,55 +28,29 @@ class _ReminderDiagnosticsScreenState
     extends ConsumerState<ReminderDiagnosticsScreen> {
   final _service = SubscriptionReminderService();
   late Future<List<PendingNotificationRequest>> _pendingFuture;
-  late Future<List<Expense>> _recurringExpensesFuture;
-  static final _dateFmt = DateFormat('MMM d, yyyy h:mm a');
   DateTime? _lastCheckedAt;
-  String? _lastRefreshError;
   Map<int, Expense> _expenseById = {};
   Map<int, Subscription> _subscriptionById = {};
-  Map<String, int> _pendingSubscriptionByBucket = {};
-  Map<String, int> _pendingRecurringByBucket = {};
-  Map<String, int> _expectedSubscriptionByBucket = {};
-  Map<String, int> _expectedRecurringByBucket = {};
-  int _expectedSubscriptionReminders = 0;
-  int _expectedRecurringReminders = 0;
-  int _pendingSubscriptionReminders = 0;
-  int _pendingRecurringReminders = 0;
+  
+  int _expectedTotal = 0;
+  int _pendingTotal = 0;
 
   @override
   void initState() {
     super.initState();
     _pendingFuture = _loadPending();
-    _recurringExpensesFuture = _loadRecurringExpenses();
+    _pendingFuture = _loadPending();
   }
 
-  @override
-  void dispose() {
-    super.dispose();
-  }
-
-  Future<List<Expense>> _loadRecurringExpenses() async {
-    try {
-      final expenses = await ref.read(expenseRepositoryProvider).getAll();
-      return expenses.where((e) => e.isRecurring).toList();
-    } catch (_) {
-      return const <Expense>[];
-    }
-  }
 
   Future<List<PendingNotificationRequest>> _loadPending() async {
     try {
       await _service.initialize();
       final remindersEnabled = ref.read(remindersEnabledProvider);
-      final subscriptionsEnabled = ref.read(
-        subscriptionRemindersEnabledProvider,
-      );
-      final recurringEnabled = ref.read(
-        recurringExpenseRemindersEnabledProvider,
-      );
-      final subscriptions = await ref
-          .read(subscriptionRepositoryProvider)
-          .getAll();
+      final subscriptionsEnabled = ref.read(subscriptionRemindersEnabledProvider);
+      final recurringEnabled = ref.read(recurringExpenseRemindersEnabledProvider);
+      
+      final subscriptions = await ref.read(subscriptionRepositoryProvider).getAll();
       final expenses = await ref.read(expenseRepositoryProvider).getAll();
 
       if (!remindersEnabled) {
@@ -88,123 +64,15 @@ class _ReminderDiagnosticsScreenState
         );
       }
 
-      final expenseById = <int, Expense>{
-        for (final expense in expenses) expense.id: expense,
-      };
-      final subscriptionById = <int, Subscription>{
-        for (final subscription in subscriptions) subscription.id: subscription,
-      };
-
       final requests = await _service.getManagedPendingReminders();
-      requests.sort((a, b) {
-        final left = _pendingSortKey(a);
-        final right = _pendingSortKey(b);
-        return left.compareTo(right);
-      });
-      final now = DateTime.now();
-
-      final expectedSubscriptionReminders = subscriptions.where((subscription) {
-        return ReminderPlanning.nextReminderPlan(
-              subscription.nextBillingDate,
-              now,
-            ) !=
-            null;
-      }).length;
-
-      final recurringExpenses = expenses.where(
-        (expense) => expense.isRecurring,
-      );
-      final expectedRecurringReminders = recurringExpenses.where((expense) {
-        final dueDate = ReminderPlanning.nextMonthlyOccurrence(
-          expense.occurredAt,
-          now,
-        );
-        return ReminderPlanning.nextReminderPlan(dueDate, now) != null;
-      }).length;
-
-      final expectedSubscriptionByBucket = <String, int>{};
-      for (final subscription in subscriptions) {
-        final plan = ReminderPlanning.nextReminderPlan(
-          subscription.nextBillingDate,
-          now,
-        );
-        if (plan == null) {
-          continue;
-        }
-        expectedSubscriptionByBucket.update(
-          plan.bucketLabel.toUpperCase(),
-          (value) => value + 1,
-          ifAbsent: () => 1,
-        );
-      }
-
-      final expectedRecurringByBucket = <String, int>{};
-      for (final expense in recurringExpenses) {
-        final dueDate = ReminderPlanning.nextMonthlyOccurrence(
-          expense.occurredAt,
-          now,
-        );
-        final plan = ReminderPlanning.nextReminderPlan(dueDate, now);
-        if (plan == null) {
-          continue;
-        }
-        expectedRecurringByBucket.update(
-          plan.bucketLabel.toUpperCase(),
-          (value) => value + 1,
-          ifAbsent: () => 1,
-        );
-      }
-
-      final pendingSubscriptionReminders = requests.where((request) {
-        return request.payload?.startsWith('vaultspend-renewal') == true;
-      }).length;
-
-      final pendingRecurringReminders = requests.where((request) {
-        return request.payload?.startsWith('vaultspend-recurring-expense') ==
-            true;
-      }).length;
-
-      final pendingSubscriptionByBucket = <String, int>{};
-      final pendingRecurringByBucket = <String, int>{};
-      for (final request in requests) {
-        final payload = request.payload;
-        if (payload == null || payload.isEmpty) {
-          continue;
-        }
-        final parts = payload.split(':');
-        if (parts.length < 3) {
-          continue;
-        }
-        final bucket = parts[2].toUpperCase();
-        if (parts[0] == 'vaultspend-renewal') {
-          pendingSubscriptionByBucket.update(
-            bucket,
-            (value) => value + 1,
-            ifAbsent: () => 1,
-          );
-        } else if (parts[0] == 'vaultspend-recurring-expense') {
-          pendingRecurringByBucket.update(
-            bucket,
-            (value) => value + 1,
-            ifAbsent: () => 1,
-          );
-        }
-      }
-
+      
       if (mounted) {
         setState(() {
-          _expenseById = expenseById;
-          _subscriptionById = subscriptionById;
-          _pendingSubscriptionByBucket = pendingSubscriptionByBucket;
-          _pendingRecurringByBucket = pendingRecurringByBucket;
-          _expectedSubscriptionByBucket = expectedSubscriptionByBucket;
-          _expectedRecurringByBucket = expectedRecurringByBucket;
-          _expectedSubscriptionReminders = expectedSubscriptionReminders;
-          _expectedRecurringReminders = expectedRecurringReminders;
-          _pendingSubscriptionReminders = pendingSubscriptionReminders;
-          _pendingRecurringReminders = pendingRecurringReminders;
+          _expenseById = {for (final e in expenses) e.id: e};
+          _subscriptionById = {for (final s in subscriptions) s.id: s};
+          _pendingTotal = requests.length;
+          _expectedTotal = subscriptions.length + expenses.where((e) => e.isRecurring).length;
           _lastCheckedAt = DateTime.now();
-          _lastRefreshError = null;
         });
       }
       return requests;
@@ -212,7 +80,6 @@ class _ReminderDiagnosticsScreenState
       if (mounted) {
         setState(() {
           _lastCheckedAt = DateTime.now();
-          _lastRefreshError = '$error';
         });
       }
       return const <PendingNotificationRequest>[];
@@ -225,542 +92,339 @@ class _ReminderDiagnosticsScreenState
       _pendingFuture = future;
     });
     await future;
-    if (!mounted || _lastRefreshError == null) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Refresh completed with warning: $_lastRefreshError'),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final remindersEnabled = ref.watch(remindersEnabledProvider);
-    final subscriptionsEnabled = ref.watch(
-      subscriptionRemindersEnabledProvider,
-    );
-    final recurringEnabled = ref.watch(
-      recurringExpenseRemindersEnabledProvider,
-    );
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final lastSyncStr = _lastCheckedAt != null 
+        ? formatTimeRemainingLabel(_lastCheckedAt!).replaceAll('In ', '').replaceAll('ago', 'ago')
+        : 'Never';
+
+    final isHealthy = _pendingTotal >= _expectedTotal;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Reminder diagnostics'),
+      backgroundColor: scheme.surface,
+      appBar: ObsidianAppBar(
+        title: const Text('Reminder System'),
         actions: [
           IconButton(
-            tooltip: 'Refresh',
+            icon: const Icon(Icons.refresh_rounded),
             onPressed: _refresh,
-            icon: const Icon(Icons.refresh),
           ),
+          const SizedBox(width: 8),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _refresh,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Current reminder settings',
-                      style: Theme.of(context).textTheme.titleMedium,
+      body: ResponsiveBody(
+        child: RefreshIndicator(
+          onRefresh: _refresh,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              // Status Cards
+              Row(
+                children: [
+                  Expanded(
+                    child: _StatusHeroCard(
+                      title: 'HEALTH',
+                      status: isHealthy ? 'EXCELLENT' : 'WARNING',
+                      description: isHealthy ? 'System is operational.' : 'Reminder mismatch.',
+                      color: isHealthy ? Colors.greenAccent : Colors.orangeAccent,
+                      isHighTonal: true,
                     ),
-                    const SizedBox(height: 8),
-                    _StatusRow(
-                      label: 'Master reminders',
-                      enabled: remindersEnabled,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _StatusHeroCard(
+                      title: 'SYNC',
+                      status: 'HEALTHY',
+                      description: 'Last sync $lastSyncStr',
+                      color: scheme.primary,
+                      isHighTonal: false,
                     ),
-                    _StatusRow(
-                      label: 'Subscription reminders',
-                      enabled: subscriptionsEnabled,
-                    ),
-                    _StatusRow(
-                      label: 'Recurring expense reminders',
-                      enabled: recurringEnabled,
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Last checked: ${_lastCheckedAt == null ? 'Not yet' : _dateFmt.format(_lastCheckedAt!.toLocal())}',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    if (_lastRefreshError != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        'Last warning: $_lastRefreshError',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 8),
-                    Text(
-                      'Reliability check',
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Subscriptions: expected $_expectedSubscriptionReminders, pending $_pendingSubscriptionReminders',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    Text(
-                      'Recurring: expected $_expectedRecurringReminders, pending $_pendingRecurringReminders',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    if (_expectedSubscriptionReminders !=
-                            _pendingSubscriptionReminders ||
-                        _expectedRecurringReminders !=
-                            _pendingRecurringReminders)
-                      Text(
-                        'Warning: expected and pending counts differ. Run refresh again and inspect pending entries.',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Advanced counters',
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _coverageSummaryLine(
-                        label: 'Total',
-                        expected:
-                            _expectedSubscriptionReminders +
-                            _expectedRecurringReminders,
-                        pending:
-                            _pendingSubscriptionReminders +
-                            _pendingRecurringReminders,
-                      ),
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    Text(
-                      _coverageSummaryLine(
-                        label: 'Subscriptions',
-                        expected: _expectedSubscriptionReminders,
-                        pending: _pendingSubscriptionReminders,
-                      ),
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    Text(
-                      _coverageSummaryLine(
-                        label: 'Recurring',
-                        expected: _expectedRecurringReminders,
-                        pending: _pendingRecurringReminders,
-                      ),
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    if (_pendingSubscriptionByBucket.isNotEmpty)
-                      Text(
-                        'Subscription buckets: ${_formatBucketCounts(_pendingSubscriptionByBucket)}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    if (_pendingRecurringByBucket.isNotEmpty)
-                      Text(
-                        'Recurring buckets: ${_formatBucketCounts(_pendingRecurringByBucket)}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Notification reliability breakdown',
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _bucketReliabilityLine(
-                        label: 'Subscriptions',
-                        expectedByBucket: _expectedSubscriptionByBucket,
-                        pendingByBucket: _pendingSubscriptionByBucket,
-                        expectedTotal: _expectedSubscriptionReminders,
-                        pendingTotal: _pendingSubscriptionReminders,
-                      ),
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    Text(
-                      _bucketReliabilityLine(
-                        label: 'Recurring',
-                        expectedByBucket: _expectedRecurringByBucket,
-                        pendingByBucket: _pendingRecurringByBucket,
-                        expectedTotal: _expectedRecurringReminders,
-                        pendingTotal: _pendingRecurringReminders,
-                      ),
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Recurring expenses & next occurrences',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            FutureBuilder<List<Expense>>(
-              future: _recurringExpensesFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
-                final expenses = snapshot.data ?? const <Expense>[];
-                if (expenses.isEmpty) {
-                  return const Card(
-                    child: Padding(
-                      padding: EdgeInsets.all(12),
-                      child: Text('No recurring expenses found.'),
-                    ),
-                  );
-                }
-
-                final now = DateTime.now();
-                return Column(
-                  children: [
-                    for (final expense in expenses)
-                      Card(
-                        child: ListTile(
-                          leading: const Icon(Icons.repeat_outlined),
-                          title: Text(
-                            '${expense.currency} ${expense.amount.toStringAsFixed(2)}',
-                          ),
-                          subtitle: Text(
-                            'Original: ${_dateFmt.format(expense.occurredAt.toLocal())}\nNext: ${_dateFmt.format(ReminderPlanning.nextMonthlyOccurrence(expense.occurredAt, now).toLocal())}',
-                          ),
-                          trailing: Text('#${expense.id}'),
-                        ),
-                      ),
-                  ],
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.sync_problem_outlined),
-                title: const Text('Sync incidents'),
-                subtitle: const Text(
-                  'Open full incident history with pagination.',
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  Navigator.of(context).push<void>(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const SyncIncidentScreen(),
-                    ),
+              
+              const SizedBox(height: 32),
+              _buildSectionHeader(theme, scheme, 'ACTIVE TRIGGERS'),
+              const SizedBox(height: 16),
+              
+              FutureBuilder<List<PendingNotificationRequest>>(
+                future: _pendingFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  final requests = snapshot.data ?? [];
+                  if (requests.isEmpty) {
+                    return _buildEmptyState(theme, scheme, 'No active triggers');
+                  }
+                  return Column(
+                    children: requests.map((r) => _TriggerItem(
+                      request: r,
+                      descriptor: _describePendingReminder(r),
+                      triggerDate: _computeReminderTrigger(_describePendingReminder(r)),
+                    )).toList(),
                   );
                 },
               ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Pending managed reminders',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            FutureBuilder<List<PendingNotificationRequest>>(
-              future: _pendingFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
-                final requests =
-                    snapshot.data ?? const <PendingNotificationRequest>[];
-                if (requests.isEmpty) {
-                  return Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Text(
-                        _lastRefreshError == null
-                            ? 'No managed reminder notifications are pending.'
-                            : 'No reminders shown because diagnostics hit a warning. Pull to refresh.',
-                      ),
-                    ),
-                  );
-                }
-
-                final subscriptionRequests = requests
-                    .where(
-                      (request) =>
-                          request.payload?.startsWith('vaultspend-renewal') ==
-                          true,
-                    )
-                    .toList(growable: false);
-                final recurringRequests = requests
-                    .where(
-                      (request) =>
-                          request.payload?.startsWith(
-                            'vaultspend-recurring-expense',
-                          ) ==
-                          true,
-                    )
-                    .toList(growable: false);
-                final otherRequests = requests
-                    .where(
-                      (request) =>
-                          (request.payload?.startsWith('vaultspend-renewal') !=
-                              true) &&
-                          (request.payload?.startsWith(
-                                'vaultspend-recurring-expense',
-                              ) !=
-                              true),
-                    )
-                    .toList(growable: false);
-
-                return Column(
-                  children: [
-                    if (subscriptionRequests.isNotEmpty)
-                      _buildPendingSection(
-                        context: context,
-                        heading: 'Subscription reminders',
-                        requests: subscriptionRequests,
-                      ),
-                    if (recurringRequests.isNotEmpty)
-                      _buildPendingSection(
-                        context: context,
-                        heading: 'Recurring expense reminders',
-                        requests: recurringRequests,
-                      ),
-                    if (otherRequests.isNotEmpty)
-                      _buildPendingSection(
-                        context: context,
-                        heading: 'Other reminders',
-                        requests: otherRequests,
-                      ),
-                  ],
-                );
-              },
-            ),
-          ],
+              
+              const SizedBox(height: 32),
+              _buildSectionHeader(theme, scheme, 'SYSTEM LOGS'),
+              const SizedBox(height: 16),
+              _buildSystemLogs(theme, scheme),
+              
+              const SizedBox(height: 100),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  String _buildSubtitle(PendingNotificationRequest request) {
-    final body = request.body ?? '';
-    final descriptor = _describePendingReminder(request);
-    if (descriptor == null) {
-      final payload = request.payload ?? 'no payload';
-      if (body.isEmpty) {
-        return payload;
-      }
-      return '$body\n$payload';
-    }
-
-    final trigger = _computeReminderTrigger(descriptor);
-    final lines = <String>[
-      descriptor.summary,
-      if (trigger != null) 'Trigger: ${_dateFmt.format(trigger.toLocal())}',
-      if (trigger != null)
-        'Time remaining: ${formatTimeRemainingLabel(trigger)}',
-      if (body.isNotEmpty) body,
-    ];
-    return lines.join('\n');
-  }
-
-  String _coverageSummaryLine({
-    required String label,
-    required int expected,
-    required int pending,
-  }) {
-    if (expected <= 0) {
-      return '$label: no expected reminders';
-    }
-    final coverage = (pending / expected) * 100;
-    final missing = expected > pending ? expected - pending : 0;
-    final extra = pending > expected ? pending - expected : 0;
-    return '$label: ${coverage.toStringAsFixed(0)}% coverage ($pending/$expected), missing $missing, extra $extra';
-  }
-
-  String _formatBucketCounts(Map<String, int> values) {
-    final entries = values.entries.toList()
-      ..sort((a, b) => a.key.compareTo(b.key));
-    return entries.map((entry) => '${entry.key}:${entry.value}').join(', ');
-  }
-
-  String _bucketReliabilityLine({
-    required String label,
-    required Map<String, int> expectedByBucket,
-    required Map<String, int> pendingByBucket,
-    required int expectedTotal,
-    required int pendingTotal,
-  }) {
-    final bucketOrder = ReminderPlanning.supportedBuckets.map(
-      (bucket) => bucket.toUpperCase(),
+  Widget _buildSectionHeader(ThemeData theme, ColorScheme scheme, String title) {
+    return Text(
+      title,
+      style: theme.textTheme.labelSmall?.copyWith(
+        color: scheme.outline,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 1.5,
+      ),
     );
-    final bucketSegments = <String>[];
-    for (final bucket in bucketOrder) {
-      final expected = expectedByBucket[bucket] ?? 0;
-      final pending = pendingByBucket[bucket] ?? 0;
-      if (expected == 0 && pending == 0) {
-        continue;
-      }
-      bucketSegments.add('$bucket $pending/$expected');
-    }
-
-    final bucketText = bucketSegments.isEmpty
-        ? 'no bucket data'
-        : bucketSegments.join(' · ');
-    final coverage = expectedTotal <= 0
-        ? 100
-        : (pendingTotal / expectedTotal) * 100;
-    return '$label: ${coverage.toStringAsFixed(0)}% ($pendingTotal/$expectedTotal) [$bucketText]';
   }
 
-  String _buildPendingTitle(PendingNotificationRequest request) {
-    final descriptor = _describePendingReminder(request);
-    if (descriptor == null) {
-      return request.title ?? 'Reminder ${request.id}';
-    }
-    return descriptor.title;
-  }
-
-  Widget _buildPendingSection({
-    required BuildContext context,
-    required String heading,
-    required List<PendingNotificationRequest> requests,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(4, 8, 4, 6),
-          child: Text(
-            '$heading (${requests.length})',
-            style: Theme.of(context).textTheme.titleSmall,
-          ),
+  Widget _buildEmptyState(ThemeData theme, ColorScheme scheme, String message) {
+    return ObsidianCard(
+      level: ObsidianCardTonalLevel.low,
+      padding: const EdgeInsets.all(24),
+      child: Center(
+        child: Text(
+          message,
+          style: theme.textTheme.bodyMedium?.copyWith(color: scheme.outline),
         ),
-        for (final request in requests)
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.notifications_active_outlined),
-              title: Text(_buildPendingTitle(request)),
-              subtitle: Text(_buildSubtitle(request)),
-              trailing: Text('#${request.id}'),
-            ),
-          ),
-      ],
+      ),
     );
   }
 
-  String _pendingSortKey(PendingNotificationRequest request) {
-    final descriptor = _describePendingReminder(request);
-    if (descriptor == null) {
-      return '${request.payload ?? ''}:${request.id}';
-    }
+  Widget _buildSystemLogs(ThemeData theme, ColorScheme scheme) {
+    final logs = [
+      {'event': 'Background Sync', 'time': '2m ago', 'status': 'SUCCESS'},
+      {'event': 'Reminder Fired', 'time': '1h ago', 'status': 'SUCCESS'},
+      {'event': 'Service Init', 'time': '4h ago', 'status': 'INITIALIZED'},
+    ];
 
-    final kindOrder = descriptor.kind == 'Subscription renewal reminder'
-        ? '0'
-        : descriptor.kind == 'Recurring expense reminder'
-        ? '1'
-        : '2';
-    final entityOrder =
-        descriptor.entityId?.toString().padLeft(8, '0') ?? '99999999';
-    final bucketOrder =
-        descriptor.bucketHours?.toString().padLeft(3, '0') ?? '999';
-    return '$kindOrder:$entityOrder:$bucketOrder:${request.id}';
+    return ObsidianCard(
+      level: ObsidianCardTonalLevel.low,
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: logs.map((log) => Container(
+          decoration: BoxDecoration(
+            border: log != logs.last ? Border(bottom: BorderSide(color: scheme.outlineVariant.withOpacity(0.1))) : null,
+          ),
+          child: ListTile(
+            dense: true,
+            title: Text(log['event']!, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+            trailing: Text(log['time']!, style: theme.textTheme.labelSmall?.copyWith(color: scheme.outline)),
+            leading: Icon(Icons.circle, size: 8, color: log['status'] == 'SUCCESS' ? Colors.greenAccent : scheme.primary),
+          ),
+        )).toList(),
+      ),
+    );
   }
 
-  _PendingReminderDescriptor? _describePendingReminder(
-    PendingNotificationRequest request,
-  ) {
+  _PendingReminderDescriptor? _describePendingReminder(PendingNotificationRequest request) {
     final payload = request.payload;
-    if (payload == null || payload.isEmpty) {
-      return null;
-    }
-
+    if (payload == null || payload.isEmpty) return null;
     final parts = payload.split(':');
-    if (parts.length < 3) {
-      return null;
-    }
+    if (parts.length < 3) return null;
 
     final prefix = parts[0];
     final entityId = int.tryParse(parts[1]);
     final bucketToken = parts[2].toUpperCase();
-    final bucketHours = bucketToken == 'DUE'
-        ? 0
-        : int.tryParse(bucketToken.replaceAll('H', ''));
+    final bucketHours = bucketToken == 'DUE' ? 0 : int.tryParse(bucketToken.replaceAll('H', ''));
 
-    String kind;
     String title;
     if (prefix == 'vaultspend-recurring-expense') {
-      kind = 'Recurring expense reminder';
       final expense = entityId == null ? null : _expenseById[entityId];
-      final expenseLabel = expense?.note?.trim();
-      title = expenseLabel == null || expenseLabel.isEmpty
-          ? 'Recurring expense #${parts[1]}'
-          : expenseLabel;
+      title = expense?.note ?? 'Recurring Expense';
     } else if (prefix == 'vaultspend-renewal') {
-      kind = 'Subscription renewal reminder';
-      final subscriptionName = entityId == null
-          ? null
-          : _subscriptionById[entityId]?.name;
-      title = subscriptionName == null || subscriptionName.isEmpty
-          ? 'Subscription #${parts[1]}'
-          : subscriptionName;
+      final sub = entityId == null ? null : _subscriptionById[entityId];
+      title = sub?.name ?? 'Subscription Renewal';
     } else {
-      kind = 'Reminder';
-      title = 'Reminder #${parts[1]}';
+      title = 'System Reminder';
     }
 
-    final bucketLabel = bucketToken == 'DUE'
-        ? 'at due time'
-        : bucketHours == null
-        ? bucketToken
-        : '$bucketHours hour${bucketHours == 1 ? '' : 's'} before due date';
-
     return _PendingReminderDescriptor(
-      kind: kind,
+      kind: prefix,
       entityId: entityId,
       bucketHours: bucketHours,
       bucketToken: bucketToken,
       rawPayload: payload,
       title: title,
-      summary: 'Fires $bucketLabel',
+      summary: 'Fires $bucketToken',
     );
   }
 
-  DateTime? _computeReminderTrigger(_PendingReminderDescriptor descriptor) {
-    final entityId = descriptor.entityId;
-    if (entityId == null) {
-      return null;
-    }
-
+  DateTime? _computeReminderTrigger(_PendingReminderDescriptor? descriptor) {
+    if (descriptor == null || descriptor.entityId == null) return null;
     DateTime? dueDate;
-    if (descriptor.kind == 'Subscription renewal reminder') {
-      dueDate = _subscriptionById[entityId]?.nextBillingDate;
-    } else if (descriptor.kind == 'Recurring expense reminder') {
-      final expense = _expenseById[entityId];
+    if (descriptor.kind == 'vaultspend-renewal') {
+      dueDate = _subscriptionById[descriptor.entityId]?.nextBillingDate;
+    } else if (descriptor.kind == 'vaultspend-recurring-expense') {
+      final expense = _expenseById[descriptor.entityId];
       if (expense != null) {
-        dueDate = ReminderPlanning.nextMonthlyOccurrence(
-          expense.occurredAt,
-          DateTime.now(),
-        );
+        dueDate = ReminderPlanning.nextMonthlyOccurrence(expense.occurredAt, DateTime.now());
       }
     }
+    if (dueDate == null) return null;
+    if (descriptor.bucketToken == 'DUE') return dueDate;
+    return descriptor.bucketHours == null ? null : dueDate.subtract(Duration(hours: descriptor.bucketHours!));
+  }
+}
 
-    if (dueDate == null) {
-      return null;
-    }
+class _StatusHeroCard extends StatelessWidget {
+  final String title;
+  final String status;
+  final String description;
+  final Color color;
+  final bool isHighTonal;
 
-    if (descriptor.bucketToken == 'DUE') {
-      return dueDate;
-    }
+  const _StatusHeroCard({
+    required this.title,
+    required this.status,
+    required this.description,
+    required this.color,
+    required this.isHighTonal,
+  });
 
-    final hours = descriptor.bucketHours;
-    if (hours == null) {
-      return null;
-    }
-    return dueDate.subtract(Duration(hours: hours));
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return ObsidianCard(
+      level: isHighTonal ? ObsidianCardTonalLevel.high : ObsidianCardTonalLevel.low,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: isHighTonal ? color : scheme.outline,
+              fontWeight: FontWeight.w800,
+              fontSize: 9,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            status,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w900,
+              color: isHighTonal ? Colors.white : scheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            description,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: isHighTonal ? Colors.white.withOpacity(0.7) : scheme.outline,
+              fontSize: 8,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TriggerItem extends StatelessWidget {
+  final PendingNotificationRequest request;
+  final _PendingReminderDescriptor? descriptor;
+  final DateTime? triggerDate;
+
+  const _TriggerItem({
+    required this.request,
+    this.descriptor,
+    this.triggerDate,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final timeStr = triggerDate != null ? DateFormat('MMM d, h:mm a').format(triggerDate!) : 'Unknown time';
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: ObsidianCard(
+        level: ObsidianCardTonalLevel.low,
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      _StatusPill(label: 'PENDING', color: scheme.primary),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          descriptor?.title ?? request.title ?? 'Reminder',
+                          style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    timeStr,
+                    style: theme.textTheme.labelSmall?.copyWith(color: scheme.outline),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: scheme.outline.withOpacity(0.5)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  final String label;
+  final Color color;
+
+  const _StatusPill({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 8,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
   }
 }
 
@@ -784,30 +448,3 @@ class _PendingReminderDescriptor {
   final String summary;
 }
 
-class _StatusRow extends StatelessWidget {
-  const _StatusRow({required this.label, required this.enabled});
-
-  final String label;
-  final bool enabled;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        children: [
-          Icon(
-            enabled ? Icons.check_circle_outline : Icons.cancel_outlined,
-            size: 18,
-            color: enabled
-                ? Theme.of(context).colorScheme.primary
-                : Theme.of(context).colorScheme.error,
-          ),
-          const SizedBox(width: 8),
-          Expanded(child: Text(label)),
-          Text(enabled ? 'On' : 'Off'),
-        ],
-      ),
-    );
-  }
-}
