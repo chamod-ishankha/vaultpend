@@ -11,6 +11,8 @@ import '../../core/providers.dart';
 import '../../core/logging/app_logging.dart';
 import '../../core/notifications/reminder_sync_helper.dart';
 import '../../core/ocr/receipt_ocr_service.dart';
+import '../../core/theme/app_theme.dart';
+import '../../core/widgets/fx_reference_strip.dart';
 import '../../core/widgets/obsidian_app_bar.dart';
 import '../../core/widgets/obsidian_button.dart';
 import '../../core/widgets/responsive_layout.dart';
@@ -45,7 +47,28 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   bool _saving = false;
 
   static const _currencies = ['LKR', 'USD', 'EUR', 'GBP', 'JPY'];
-  static final _dateTimeFmt = DateFormat('EEEE, MMM d, yyyy');
+  static const _currencyNames = {
+    'LKR': 'SRI LANKAN RUPEE',
+    'USD': 'US DOLLAR',
+    'EUR': 'EURO',
+    'GBP': 'POUND STERLING',
+    'JPY': 'JAPANESE YEN',
+  };
+  static const _currencySymbols = {
+    'LKR': 'Rs',
+    'USD': r'$',
+    'EUR': 'EUR',
+    'GBP': 'GBP',
+    'JPY': 'JPY',
+  };
+  static final _dateTimeCardFmt = DateFormat('MM/dd/yyyy, hh:mm a');
+
+  String _currencySymbol() => _currencySymbols[_currency] ?? _currency;
+
+  String _currencyLabel() {
+    final name = _currencyNames[_currency] ?? _currency;
+    return '$_currency - $name';
+  }
 
   @override
   void initState() {
@@ -79,6 +102,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   }
 
   Future<void> _pickTime() async {
+    final scheme = Theme.of(context).colorScheme;
+    final ext = Theme.of(context).vaultSpend;
     final d = await showDatePicker(
       context: context,
       initialDate: _when,
@@ -86,9 +111,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       lastDate: DateTime(2100),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
-          colorScheme: Theme.of(
-            context,
-          ).colorScheme.copyWith(surface: const Color(0xFF1B1B1F)),
+          colorScheme: Theme.of(context).colorScheme.copyWith(
+            surface: ext.surfaceContainerLow,
+            primary: scheme.primary,
+          ),
         ),
         child: child!,
       ),
@@ -108,11 +134,18 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   Future<void> _scanReceipt() async {
     final appLogger = ref.read(appLoggerProvider);
     appLogger.info('receipt_scan_sheet_opened');
+    final scheme = Theme.of(context).colorScheme;
+    final ext = Theme.of(context).vaultSpend;
 
     final source = await showModalBottomSheet<ImageSource?>(
       context: context,
       showDragHandle: true,
-      backgroundColor: const Color(0xFF131317),
+      backgroundColor: scheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(ext.addExpenseCardRadius),
+        ),
+      ),
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -171,11 +204,18 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     if (result.amountCandidates.isEmpty) return result.amount;
     final candidates = result.amountCandidates.take(3).toList();
     var selectedIndex = 0;
+    final scheme = Theme.of(context).colorScheme;
+    final ext = Theme.of(context).vaultSpend;
 
     return showModalBottomSheet<double?>(
       context: context,
       showDragHandle: true,
-      backgroundColor: const Color(0xFF131317),
+      backgroundColor: scheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(ext.addExpenseCardRadius),
+        ),
+      ),
       builder: (ctx) => StatefulBuilder(
         builder: (context, setSheetState) => SafeArea(
           child: Padding(
@@ -195,6 +235,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                       selectedIndex == i
                           ? Icons.radio_button_checked
                           : Icons.radio_button_unchecked,
+                      color: selectedIndex == i
+                          ? scheme.primary
+                          : scheme.outline,
                     ),
                     title: Text(candidates[i].amount.toStringAsFixed(2)),
                     subtitle: Text(candidates[i].line, maxLines: 1),
@@ -273,203 +316,192 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final ext = theme.vaultSpend;
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    final isEditing = widget.expense != null;
     final catsAsync = ref.watch(categoryListProvider);
 
     return Scaffold(
       backgroundColor: scheme.surface,
       appBar: ObsidianAppBar(
+        centerTitle: false,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
         title: Text(
-          widget.expense != null ? 'Edit Transaction' : 'New Transaction',
+          isEditing ? 'Edit Expense' : 'Add Expense',
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.2,
+            color: scheme.onSurface,
+          ),
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.document_scanner_rounded),
+            color: scheme.primary,
             onPressed: _scanReceipt,
+            tooltip: 'Scan receipt',
           ),
           const SizedBox(width: 8),
         ],
       ),
       body: ResponsiveBody(
-        child: catsAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(child: Text('$e')),
-          data: (cats) {
-            final category = _categoryId != null
-                ? cats.firstWhere(
-                    (c) => c.id == _categoryId,
-                    orElse: () => cats.first,
-                  )
-                : (cats.isNotEmpty ? cats.first : null);
+        child: Column(
+          children: [
+            const FxReferenceStrip(),
+            Expanded(
+              child: catsAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) => Center(child: Text('$e')),
+                data: (cats) {
+                  Category? category;
+                  if (cats.isNotEmpty) {
+                    if (_categoryId != null) {
+                      for (final c in cats) {
+                        if (c.id == _categoryId) {
+                          category = c;
+                          break;
+                        }
+                      }
+                    }
+                    category ??= cats.first;
+                  }
 
-            if (_categoryId == null && cats.isNotEmpty) {
-              _categoryId = cats.first.id;
-            }
+                  if (_categoryId == null && cats.isNotEmpty) {
+                    _categoryId = cats.first.id;
+                  }
 
-            return ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              children: [
-                // Amount Hero (Digital Obsidian Style)
-                _buildAmountHero(theme, scheme),
-
-                const SizedBox(height: 32),
-
-                // Form Sections
-                _buildSectionHeader(theme, scheme, 'GENERAL'),
-                const SizedBox(height: 12),
-                ObsidianCard(
-                  level: ObsidianCardTonalLevel.low,
-                  padding: EdgeInsets.zero,
-                  child: Column(
+                  return ListView(
+                    padding: EdgeInsets.fromLTRB(
+                      24,
+                      8,
+                      24,
+                      ext.addExpenseBottomActionSpacing + bottomInset,
+                    ),
                     children: [
-                      _buildFormRow(
-                        icon: Icons.notes_rounded,
-                        iconColor: scheme.secondary,
-                        label: 'Note',
-                        child: TextField(
-                          controller: _noteCtrl,
-                          style: theme.textTheme.bodyLarge?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                          decoration: InputDecoration(
-                            hintText: 'Add a description...',
-                            hintStyle: TextStyle(
-                              color: scheme.outline.withOpacity(0.3),
-                              fontWeight: FontWeight.w400,
-                            ),
-                            border: InputBorder.none,
-                            isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(
-                              vertical: 8,
-                            ),
-                          ),
+                      _buildAmountHero(theme, scheme, ext),
+
+                      const SizedBox(height: 20),
+
+                      _buildCategoryCurrencyBlock(
+                        theme,
+                        scheme,
+                        ext,
+                        category,
+                        cats,
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      _buildDateTimeCard(theme, scheme, ext),
+
+                      const SizedBox(height: 14),
+
+                      _buildRecurringCard(theme, scheme, ext),
+
+                      const SizedBox(height: 14),
+
+                      _buildNoteCard(theme, scheme, ext),
+
+                      const SizedBox(height: 14),
+
+                      _buildReceiptTiles(theme, scheme, ext),
+
+                      const SizedBox(height: 24),
+
+                      ObsidianButton(
+                        onPressed: _saving ? null : _save,
+                        text: isEditing ? 'Update Expense' : 'Save Expense',
+                        isLoading: _saving,
+                        enableShimmer: true,
+                        style: ObsidianButtonStyle.primary,
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      Text(
+                        'ENCRYPTED AND SECURED IN THE OBSIDIAN VAULT',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: scheme.onSurfaceVariant.withValues(alpha: 0.8),
+                          letterSpacing: 2.2,
+                          fontSize: 8.5,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
-                      const Divider(height: 1, indent: 56),
-                      _buildFormRow(
-                        icon: Icons.calendar_month_rounded,
-                        iconColor: Colors.orangeAccent,
-                        label: 'Date & Time',
-                        value: _dateTimeFmt.format(_when),
-                        onTap: _pickTime,
-                      ),
                     ],
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                _buildSectionHeader(theme, scheme, 'CATEGORY'),
-                const SizedBox(height: 12),
-                ObsidianCard(
-                  level: ObsidianCardTonalLevel.low,
-                  padding: EdgeInsets.zero,
-                  child: _buildFormRow(
-                    icon: resolveCategoryIcon(category?.iconKey),
-                    iconColor: resolveCategoryColor(context, category?.color),
-                    label: 'Classification',
-                    value: category?.name ?? 'Select Category',
-                    onTap: () => _showCategoryPicker(cats),
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                _buildSectionHeader(theme, scheme, 'ADVANCED'),
-                const SizedBox(height: 12),
-                ObsidianCard(
-                  level: ObsidianCardTonalLevel.low,
-                  padding: EdgeInsets.zero,
-                  child: _buildFormRow(
-                    icon: Icons.repeat_rounded,
-                    iconColor: Colors.blueAccent,
-                    label: 'Recurring Transaction',
-                    trailing: Switch(
-                      value: _recurring,
-                      onChanged: (v) => setState(() => _recurring = v),
-                      activeThumbColor: scheme.primary,
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 48),
-
-                ObsidianButton(
-                  onPressed: _saving ? null : _save,
-                  text: widget.expense != null
-                      ? 'UPDATE TRANSACTION'
-                      : 'CONFIRM TRANSACTION',
-                  isLoading: _saving,
-                  style: ObsidianButtonStyle.primary,
-                ),
-                const SizedBox(height: 100),
-              ],
-            );
-          },
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildAmountHero(ThemeData theme, ColorScheme scheme) {
+  Widget _buildAmountHero(
+    ThemeData theme,
+    ColorScheme scheme,
+    VaultSpendThemeExtension ext,
+  ) {
+    final currentAmount = _amountCtrl.text.trim();
+    final amountTextColor = (currentAmount.isEmpty || currentAmount == '0.00')
+        ? scheme.onSurface.withValues(alpha: 0.25)
+        : scheme.onSurface;
+
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 40),
+      padding: EdgeInsets.symmetric(
+        vertical: ext.addExpenseAmountHeroVerticalPadding,
+      ),
       child: Column(
         children: [
           Text(
             'TRANSACTION AMOUNT',
             style: theme.textTheme.labelSmall?.copyWith(
-              color: scheme.primary.withOpacity(0.7),
-              fontWeight: FontWeight.w800,
+              color: scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
               fontSize: 10,
-              letterSpacing: 2,
+              letterSpacing: 2.6,
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 14),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
-              GestureDetector(
-                onTap: _showCurrencyPicker,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: scheme.surfaceContainerHighest.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: scheme.outline.withOpacity(0.1)),
-                  ),
-                  child: Text(
-                    _currency,
-                    style: GoogleFonts.manrope(
-                      color: scheme.outline,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 18,
-                    ),
-                  ),
+              Text(
+                _currencySymbol(),
+                style: GoogleFonts.manrope(
+                  color: scheme.primary,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 34,
                 ),
               ),
-              const SizedBox(width: 16),
-              IntrinsicWidth(
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 220,
                 child: TextField(
                   controller: _amountCtrl,
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
-                  textAlign: TextAlign.center,
+                  textAlign: TextAlign.left,
                   style: GoogleFonts.manrope(
                     fontWeight: FontWeight.w800,
-                    color: scheme.onSurface,
-                    fontSize: 56,
-                    letterSpacing: -2,
+                    color: amountTextColor,
+                    fontSize: ext.addExpenseAmountFontSize,
+                    letterSpacing: -1.8,
                   ),
                   decoration: const InputDecoration(
                     border: InputBorder.none,
                     contentPadding: EdgeInsets.zero,
+                    hintText: '0.00',
                   ),
+                  onChanged: (_) => setState(() {}),
                   inputFormatters: [
                     FilteringTextInputFormatter.allow(RegExp(r'[\d.,]')),
                   ],
@@ -477,140 +509,446 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: _showCurrencyPicker,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: ext.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: scheme.outline.withValues(alpha: 0.2),
+                ),
+              ),
+              child: Text(
+                _currencyLabel(),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: scheme.primary,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 8.5,
+                  letterSpacing: 1,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildSectionHeader(
+  Widget _buildCategoryCurrencyBlock(
     ThemeData theme,
     ColorScheme scheme,
-    String title,
+    VaultSpendThemeExtension ext,
+    Category? category,
+    List<Category> cats,
   ) {
-    return Text(
-      title,
-      style: theme.textTheme.labelSmall?.copyWith(
-        color: scheme.outline,
-        fontWeight: FontWeight.w800,
-        letterSpacing: 1.5,
-        fontSize: 10,
+    Widget card({
+      required String label,
+      required Widget content,
+      VoidCallback? onTap,
+    }) {
+      return ObsidianCard(
+        level: ObsidianCardTonalLevel.low,
+        borderRadius: ext.addExpenseCardRadius,
+        padding: const EdgeInsets.all(16),
+        showTopBorder: false,
+        onTap: onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+                fontSize: 9,
+                letterSpacing: 1.2,
+              ),
+            ),
+            const SizedBox(height: 8),
+            content,
+          ],
+        ),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth >= 680;
+
+        final categoryCard = card(
+          label: 'CATEGORY',
+          onTap: () => _showCategoryPicker(cats),
+          content: Row(
+            children: [
+              Icon(
+                resolveCategoryIcon(category?.iconKey),
+                color: resolveCategoryColor(context, category?.color),
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  category?.name ?? 'Select Category',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: scheme.onSurface,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Icon(
+                Icons.expand_more_rounded,
+                color: scheme.onSurfaceVariant,
+                size: 18,
+              ),
+            ],
+          ),
+        );
+
+        final currencyCard = card(
+          label: 'CURRENCY',
+          onTap: _showCurrencyPicker,
+          content: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '$_currency (${_currencySymbol()})',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: scheme.onSurface,
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.payments_outlined,
+                color: scheme.onSurfaceVariant,
+                size: 18,
+              ),
+            ],
+          ),
+        );
+
+        if (isWide) {
+          return Row(
+            children: [
+              Expanded(child: categoryCard),
+              const SizedBox(width: 12),
+              Expanded(child: currencyCard),
+            ],
+          );
+        }
+
+        return Column(
+          children: [categoryCard, const SizedBox(height: 12), currencyCard],
+        );
+      },
+    );
+  }
+
+  Widget _buildDateTimeCard(
+    ThemeData theme,
+    ColorScheme scheme,
+    VaultSpendThemeExtension ext,
+  ) {
+    return ObsidianCard(
+      level: ObsidianCardTonalLevel.low,
+      borderRadius: ext.addExpenseCardRadius,
+      padding: const EdgeInsets.all(16),
+      showTopBorder: false,
+      onTap: _pickTime,
+      child: Row(
+        children: [
+          Icon(
+            Icons.calendar_today_rounded,
+            color: scheme.primary.withValues(alpha: 0.7),
+            size: 18,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'DATE & TIME',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 9,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _dateTimeCardFmt.format(_when),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: scheme.onSurface,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(Icons.event_outlined, color: scheme.onSurfaceVariant, size: 18),
+        ],
       ),
     );
   }
 
-  Widget _buildFormRow({
-    required IconData icon,
-    required Color iconColor,
-    required String label,
-    String? value,
-    Widget? child,
-    Widget? trailing,
-    VoidCallback? onTap,
-  }) {
-    final theme = Theme.of(context);
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        child: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: iconColor.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: iconColor.withOpacity(0.1)),
-              ),
-              child: Icon(icon, color: iconColor, size: 20),
+  Widget _buildRecurringCard(
+    ThemeData theme,
+    ColorScheme scheme,
+    VaultSpendThemeExtension ext,
+  ) {
+    return ObsidianCard(
+      level: ObsidianCardTonalLevel.high,
+      borderRadius: ext.addExpenseCardRadius,
+      padding: const EdgeInsets.all(16),
+      showTopBorder: false,
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: scheme.primary.withValues(alpha: 0.12),
             ),
-            const SizedBox(width: 16),
-            Expanded(
+            child: Icon(Icons.event_repeat, color: scheme.primary, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Recurring Expense',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: scheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Automatically repeat this charge',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    fontSize: 10,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            value: _recurring,
+            onChanged: (v) => setState(() => _recurring = v),
+            activeThumbColor: scheme.onPrimary,
+            activeTrackColor: scheme.primaryContainer,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoteCard(
+    ThemeData theme,
+    ColorScheme scheme,
+    VaultSpendThemeExtension ext,
+  ) {
+    return ObsidianCard(
+      level: ObsidianCardTonalLevel.low,
+      borderRadius: ext.addExpenseCardRadius,
+      padding: const EdgeInsets.all(16),
+      showTopBorder: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'NOTE',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+              fontSize: 9,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _noteCtrl,
+            maxLines: 3,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: scheme.onSurface,
+              fontWeight: FontWeight.w500,
+            ),
+            decoration: InputDecoration(
+              hintText: 'Add a description or tag people...',
+              hintStyle: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant.withValues(alpha: 0.5),
+              ),
+              border: InputBorder.none,
+              isDense: true,
+              contentPadding: EdgeInsets.zero,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReceiptTiles(
+    ThemeData theme,
+    ColorScheme scheme,
+    VaultSpendThemeExtension ext,
+  ) {
+    return Row(
+      children: [
+        Expanded(
+          child: GestureDetector(
+            onTap: _scanReceipt,
+            child: Container(
+              height: 96,
+              decoration: BoxDecoration(
+                color: ext.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(ext.addExpenseCardRadius),
+                border: Border.all(
+                  color: scheme.outline.withValues(alpha: 0.35),
+                ),
+              ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
+                  Icon(
+                    Icons.add_a_photo_outlined,
+                    color: scheme.onSurfaceVariant,
+                    size: 18,
+                  ),
+                  const SizedBox(height: 6),
                   Text(
-                    label.toUpperCase(),
+                    'ADD RECEIPT',
                     style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.outline,
-                      fontSize: 9,
+                      color: scheme.onSurfaceVariant,
+                      fontSize: 8,
+                      letterSpacing: 1.2,
                       fontWeight: FontWeight.w800,
-                      letterSpacing: 1,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  if (child != null)
-                    child
-                  else
-                    Text(
-                      value ?? '',
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: theme.colorScheme.onSurface,
-                      ),
-                    ),
                 ],
               ),
             ),
-            if (trailing != null)
-              trailing
-            else if (onTap != null)
-              Icon(
-                Icons.chevron_right_rounded,
-                color: theme.colorScheme.outline.withOpacity(0.5),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Container(
+            height: 96,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(ext.addExpenseCardRadius),
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  scheme.surfaceContainerHigh,
+                  scheme.surfaceContainerLow,
+                ],
               ),
+            ),
+            child: Stack(
+              children: [
+                Center(
+                  child: Icon(
+                    Icons.receipt_long,
+                    color: scheme.onSurfaceVariant.withValues(alpha: 0.5),
+                    size: 30,
+                  ),
+                ),
+                Positioned(
+                  left: 10,
+                  right: 10,
+                  bottom: 8,
+                  child: Text(
+                    'CURRENT RECEIPT',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: scheme.onSurface,
+                      fontSize: 8,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.1,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showCurrencyPicker() {
+    final scheme = Theme.of(context).colorScheme;
+    final ext = Theme.of(context).vaultSpend;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: scheme.surface,
+      showDragHandle: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(ext.addExpenseCardRadius),
+        ),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text(
+                'Select Currency',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            ..._currencies.map(
+              (c) => ListTile(
+                title: Text(
+                  c,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontWeight: _currency == c
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                    color: _currency == c ? scheme.primary : null,
+                  ),
+                ),
+                onTap: () {
+                  setState(() => _currency = c);
+                  Navigator.pop(ctx);
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
           ],
         ),
       ),
     );
   }
 
-  void _showCurrencyPicker() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF131317),
-      showDragHandle: true,
-      builder: (ctx) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Text(
-              'Select Currency',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          ),
-          ..._currencies.map(
-            (c) => ListTile(
-              title: Text(
-                c,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontWeight: _currency == c
-                      ? FontWeight.bold
-                      : FontWeight.normal,
-                  color: _currency == c
-                      ? Theme.of(context).colorScheme.primary
-                      : null,
-                ),
-              ),
-              onTap: () {
-                setState(() => _currency = c);
-                Navigator.pop(ctx);
-              },
-            ),
-          ),
-          const SizedBox(height: 32),
-        ],
-      ),
-    );
-  }
-
   void _showCategoryPicker(List<Category> cats) {
+    final scheme = Theme.of(context).colorScheme;
+    final ext = Theme.of(context).vaultSpend;
+
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF131317),
+      backgroundColor: scheme.surface,
       showDragHandle: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(ext.addExpenseCardRadius),
+        ),
+      ),
       builder: (ctx) => ListView.builder(
         shrinkWrap: true,
         itemCount: cats.length,

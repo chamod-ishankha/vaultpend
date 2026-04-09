@@ -84,6 +84,7 @@ flutter:
 
   assets:
     - assets/branding/app_icon.png
+    - assets/branding/login_decorative.png
     - assets/branding/logo.png
     - assets/branding/logo_pattern.png
     - assets/branding/splash_bg.png

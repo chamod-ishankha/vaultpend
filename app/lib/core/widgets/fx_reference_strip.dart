@@ -19,14 +19,14 @@ class FxReferenceStrip extends ConsumerWidget {
         color: scheme.surfaceContainerLow,
         border: Border(
           bottom: BorderSide(
-            color: scheme.outlineVariant.withOpacity(0.1),
+            color: scheme.outlineVariant.withValues(alpha: 0.1),
             width: 1,
           ),
         ),
       ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
         child: Row(
           children: [
             Row(
@@ -44,7 +44,7 @@ class FxReferenceStrip extends ConsumerWidget {
                 Container(
                   width: 1,
                   height: 12,
-                  color: scheme.outlineVariant.withOpacity(0.3),
+                  color: scheme.outlineVariant.withValues(alpha: 0.3),
                 ),
                 const SizedBox(width: 24),
               ],
@@ -52,24 +52,51 @@ class FxReferenceStrip extends ConsumerWidget {
             async.when(
               data: (snap) {
                 if (snap == null || snap.rates.isEmpty) {
-                  return _buildItem(context, scheme, 'OFFLINE', 'Pull to refresh', isError: true);
+                  return _buildItem(
+                    context,
+                    scheme,
+                    'OFFLINE',
+                    'Pull to refresh',
+                    isError: true,
+                  );
                 }
 
                 // If base is USD, we convert it to pairs like EUR/USD
                 final widgets = <Widget>[];
                 snap.rates.forEach((currency, rate) {
-                  widgets.add(_buildItem(context, scheme, '$currency/${snap.base}', rate.toStringAsFixed(4)));
+                  widgets.add(
+                    _buildItem(
+                      context,
+                      scheme,
+                      '$currency/${snap.base}',
+                      rate.toStringAsFixed(4),
+                    ),
+                  );
                   widgets.add(const SizedBox(width: 24));
                 });
 
                 if (snap.isStale) {
-                  widgets.add(_buildItem(context, scheme, 'CHCD', 'Cached Data', isError: true));
+                  widgets.add(
+                    _buildItem(
+                      context,
+                      scheme,
+                      'CHCD',
+                      'Cached Data',
+                      isError: true,
+                    ),
+                  );
                 }
 
                 return Row(children: widgets);
               },
               loading: () => _buildItem(context, scheme, 'SYNC', 'Loading...'),
-              error: (err, _) => _buildItem(context, scheme, 'ERR', 'Unavailable', isError: true),
+              error: (err, _) => _buildItem(
+                context,
+                scheme,
+                'ERR',
+                'Unavailable',
+                isError: true,
+              ),
             ),
           ],
         ),
@@ -77,7 +104,13 @@ class FxReferenceStrip extends ConsumerWidget {
     );
   }
 
-  Widget _buildItem(BuildContext context, ColorScheme scheme, String label, String value, {bool isError = false}) {
+  Widget _buildItem(
+    BuildContext context,
+    ColorScheme scheme,
+    String label,
+    String value, {
+    bool isError = false,
+  }) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -103,4 +136,3 @@ class FxReferenceStrip extends ConsumerWidget {
     );
   }
 }
-

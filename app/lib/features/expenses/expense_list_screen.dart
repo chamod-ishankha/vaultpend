@@ -51,21 +51,27 @@ class ExpenseListScreen extends ConsumerWidget {
       final expenses = await ref.read(expenseListProvider.future);
       if (expenses.isEmpty) {
         if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No expenses to export.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('No expenses to export.')));
         return;
       }
 
       final categoryRepository = ref.read(categoryRepositoryProvider);
       final categoryNames = <int, String>{};
-      final categoryIds = expenses.map((e) => e.categoryId).whereType<int>().toSet();
+      final categoryIds = expenses
+          .map((e) => e.categoryId)
+          .whereType<int>()
+          .toSet();
       for (final id in categoryIds) {
         final cat = await categoryRepository.getById(id);
         if (cat != null) categoryNames[id] = cat.name;
       }
 
-      final csv = _csvExportService.buildCsv(expenses: expenses, categoryNames: categoryNames);
+      final csv = _csvExportService.buildCsv(
+        expenses: expenses,
+        categoryNames: categoryNames,
+      );
       final stamp = DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
       final bytes = Uint8List.fromList(utf8.encode(csv));
 
@@ -73,29 +79,40 @@ class ExpenseListScreen extends ConsumerWidget {
         ShareParams(
           subject: 'Expenses Export',
           text: 'VaultSpend CSV Export',
-          files: [XFile.fromData(bytes, mimeType: 'text/csv', name: 'expenses_$stamp.csv')],
+          files: [
+            XFile.fromData(
+              bytes,
+              mimeType: 'text/csv',
+              name: 'expenses_$stamp.csv',
+            ),
+          ],
         ),
       );
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Export failed: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Export failed: $e')));
     }
   }
-  
+
   Future<void> _exportExpensesPdf(BuildContext context, WidgetRef ref) async {
     try {
       final expenses = await ref.read(expenseListProvider.future);
       if (expenses.isEmpty) {
         if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No expenses to export.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('No expenses to export.')));
         return;
       }
 
       final categoryRepository = ref.read(categoryRepositoryProvider);
       final categoryNames = <int, String>{};
-      final categoryIds = expenses.map((e) => e.categoryId).whereType<int>().toSet();
+      final categoryIds = expenses
+          .map((e) => e.categoryId)
+          .whereType<int>()
+          .toSet();
       for (final id in categoryIds) {
         final cat = await categoryRepository.getById(id);
         if (cat != null) categoryNames[id] = cat.name;
@@ -112,12 +129,20 @@ class ExpenseListScreen extends ConsumerWidget {
         ShareParams(
           subject: 'Expenses Report',
           text: 'VaultSpend PDF Export',
-          files: [XFile.fromData(bytes, mimeType: 'application/pdf', name: 'expenses_$stamp.pdf')],
+          files: [
+            XFile.fromData(
+              bytes,
+              mimeType: 'application/pdf',
+              name: 'expenses_$stamp.pdf',
+            ),
+          ],
         ),
       );
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Export failed: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Export failed: $e')));
     }
   }
 
@@ -126,27 +151,35 @@ class ExpenseListScreen extends ConsumerWidget {
     final async = ref.watch(expenseListProvider);
     final currencyFormat = NumberFormat.currency(symbol: '');
     final preferredCurrency = ref.watch(preferredCurrencyProvider);
-    final fxSnapshot = ref.watch(fxRatesProvider).maybeWhen(data: (d) => d, orElse: () => null);
-        
+    final fxSnapshot = ref
+        .watch(fxRatesProvider)
+        .maybeWhen(data: (d) => d, orElse: () => null);
+
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final ext = theme.vaultSpend;
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    final shellBottomNavReservedHeight = 80.0 + bottomInset;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       extendBodyBehindAppBar: true,
       appBar: ObsidianAppBar(
-        title: const Text('Expenses'),
+        centerTitle: false,
+        title: Text(
+          'Expenses',
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.2,
+          ),
+        ),
         leading: onOpenDrawer != null
-            ? IconButton(
-                icon: const Icon(Icons.menu),
-                onPressed: onOpenDrawer,
-              )
+            ? IconButton(icon: const Icon(Icons.menu), onPressed: onOpenDrawer)
             : null,
         actions: [
           PopupMenuButton<String>(
             tooltip: 'Export',
-            icon: const Icon(Icons.download_rounded),
+            icon: const Icon(Icons.ios_share_rounded),
             onSelected: (v) {
               if (v == 'csv') {
                 _exportExpensesCsv(context, ref);
@@ -177,7 +210,17 @@ class ExpenseListScreen extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(width: 8),
+          Container(
+            width: 32,
+            height: 32,
+            margin: const EdgeInsets.only(right: 16),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: scheme.primary.withValues(alpha: 0.2)),
+              color: ext.surfaceContainerLow,
+            ),
+            child: Icon(Icons.person, size: 18, color: scheme.primary),
+          ),
         ],
       ),
       body: ResponsiveBody(
@@ -192,16 +235,19 @@ class ExpenseListScreen extends ConsumerWidget {
                     return RefreshIndicator(
                       onRefresh: () => _onRefresh(ref),
                       child: ListView(
-                        children: [
-                          _buildEmptyState(theme, scheme, ext),
-                        ],
+                        children: [_buildEmptyState(theme, scheme, ext)],
                       ),
                     );
                   }
                   return RefreshIndicator(
                     onRefresh: () => _onRefresh(ref),
                     child: ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+                      padding: EdgeInsets.fromLTRB(
+                        16,
+                        16,
+                        16,
+                        120 + bottomInset,
+                      ),
                       itemCount: items.length + 1,
                       itemBuilder: (context, i) {
                         if (i == 0) {
@@ -212,7 +258,7 @@ class ExpenseListScreen extends ConsumerWidget {
                               style: theme.textTheme.labelSmall?.copyWith(
                                 color: scheme.outline,
                                 fontWeight: FontWeight.w800,
-                                letterSpacing: 1.5,
+                                letterSpacing: 2,
                               ),
                             ),
                           );
@@ -254,21 +300,30 @@ class ExpenseListScreen extends ConsumerWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: const Icon(Icons.add, size: 28),
       ),
-      bottomNavigationBar: const SizedBox(height: 80),
+      bottomNavigationBar: SizedBox(height: shellBottomNavReservedHeight),
     );
   }
 
-  Future<void> _confirmDelete(BuildContext context, WidgetRef ref, Expense e) async {
+  Future<void> _confirmDelete(
+    BuildContext context,
+    WidgetRef ref,
+    Expense e,
+  ) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete Expense?'),
         content: const Text('This will permanently remove this record.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
             child: const Text('Delete'),
           ),
         ],
@@ -280,15 +335,55 @@ class ExpenseListScreen extends ConsumerWidget {
     }
   }
 
-  Widget _buildEmptyState(ThemeData theme, ColorScheme scheme, VaultSpendThemeExtension ext) {
+  Widget _buildEmptyState(
+    ThemeData theme,
+    ColorScheme scheme,
+    VaultSpendThemeExtension ext,
+  ) {
     return Column(
       children: [
-        const SizedBox(height: 100),
-        Icon(Icons.receipt_long, size: 64, color: scheme.primary.withOpacity(0.3)),
-        const SizedBox(height: 24),
-        Text('No expenses yet', style: theme.textTheme.titleLarge),
+        const SizedBox(height: 120),
+        Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: scheme.primary.withValues(alpha: 0.08),
+              ),
+            ),
+            Container(
+              width: 88,
+              height: 88,
+              decoration: BoxDecoration(
+                color: ext.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: scheme.primary.withValues(alpha: 0.2),
+                ),
+              ),
+              child: Icon(Icons.receipt_long, size: 44, color: scheme.primary),
+            ),
+          ],
+        ),
+        const SizedBox(height: 28),
+        Text(
+          'No expenses yet',
+          style: theme.textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         const SizedBox(height: 8),
-        Text('Tap + to start tracking', style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant)),
+        Text(
+          'Tap + to add one.\nPull down to refresh.',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: scheme.onSurfaceVariant,
+            height: 1.5,
+          ),
+        ),
       ],
     );
   }
@@ -315,7 +410,7 @@ class _ExpenseCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    
+
     final converted = convertCurrencyAmount(
       amount: expense.amount,
       from: expense.currency,
@@ -330,91 +425,72 @@ class _ExpenseCard extends ConsumerWidget {
     final dateStr = _formatDate(expense.occurredAt);
 
     return FutureBuilder<Category?>(
-      future: expense.categoryId != null 
-        ? ref.read(categoryRepositoryProvider).getById(expense.categoryId!) 
-        : Future.value(null),
+      future: expense.categoryId != null
+          ? ref.read(categoryRepositoryProvider).getById(expense.categoryId!)
+          : Future.value(null),
       builder: (context, snap) {
         final category = snap.data;
         final categoryName = category?.name ?? 'Uncategorized';
-        final title = expense.note != null && expense.note!.isNotEmpty 
-            ? expense.note! 
+        final title = expense.note != null && expense.note!.isNotEmpty
+            ? expense.note!
             : categoryName;
-        final categoryColor = resolveCategoryColor(context, category?.color);
+        final subtitleText = '$categoryName · $dateStr';
 
-        return ObsidianCard(
-          level: ObsidianCardTonalLevel.low,
-          padding: EdgeInsets.zero,
-          onTap: onEdit,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                _CategoryIcon(category: category),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+        return GestureDetector(
+          onLongPress: () => _showOptions(context),
+          child: ObsidianCard(
+            level: ObsidianCardTonalLevel.low,
+            borderRadius: 16,
+            showTopBorder: false,
+            padding: EdgeInsets.zero,
+            onTap: onEdit,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  _CategoryIcon(category: category),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.2,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          subtitleText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        title,
+                        amountText,
                         style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.2,
+                          fontWeight: FontWeight.w800,
+                          color: scheme.onSurface,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: categoryColor.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: categoryColor.withOpacity(0.3)),
-                            ),
-                            child: Text(
-                              categoryName.toUpperCase(),
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: categoryColor,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 8,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            dateStr,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      amountText,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: scheme.onSurface,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.more_horiz, size: 20, color: Colors.grey),
-                      visualDensity: VisualDensity.compact,
-                      onPressed: () => _showOptions(context),
-                    ),
-                  ],
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );
@@ -429,31 +505,45 @@ class _ExpenseCard extends ConsumerWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (ctx) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 8),
-          Container(width: 40, height: 4, decoration: BoxDecoration(
-            color: Colors.grey.withOpacity(0.2), borderRadius: BorderRadius.circular(2),
-          )),
-          ListTile(
-            leading: const Icon(Icons.edit_rounded),
-            title: const Text('Edit Transaction'),
-            onTap: () {
-              Navigator.pop(ctx);
-              onEdit();
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.delete_rounded, color: Colors.redAccent),
-            title: const Text('Delete Transaction', style: TextStyle(color: Colors.redAccent)),
-            onTap: () {
-              Navigator.pop(ctx);
-              onDelete();
-            },
-          ),
-          const SizedBox(height: 32),
-        ],
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit_rounded),
+              title: const Text('Edit Transaction'),
+              onTap: () {
+                Navigator.pop(ctx);
+                onEdit();
+              },
+            ),
+            ListTile(
+              leading: const Icon(
+                Icons.delete_rounded,
+                color: Colors.redAccent,
+              ),
+              title: const Text(
+                'Delete Transaction',
+                style: TextStyle(color: Colors.redAccent),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                onDelete();
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
       ),
     );
   }
@@ -487,14 +577,11 @@ class _CategoryIcon extends StatelessWidget {
       width: 44,
       height: 44,
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.1)),
+        border: Border.all(color: color.withValues(alpha: 0.1)),
       ),
-      child: Center(
-        child: Icon(iconData, color: color, size: 24),
-      ),
+      child: Center(child: Icon(iconData, color: color, size: 24)),
     );
   }
-
 }

@@ -10,6 +10,7 @@ class ObsidianAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.leading,
     this.height = 64.0,
     this.showBottomBorder = true,
+    this.centerTitle = true,
   });
 
   final Widget title;
@@ -17,6 +18,7 @@ class ObsidianAppBar extends StatelessWidget implements PreferredSizeWidget {
   final Widget? leading;
   final double height;
   final bool showBottomBorder;
+  final bool centerTitle;
 
   @override
   Size get preferredSize => Size.fromHeight(height);
@@ -30,15 +32,18 @@ class ObsidianAppBar extends StatelessWidget implements PreferredSizeWidget {
 
     return ClipRRect(
       child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: ext.glassBlur, sigmaY: ext.glassBlur),
+        filter: ui.ImageFilter.blur(
+          sigmaX: ext.glassBlur,
+          sigmaY: ext.glassBlur,
+        ),
         child: Container(
           height: height + topPadding,
           decoration: BoxDecoration(
-            color: scheme.surface.withOpacity(0.6),
+            color: scheme.surface.withValues(alpha: 0.6),
             border: showBottomBorder
                 ? Border(
                     bottom: BorderSide(
-                      color: scheme.outlineVariant.withOpacity(0.08),
+                      color: scheme.outlineVariant.withValues(alpha: 0.08),
                       width: 1,
                     ),
                   )
@@ -58,7 +63,7 @@ class ObsidianAppBar extends StatelessWidget implements PreferredSizeWidget {
               child: title,
             ),
             actions: actions,
-            centerTitle: true,
+            centerTitle: centerTitle,
           ),
         ),
       ),

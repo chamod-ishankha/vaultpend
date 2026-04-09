@@ -1,8 +1,7 @@
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/obsidian_button.dart';
 import '../../core/widgets/obsidian_text_field.dart';
 
@@ -78,26 +77,78 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     final busy = _submitting;
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final ext = theme.vaultSpend;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final decorativeWidth = (screenWidth * 0.95) < ext.loginDecorativeWidth
+        ? (screenWidth * 0.95)
+        : ext.loginDecorativeWidth;
+    final decorativeHeight = (screenHeight * 0.58) < ext.loginDecorativeWidth
+        ? (screenHeight * 0.58)
+        : ext.loginDecorativeWidth;
+
+    final titleStyle = theme.textTheme.displaySmall?.copyWith(
+      color: scheme.primary,
+      fontWeight: FontWeight.w900,
+      letterSpacing: -1.2,
+    );
+    final welcomeStyle = theme.textTheme.headlineMedium?.copyWith(
+      color: scheme.onSurface,
+      fontWeight: FontWeight.w800,
+      letterSpacing: -0.5,
+    );
+    final subtitleStyle = theme.textTheme.bodySmall?.copyWith(
+      color: scheme.onSurfaceVariant,
+      height: 1.5,
+    );
+    final footnoteStyle = theme.textTheme.bodySmall?.copyWith(
+      color: scheme.outline.withValues(alpha: 0.6),
+      height: 1.6,
+    );
+
+    final compactSpacing = ext.loginFieldSpacing / 2;
+    final microSpacing = ext.loginFieldSpacing / 3;
+    final mediumSpacing = ext.loginFieldSpacing / 1.5;
 
     return Scaffold(
       backgroundColor: scheme.surface,
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Background Ambient Glow
           Align(
             alignment: Alignment.center,
-            child: Container(
-              width: 600,
-              height: 600,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: scheme.primary.withOpacity(0.05),
+            child: IgnorePointer(
+              child: Container(
+                width: ext.loginBackdropGlowSize,
+                height: ext.loginBackdropGlowSize,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      scheme.primary.withValues(alpha: 0.12),
+                      scheme.primary.withValues(alpha: 0.0),
+                    ],
+                  ),
+                ),
               ),
-              child: ClipRRect(
-                child: BackdropFilter(
-                  filter: ui.ImageFilter.blur(sigmaX: 60, sigmaY: 60),
-                  child: const SizedBox.shrink(),
+            ),
+          ),
+
+          Positioned(
+            top: 0,
+            right: 0,
+            left: 0,
+            child: IgnorePointer(
+              child: Opacity(
+                opacity: ext.loginDecorativeOpacity,
+                child: SizedBox(
+                  width: decorativeWidth,
+                  height: decorativeHeight,
+                  child: Image.asset(
+                    'assets/branding/login_decorative.png',
+                    fit: BoxFit.contain,
+                    alignment: Alignment.topCenter,
+                  ),
                 ),
               ),
             ),
@@ -106,214 +157,284 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
+                padding: EdgeInsets.symmetric(
+                  horizontal: ext.loginPageHorizontalPadding,
+                  vertical: ext.loginPageVerticalPadding,
+                ),
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 420),
+                  constraints: BoxConstraints(
+                    maxWidth: ext.loginMaxContentWidth,
+                  ),
                   child: Column(
                     children: [
-                      // Logo Area
-                      Column(
-                        children: [
-                          Container(
-                            width: 64,
-                            height: 64,
-                            margin: const EdgeInsets.only(bottom: 16),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(16),
-                              gradient: LinearGradient(
-                                colors: [scheme.primary, scheme.primaryContainer],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: scheme.primary.withOpacity(0.15),
-                                  blurRadius: 40,
-                                ),
-                              ],
-                            ),
-                            child: const Icon(
-                              Icons.account_balance_wallet,
-                              color: Color(0xFF003732),
-                              size: 32,
-                            ),
-                          ),
-                          Text(
-                            'VaultSpend',
-                            style: theme.textTheme.displaySmall?.copyWith(
-                              color: scheme.primary,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: -1.5,
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 48),
-
-                      // Header Section
-                      Column(
-                        children: [
-                          Text(
-                            'Welcome Back',
-                            style: theme.textTheme.headlineMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: scheme.onSurface,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Sign in to sync your data with Cloud.',
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 40),
-
-                      if (_statusMessage != null && _localError == null)
-                        Container(
-                          width: double.infinity,
-                          margin: const EdgeInsets.only(bottom: 24),
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: scheme.secondaryContainer.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: scheme.secondary.withOpacity(0.3),
-                            ),
-                          ),
-                          child: Text(
-                            _statusMessage!,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: scheme.onSecondaryContainer,
-                            ),
-                          ),
-                        ),
-
-                      if (_localError != null)
-                        Container(
-                          width: double.infinity,
-                          margin: const EdgeInsets.only(bottom: 24),
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: scheme.errorContainer.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: scheme.error.withOpacity(0.3),
-                            ),
-                          ),
-                          child: Text(
-                            _localError!,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: scheme.onErrorContainer,
-                            ),
-                          ),
-                        ),
-
-                      // Form
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          ObsidianTextField(
-                            label: 'EMAIL',
-                            hintText: 'name@company.com',
-                            controller: _email,
-                            keyboardType: TextInputType.emailAddress,
-                            prefixIcon: const Icon(Icons.mail_outline),
-                          ),
-                          const SizedBox(height: 24),
-                          ObsidianTextField(
-                            label: 'PASSWORD',
-                            hintText: '••••••••',
-                            controller: _password,
-                            obscureText: _obscurePassword,
-                            prefixIcon: const Icon(Icons.lock_outline),
-                            suffixIcon: IconButton(
-                              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                              icon: Icon(
-                                _obscurePassword
-                                    ? Icons.visibility_off_outlined
-                                    : Icons.visibility_outlined,
-                              ),
-                            ),
-                          ),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton(
-                              onPressed: () {},
-                              child: const Text('Forgot password?'),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          ObsidianButton(
-                            text: busy ? 'Signing in...' : 'Sign in',
-                            onPressed: busy ? () {} : _submit,
-                          ),
-                        ],
-                      ),
-
-                      // Divider
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 40),
-                        child: Row(
+                      SizedBox(
+                        height: ext.loginBrandBlockHeight,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Expanded(child: Divider(color: scheme.outlineVariant)),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              child: Text(
-                                'OR',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: scheme.outline,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 1.5,
+                            Container(
+                              width: ext.loginLogoTileSize,
+                              height: ext.loginLogoTileSize,
+                              margin: EdgeInsets.only(bottom: compactSpacing),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(
+                                  ext.loginCornerRadius,
                                 ),
+                                gradient: LinearGradient(
+                                  colors: [
+                                    scheme.primary,
+                                    scheme.primaryContainer,
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: scheme.primary.withValues(
+                                      alpha: 0.15,
+                                    ),
+                                    blurRadius: ext.loginSectionSpacing,
+                                  ),
+                                ],
+                              ),
+                              child: Icon(
+                                Icons.account_balance_wallet,
+                                color: scheme.onPrimary,
+                                size: ext.loginLogoIconSize,
                               ),
                             ),
-                            Expanded(child: Divider(color: scheme.outlineVariant)),
+                            Text('VaultSpend', style: titleStyle),
                           ],
                         ),
                       ),
 
-                      // Secondary Actions
+                      SizedBox(height: ext.loginBrandToWelcomeGap),
+
                       Column(
                         children: [
-                          ObsidianButton(
-                            text: 'Create account',
-                            style: ObsidianButtonStyle.secondary,
-                            onPressed: () {
-                              Navigator.of(context).push<void>(
-                                MaterialPageRoute(
-                                  builder: (_) => const RegisterScreen(),
-                                ),
-                              );
-                            },
+                          Text(
+                            'Welcome Back',
+                            textAlign: TextAlign.center,
+                            style: welcomeStyle,
                           ),
-                          const SizedBox(height: 16),
-                          ObsidianButton(
-                            text: 'Continue as guest',
-                            style: ObsidianButtonStyle.tertiary,
-                            onPressed: () async {
-                              await ref
-                                  .read(guestModeControllerProvider.notifier)
-                                  .enterGuestMode();
-                            },
+                          SizedBox(height: microSpacing),
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: ext.loginHeaderSubtitleMaxWidth,
+                            ),
+                            child: Text(
+                              'Sign in to sync your data with Cloud.',
+                              textAlign: TextAlign.center,
+                              style: subtitleStyle,
+                            ),
                           ),
                         ],
                       ),
 
-                      const SizedBox(height: 48),
+                      SizedBox(height: ext.loginSectionSpacing),
 
-                      Text(
-                        'Local access stores data on this device only. Sign in to enable end-to-end encrypted synchronization.',
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: scheme.outline,
-                          height: 1.6,
+                      if (_localError != null)
+                        _LoginMessageCard(
+                          message: _localError!,
+                          backgroundColor: scheme.errorContainer.withValues(
+                            alpha: 0.2,
+                          ),
+                          textColor: scheme.onErrorContainer,
+                          cornerRadius: ext.loginCornerRadius,
+                          spacing: mediumSpacing,
+                          textStyle: theme.textTheme.bodySmall,
+                        ),
+
+                      if (_statusMessage != null)
+                        _LoginMessageCard(
+                          message: _statusMessage!,
+                          backgroundColor: scheme.secondaryContainer.withValues(
+                            alpha: 0.2,
+                          ),
+                          textColor: scheme.onSecondaryContainer,
+                          cornerRadius: ext.loginCornerRadius,
+                          spacing: mediumSpacing,
+                          textStyle: theme.textTheme.bodySmall,
+                        ),
+
+                      IgnorePointer(
+                        ignoring: busy,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            ObsidianTextField(
+                              label: 'EMAIL',
+                              hintText: 'name@company.com',
+                              controller: _email,
+                              keyboardType: TextInputType.emailAddress,
+                              prefixIcon: const Icon(Icons.mail_outline),
+                            ),
+                            SizedBox(height: ext.loginFieldSpacing),
+                            ObsidianTextField(
+                              label: 'PASSWORD',
+                              hintText: '••••••••',
+                              controller: _password,
+                              obscureText: _obscurePassword,
+                              prefixIcon: const Icon(Icons.lock_outline),
+                              suffixIcon: IconButton(
+                                onPressed: () => setState(
+                                  () => _obscurePassword = !_obscurePassword,
+                                ),
+                                icon: Icon(
+                                  _obscurePassword
+                                      ? Icons.visibility_off_outlined
+                                      : Icons.visibility_outlined,
+                                ),
+                              ),
+                            ),
+                            SizedBox(height: mediumSpacing),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                onPressed: busy ? null : () {},
+                                style: TextButton.styleFrom(
+                                  foregroundColor: scheme.primary,
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: const Size(0, 0),
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                child: Text(
+                                  'Forgot password?',
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            SizedBox(height: ext.loginFieldSpacing),
+                            SizedBox(
+                              height: ext.loginPrimaryButtonHeight,
+                              child: ObsidianButton(
+                                text: 'Sign in',
+                                onPressed: busy ? null : _submit,
+                                isLoading: busy,
+                                height: ext.loginPrimaryButtonHeight,
+                                borderRadius: ext.loginCornerRadius,
+                                gradientColors: [
+                                  scheme.primary,
+                                  ext.primaryDark,
+                                ],
+                                shadowColor: ext.primaryDark.withValues(
+                                  alpha: 0.4,
+                                ),
+                                textColor: scheme.onPrimary,
+                                enableShimmer: true,
+                                shimmerDuration: const Duration(
+                                  milliseconds: 4000,
+                                ),
+                                shimmerPeakOpacity: 0.16,
+                                shimmerBandFraction: 0.24,
+                                shimmerAngle: 0.78,
+                              ),
+                            ),
+                            SizedBox(height: ext.loginSectionSpacing),
+                            Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: ext.loginDividerHorizontalPadding,
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Divider(
+                                      color: scheme.outlineVariant.withValues(
+                                        alpha: 0.15,
+                                      ),
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: compactSpacing,
+                                    ),
+                                    child: Text(
+                                      'or',
+                                      style: theme.textTheme.labelSmall
+                                          ?.copyWith(
+                                            color: scheme.outline.withValues(
+                                              alpha: 0.6,
+                                            ),
+                                            fontWeight: FontWeight.w700,
+                                            letterSpacing: 1,
+                                          ),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Divider(
+                                      color: scheme.outlineVariant.withValues(
+                                        alpha: 0.15,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            SizedBox(height: ext.loginFieldSpacing),
+                            SizedBox(
+                              height: ext.loginPrimaryButtonHeight,
+                              child: ObsidianButton(
+                                text: 'Create account',
+                                onPressed: busy
+                                    ? null
+                                    : () {
+                                        Navigator.of(context).push<void>(
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                const RegisterScreen(),
+                                          ),
+                                        );
+                                      },
+                                style: ObsidianButtonStyle.secondary,
+                                height: ext.loginPrimaryButtonHeight,
+                                borderRadius: ext.loginCornerRadius,
+                                borderColor: scheme.primary,
+                                textColor: scheme.primary,
+                              ),
+                            ),
+                            SizedBox(height: mediumSpacing),
+                            TextButton.icon(
+                              onPressed: busy
+                                  ? null
+                                  : () async {
+                                      await ref
+                                          .read(
+                                            guestModeControllerProvider
+                                                .notifier,
+                                          )
+                                          .enterGuestMode();
+                                    },
+                              style: TextButton.styleFrom(
+                                foregroundColor: scheme.primary,
+                              ),
+                              icon: Icon(
+                                Icons.person_outline,
+                                size: ext.loginLogoIconSize * 0.6,
+                              ),
+                              label: Text(
+                                'Continue as guest (local only)',
+                                style: theme.textTheme.labelLarge?.copyWith(
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      SizedBox(height: ext.loginPageVerticalPadding),
+
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: ext.loginFootnoteMaxWidth,
+                        ),
+                        child: Text(
+                          'Local access stores data on this device only. Sign in to enable end-to-end encrypted synchronization across all your Obsidian Vault instances.',
+                          textAlign: TextAlign.center,
+                          style: footnoteStyle,
                         ),
                       ),
                     ],
@@ -324,6 +445,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           ),
         ],
       ),
+    );
+  }
+}
+
+class _LoginMessageCard extends StatelessWidget {
+  const _LoginMessageCard({
+    required this.message,
+    required this.backgroundColor,
+    required this.textColor,
+    required this.cornerRadius,
+    required this.spacing,
+    this.textStyle,
+  });
+
+  final String message;
+  final Color backgroundColor;
+  final Color textColor;
+  final double cornerRadius;
+  final double spacing;
+  final TextStyle? textStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: EdgeInsets.only(bottom: spacing),
+      padding: EdgeInsets.all(spacing),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(cornerRadius),
+      ),
+      child: Text(message, style: textStyle?.copyWith(color: textColor)),
     );
   }
 }

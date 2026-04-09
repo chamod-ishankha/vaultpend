@@ -25,7 +25,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
 
-  static const _currencies = ['LKR', 'USD', 'EUR', 'GBP', 'JPY'];
+  static const _currencies = ['USD', 'LKR', 'EUR'];
+  static const _currencyLabels = {
+    'USD': 'USD - United States Dollar',
+    'LKR': 'LKR - Sri Lankan Rupee',
+    'EUR': 'EUR - Euro',
+  };
 
   @override
   void dispose() {
@@ -89,26 +94,79 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final ext = theme.vaultSpend;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final screenHeight = MediaQuery.sizeOf(context).height;
+
+    final decorativeWidth = (screenWidth * 0.95) < ext.loginDecorativeWidth
+        ? (screenWidth * 0.95)
+        : ext.loginDecorativeWidth;
+    final decorativeHeight = (screenHeight * 0.58) < ext.loginDecorativeWidth
+        ? (screenHeight * 0.58)
+        : ext.loginDecorativeWidth;
+
+    final titleStyle = theme.textTheme.displaySmall?.copyWith(
+      color: scheme.primary,
+      fontWeight: FontWeight.w900,
+      letterSpacing: -1.2,
+    );
+    final headingStyle = theme.textTheme.headlineMedium?.copyWith(
+      color: scheme.onSurface,
+      fontWeight: FontWeight.w700,
+      letterSpacing: -0.5,
+    );
+    final subtitleStyle = theme.textTheme.bodySmall?.copyWith(
+      color: scheme.onSurfaceVariant,
+      height: 1.5,
+    );
+    final footnoteStyle = theme.textTheme.bodySmall?.copyWith(
+      color: scheme.outline.withValues(alpha: 0.6),
+      height: 1.6,
+    );
+
+    final logoBottomSpacing = ext.loginFieldSpacing / 1.5;
+    final helperSpacing = ext.registerHelperSpacing;
 
     return Scaffold(
       backgroundColor: scheme.surface,
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Background Ambient Glow
           Align(
             alignment: Alignment.center,
             child: Container(
-              width: 600,
-              height: 600,
+              width: ext.loginBackdropGlowSize,
+              height: ext.loginBackdropGlowSize,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: scheme.primary.withOpacity(0.05),
+                color: scheme.primary.withValues(alpha: 0.05),
               ),
               child: ClipRRect(
                 child: BackdropFilter(
-                  filter: ui.ImageFilter.blur(sigmaX: 60, sigmaY: 60),
+                  filter: ui.ImageFilter.blur(
+                    sigmaX: ext.loginBackdropGlowBlur,
+                    sigmaY: ext.loginBackdropGlowBlur,
+                  ),
                   child: const SizedBox.shrink(),
+                ),
+              ),
+            ),
+          ),
+
+          Positioned(
+            top: 0,
+            right: 0,
+            left: 0,
+            child: IgnorePointer(
+              child: Opacity(
+                opacity: ext.loginDecorativeOpacity,
+                child: SizedBox(
+                  width: decorativeWidth,
+                  height: decorativeHeight,
+                  child: Image.asset(
+                    'assets/branding/login_decorative.png',
+                    fit: BoxFit.contain,
+                    alignment: Alignment.topRight,
+                  ),
                 ),
               ),
             ),
@@ -117,85 +175,91 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
+                padding: EdgeInsets.symmetric(
+                  horizontal: ext.loginPageHorizontalPadding,
+                  vertical: ext.loginPageVerticalPadding,
+                ),
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 420),
+                  constraints: BoxConstraints(
+                    maxWidth: ext.loginMaxContentWidth,
+                  ),
                   child: Column(
                     children: [
-                      // Logo Area
-                      Column(
-                        children: [
-                          Container(
-                            width: 64,
-                            height: 64,
-                            margin: const EdgeInsets.only(bottom: 16),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(16),
-                              gradient: LinearGradient(
-                                colors: [scheme.primary, scheme.primaryContainer],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
+                      SizedBox(
+                        height: ext.loginBrandBlockHeight,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: ext.loginLogoTileSize,
+                              height: ext.loginLogoTileSize,
+                              margin: EdgeInsets.only(
+                                bottom: logoBottomSpacing,
                               ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: scheme.primary.withOpacity(0.15),
-                                  blurRadius: 40,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(
+                                  ext.loginCornerRadius,
                                 ),
-                              ],
+                                gradient: LinearGradient(
+                                  colors: [
+                                    scheme.primary,
+                                    scheme.primaryContainer,
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: scheme.primary.withValues(
+                                      alpha: 0.15,
+                                    ),
+                                    blurRadius: ext.loginSectionSpacing,
+                                  ),
+                                ],
+                              ),
+                              child: Icon(
+                                Icons.account_balance_wallet,
+                                color: scheme.onPrimary,
+                                size: ext.loginLogoIconSize,
+                              ),
                             ),
-                            child: const Icon(
-                              Icons.account_balance_wallet,
-                              color: Color(0xFF003732),
-                              size: 32,
-                            ),
-                          ),
-                          Text(
-                            'VaultSpend',
-                            style: theme.textTheme.displaySmall?.copyWith(
-                              color: scheme.primary,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: -1.5,
-                            ),
-                          ),
-                        ],
+                            Text('VaultSpend', style: titleStyle),
+                          ],
+                        ),
                       ),
 
-                      const SizedBox(height: 48),
+                      SizedBox(height: ext.loginBrandToWelcomeGap),
 
-                      // Header Section
                       Column(
                         children: [
-                          Text(
-                            'Create Account',
-                            style: theme.textTheme.headlineMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: scheme.onSurface,
-                              letterSpacing: -0.5,
+                          Text('Create Account', style: headingStyle),
+                          SizedBox(height: helperSpacing * 2),
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: ext.loginHeaderSubtitleMaxWidth,
                             ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Join the Obsidian series for secure finance.',
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: scheme.onSurfaceVariant,
+                            child: Text(
+                              'Create your account to enable Cloud sync.',
+                              textAlign: TextAlign.center,
+                              style: subtitleStyle,
                             ),
                           ),
                         ],
                       ),
 
-                      const SizedBox(height: 40),
+                      SizedBox(height: ext.loginSectionSpacing),
 
                       if (_localError != null)
                         Container(
                           width: double.infinity,
-                          margin: const EdgeInsets.only(bottom: 24),
-                          padding: const EdgeInsets.all(16),
+                          margin: EdgeInsets.only(
+                            bottom: ext.loginFieldSpacing,
+                          ),
+                          padding: EdgeInsets.all(logoBottomSpacing),
                           decoration: BoxDecoration(
-                            color: scheme.errorContainer.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: scheme.error.withOpacity(0.3),
+                            color: scheme.errorContainer.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(
+                              ext.loginCornerRadius,
                             ),
                           ),
                           child: Text(
@@ -206,118 +270,144 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           ),
                         ),
 
-                      // Form
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          ObsidianTextField(
-                            label: 'EMAIL ADDRESS',
-                            hintText: 'name@example.com',
-                            controller: _email,
-                            keyboardType: TextInputType.emailAddress,
-                            prefixIcon: const Icon(Icons.mail_outline),
-                          ),
-                          const SizedBox(height: 20),
-                          ObsidianTextField(
-                            label: 'PASSWORD',
-                            hintText: '••••••••',
-                            controller: _password,
-                            obscureText: _obscurePassword,
-                            prefixIcon: const Icon(Icons.lock_outline),
-                            suffixIcon: IconButton(
-                              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                              icon: Icon(
-                                _obscurePassword
-                                    ? Icons.visibility_off_outlined
-                                    : Icons.visibility_outlined,
+                      IgnorePointer(
+                        ignoring: busy,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            ObsidianTextField(
+                              label: 'EMAIL ADDRESS',
+                              hintText: 'name@example.com',
+                              controller: _email,
+                              keyboardType: TextInputType.emailAddress,
+                              prefixIcon: const Icon(Icons.mail_outline),
+                            ),
+                            SizedBox(height: ext.registerFieldSpacing),
+                            ObsidianTextField(
+                              label: 'PASSWORD',
+                              hintText: '••••••••',
+                              controller: _password,
+                              obscureText: _obscurePassword,
+                              prefixIcon: const Icon(Icons.lock_outline),
+                              suffixIcon: IconButton(
+                                onPressed: () => setState(
+                                  () => _obscurePassword = !_obscurePassword,
+                                ),
+                                icon: Icon(
+                                  _obscurePassword
+                                      ? Icons.visibility_off_outlined
+                                      : Icons.visibility_outlined,
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: EdgeInsets.only(
+                                left: helperSpacing,
+                                top: helperSpacing,
+                              ),
+                              child: Text(
+                                'Must be at least 8 characters long.',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: scheme.outline.withValues(alpha: 0.6),
+                                ),
+                              ),
+                            ),
+                            SizedBox(height: ext.registerFieldSpacing),
+                            ObsidianTextField(
+                              label: 'CONFIRM PASSWORD',
+                              hintText: '••••••••',
+                              controller: _password2,
+                              obscureText: _obscureConfirmPassword,
+                              prefixIcon: const Icon(Icons.key_outlined),
+                              suffixIcon: IconButton(
+                                onPressed: () => setState(
+                                  () => _obscureConfirmPassword =
+                                      !_obscureConfirmPassword,
+                                ),
+                                icon: Icon(
+                                  _obscureConfirmPassword
+                                      ? Icons.visibility_off_outlined
+                                      : Icons.visibility_outlined,
+                                ),
+                              ),
+                            ),
+                            SizedBox(height: ext.registerFieldSpacing),
+                            _RegisterCurrencyField(
+                              value: _currency,
+                              items: _currencies,
+                              labels: _currencyLabels,
+                              enabled: !busy,
+                              cornerRadius: ext.loginCornerRadius,
+                              labelSpacing: helperSpacing,
+                              onChanged: (value) {
+                                if (value == null) return;
+                                setState(() => _currency = value);
+                              },
+                            ),
+                            SizedBox(height: ext.registerPrimaryTopPadding),
+                            ObsidianButton(
+                              text: 'Create account',
+                              onPressed: busy ? null : _submit,
+                              isLoading: busy,
+                              height: ext.loginPrimaryButtonHeight,
+                              borderRadius: ext.loginCornerRadius,
+                              gradientColors: [scheme.primary, ext.primaryDark],
+                              shadowColor: ext.primaryDark.withValues(
+                                alpha: 0.4,
+                              ),
+                              textColor: scheme.onPrimary,
+                              enableShimmer: true,
+                              shimmerDuration: const Duration(
+                                milliseconds: 4000,
+                              ),
+                              shimmerPeakOpacity: 0.16,
+                              shimmerBandFraction: 0.24,
+                              shimmerAngle: 0.78,
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      SizedBox(height: ext.loginFieldSpacing),
+
+                      SizedBox(
+                        width: double.infinity,
+                        height: ext.loginPrimaryButtonHeight,
+                        child: TextButton.icon(
+                          onPressed: busy
+                              ? null
+                              : () => Navigator.of(context).pop(),
+                          style: TextButton.styleFrom(
+                            foregroundColor: scheme.primary,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(
+                                ext.loginCornerRadius,
                               ),
                             ),
                           ),
-                          const SizedBox(height: 20),
-                          ObsidianTextField(
-                            label: 'CONFIRM PASSWORD',
-                            hintText: '••••••••',
-                            controller: _password2,
-                            obscureText: _obscureConfirmPassword,
-                            prefixIcon: const Icon(Icons.key_outlined),
-                            suffixIcon: IconButton(
-                              onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
-                              icon: Icon(
-                                _obscureConfirmPassword
-                                    ? Icons.visibility_off_outlined
-                                    : Icons.visibility_outlined,
-                              ),
+                          icon: Icon(
+                            Icons.arrow_back,
+                            size: ext.loginLogoIconSize * 0.6,
+                          ),
+                          label: Text(
+                            'Back to sign in',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
-                          const SizedBox(height: 20),
-                          
-                          // Currency dropdown custom implementation
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.only(left: 4, bottom: 8),
-                                child: Text(
-                                  'PREFERRED CURRENCY',
-                                  style: theme.textTheme.labelMedium?.copyWith(
-                                    color: scheme.onSurfaceVariant,
-                                    fontWeight: FontWeight.w600,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
-                                decoration: BoxDecoration(
-                                  color: ext.surfaceContainerHighest,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: DropdownButtonHideUnderline(
-                                  child: DropdownButton<String>(
-                                    value: _currency,
-                                    isExpanded: true,
-                                    dropdownColor: ext.surfaceContainerHigh,
-                                    icon: const Icon(Icons.expand_more),
-                                    style: theme.textTheme.bodyLarge?.copyWith(
-                                      color: scheme.onSurface,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                    items: _currencies.map((c) => DropdownMenuItem(
-                                      value: c,
-                                      child: Text(c),
-                                    )).toList(),
-                                    onChanged: busy ? null : (v) => setState(() => _currency = v ?? 'USD'),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          
-                          const SizedBox(height: 32),
-                          
-                          ObsidianButton(
-                            text: busy ? 'Creating account...' : 'Create account',
-                            onPressed: busy ? () {} : _submit,
-                          ),
-                        ],
+                        ),
                       ),
 
-                      const SizedBox(height: 24),
+                      SizedBox(height: ext.loginPageVerticalPadding),
 
-                      ObsidianButton(
-                        text: 'Back to sign in',
-                        style: ObsidianButtonStyle.tertiary,
-                        onPressed: () => Navigator.of(context).pop(),
-                      ),
-
-                      const SizedBox(height: 48),
-
-                      Text(
-                        'By creating an account, you agree to our Terms of Service regarding end-to-end encrypted synchronization.',
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: scheme.outline,
-                          height: 1.6,
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: ext.registerFootnoteMaxWidth,
+                        ),
+                        child: Text(
+                          'By creating an account, you agree to our Terms of Service and Privacy Policy regarding cloud data synchronization and encryption protocols.',
+                          textAlign: TextAlign.center,
+                          style: footnoteStyle,
                         ),
                       ),
                     ],
@@ -332,3 +422,104 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 }
 
+class _RegisterCurrencyField extends StatelessWidget {
+  const _RegisterCurrencyField({
+    required this.value,
+    required this.items,
+    required this.labels,
+    required this.enabled,
+    required this.cornerRadius,
+    required this.labelSpacing,
+    required this.onChanged,
+  });
+
+  final String value;
+  final List<String> items;
+  final Map<String, String> labels;
+  final bool enabled;
+  final double cornerRadius;
+  final double labelSpacing;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final ext = theme.vaultSpend;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.only(
+            left: labelSpacing,
+            bottom: labelSpacing * 2,
+          ),
+          child: Text(
+            'PREFERRED CURRENCY',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: ext.surfaceContainerHighest.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(cornerRadius),
+            border: Border.all(
+              color: scheme.outlineVariant.withValues(alpha: 0.2),
+            ),
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Positioned(
+                left: 16,
+                child: Icon(
+                  Icons.payments_outlined,
+                  color: scheme.outline.withValues(alpha: 0.6),
+                  size: 20,
+                ),
+              ),
+              Positioned(
+                right: 16,
+                child: Icon(
+                  Icons.expand_more,
+                  color: scheme.outline.withValues(alpha: 0.6),
+                  size: 20,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(left: 46, right: 36),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: value,
+                    isExpanded: true,
+                    icon: const SizedBox.shrink(),
+                    borderRadius: BorderRadius.circular(cornerRadius),
+                    dropdownColor: ext.surfaceContainerHigh,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: scheme.onSurface,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    items: items
+                        .map(
+                          (c) => DropdownMenuItem<String>(
+                            value: c,
+                            child: Text(labels[c] ?? c),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: enabled ? onChanged : null,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}

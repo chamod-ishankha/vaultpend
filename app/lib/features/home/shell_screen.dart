@@ -3,14 +3,13 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/logging/app_logging.dart';
 import '../../core/network/network_providers.dart';
 import '../../core/providers.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/widgets/obsidian_card.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../auth/auth_providers.dart';
 import '../auth/sync_status.dart';
@@ -38,19 +37,19 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
   @override
   void initState() {
     super.initState();
-    _networkSub = ref.listenManual<AsyncValue<bool>>(
-      networkOnlineProvider,
-      (previous, next) {
-        final wasOnline = previous?.value ?? true;
-        final isOnline = next.value ?? true;
-        if (!wasOnline && isOnline) {
-          final auth = ref.read(authControllerProvider);
-          if (auth.value != null && auth.value != null) {
-            unawaited(_syncNow());
-          }
+    _networkSub = ref.listenManual<AsyncValue<bool>>(networkOnlineProvider, (
+      previous,
+      next,
+    ) {
+      final wasOnline = previous?.value ?? true;
+      final isOnline = next.value ?? true;
+      if (!wasOnline && isOnline) {
+        final auth = ref.read(authControllerProvider);
+        if (auth.value != null && auth.value != null) {
+          unawaited(_syncNow());
         }
-      },
-    );
+      }
+    });
   }
 
   @override
@@ -91,9 +90,9 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
       ]);
       ref.invalidate(syncStatusProvider);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cloud sync completed.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Cloud sync completed.')));
       }
     } catch (error) {
       if (mounted) {
@@ -118,7 +117,7 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
     final syncStatusAsync = signedIn ? ref.watch(syncStatusProvider) : null;
     final email = signedIn ? authSession.user.email : 'Guest mode';
     final subtitle = signedIn ? 'Premium Member' : 'Local-only (sync disabled)';
-    
+
     // Theme references
     final scheme = Theme.of(context).colorScheme;
     final ext = Theme.of(context).extension<VaultSpendThemeExtension>()!;
@@ -129,14 +128,14 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
             onOpenDrawer: isDesktop ? null : _openDrawer,
           )
         : _index == 1
-            ? SubscriptionListScreen(
-                key: const ValueKey(1),
-                onOpenDrawer: isDesktop ? null : _openDrawer,
-              )
-            : InsightsScreen(
-                key: const ValueKey(2),
-                onOpenDrawer: isDesktop ? null : _openDrawer,
-              );
+        ? SubscriptionListScreen(
+            key: const ValueKey(1),
+            onOpenDrawer: isDesktop ? null : _openDrawer,
+          )
+        : InsightsScreen(
+            key: const ValueKey(2),
+            onOpenDrawer: isDesktop ? null : _openDrawer,
+          );
 
     return Scaffold(
       key: _shellKey,
@@ -144,7 +143,15 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
       extendBody: true, // Needed to let background bleed behind bottom nav
       drawer: isDesktop
           ? null
-          : _buildSidebarDrawer(context, scheme, ext, email, subtitle, signedIn, isGuest),
+          : _buildSidebarDrawer(
+              context,
+              scheme,
+              ext,
+              email,
+              subtitle,
+              signedIn,
+              isGuest,
+            ),
       body: Row(
         children: [
           if (isDesktop) _buildDesktopRail(scheme, signedIn, isGuest),
@@ -175,9 +182,9 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
                     bottom: 0,
                     left: 0,
                     right: 0,
-                    child: _buildBottomNavBar(scheme, ext),
+                    child: _buildBottomNavBar(context, scheme),
                   ),
-                ]
+                ],
               ],
             ),
           ),
@@ -186,7 +193,19 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
     );
   }
 
-  Widget _buildSidebarDrawer(BuildContext context, ColorScheme scheme, VaultSpendThemeExtension ext, String? email, String subtitle, bool signedIn, bool isGuest) {
+  Widget _buildSidebarDrawer(
+    BuildContext context,
+    ColorScheme scheme,
+    VaultSpendThemeExtension ext,
+    String? email,
+    String subtitle,
+    bool signedIn,
+    bool isGuest,
+  ) {
+    final displayName = signedIn
+        ? (email?.split('@').first ?? 'Member')
+        : 'Guest User';
+
     return Drawer(
       backgroundColor: scheme.surface,
       shape: const RoundedRectangleBorder(
@@ -196,68 +215,67 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Drawer Header
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
-              child: ObsidianCard(
-                level: ObsidianCardTonalLevel.high,
-                child: Row(
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [scheme.primary, scheme.primaryContainer],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+              child: Row(
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: scheme.primary.withValues(alpha: 0.3),
+                        width: 2,
+                      ),
+                    ),
+                    child: CircleAvatar(
+                      backgroundColor: ext.surfaceContainerHigh,
+                      child: Icon(
+                        Icons.person,
+                        color: scheme.primary,
+                        size: 24,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        displayName,
+                        style: GoogleFonts.manrope(
+                          fontWeight: FontWeight.w700,
+                          color: scheme.primary,
+                          fontSize: 16,
                         ),
-                        borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Icon(Icons.person_rounded, color: scheme.onPrimary, size: 24),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            email?.split('@').first ?? 'User',
-                            style: GoogleFonts.manrope(
-                              fontWeight: FontWeight.w700,
-                              color: scheme.onSurface,
-                              fontSize: 16,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          Text(
-                            subtitle,
-                            style: GoogleFonts.inter(
-                              fontWeight: FontWeight.w500,
-                              color: scheme.onSurface.withValues(alpha: 0.5),
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
+                      Text(
+                        subtitle,
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w500,
+                          color: scheme.onSurfaceVariant,
+                          fontSize: 12,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                ],
               ),
             ),
-            
+
             // Drawer Items
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Column(
                 children: [
-                   _buildDrawerItem(
-                    icon: Icons.account_balance,
-                    label: 'Accounts',
-                    isActive: false,
+                  _buildDrawerItem(
+                    icon: Icons.currency_exchange,
+                    label: 'Transactions',
+                    isActive: true,
                     scheme: scheme,
-                    onTap: () {},
+                    onTap: () => Navigator.pop(context),
                   ),
                   const SizedBox(height: 8),
                   _buildDrawerItem(
@@ -267,76 +285,84 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
                     scheme: scheme,
                     onTap: () {
                       Navigator.pop(context);
-                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ManageCategoriesScreen()));
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const ManageCategoriesScreen(),
+                        ),
+                      );
                     },
                   ),
                   const SizedBox(height: 8),
                   _buildDrawerItem(
-                    icon: Icons.settings_outlined,
+                    icon: Icons.settings,
                     label: 'Settings',
                     isActive: false,
                     scheme: scheme,
                     onTap: () {
                       Navigator.pop(context);
-                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const SettingsScreen(),
+                        ),
+                      );
                     },
                   ),
-                  const SizedBox(height: 16),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Divider(
-                      height: 1,
-                      color: scheme.outlineVariant.withValues(alpha: 0.5),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  if (signedIn) ...[
-                    _buildDrawerItem(
-                      icon: Icons.cloud_sync_outlined,
-                      label: 'Account sync',
-                      isActive: false,
-                      scheme: scheme,
-                      onTap: () {},
-                    ),
-                    const SizedBox(height: 8),
-                    _buildDrawerItem(
-                      icon: Icons.logout,
-                      label: 'Sign out',
-                      isActive: false,
-                      scheme: scheme,
-                      onTap: () async {
-                        Navigator.pop(context);
-                        await ref.read(authControllerProvider.notifier).signOut();
-                      },
-                    ),
-                  ] else if (isGuest) ...[
-                    _buildDrawerItem(
-                      icon: Icons.login,
-                      label: 'Sign in',
-                      isActive: false,
-                      scheme: scheme,
-                      onTap: () async {
-                        Navigator.pop(context);
-                        await ref.read(guestModeControllerProvider.notifier).exitGuestMode();
-                      },
-                    ),
-                  ],
                 ],
               ),
             ),
-            
+
+            const SizedBox(height: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Divider(
+                height: 1,
+                color: scheme.outlineVariant.withValues(alpha: 0.2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (signedIn)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: _buildDrawerItem(
+                  icon: Icons.logout,
+                  label: 'Sign out',
+                  isActive: false,
+                  scheme: scheme,
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await ref.read(authControllerProvider.notifier).signOut();
+                  },
+                ),
+              )
+            else if (isGuest)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: _buildDrawerItem(
+                  icon: Icons.login,
+                  label: 'Sign in',
+                  isActive: false,
+                  scheme: scheme,
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await ref
+                        .read(guestModeControllerProvider.notifier)
+                        .exitGuestMode();
+                  },
+                ),
+              ),
+
             const Spacer(),
-            
+
             // Drawer Footer
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
               child: Text(
                 'ID: VAULT-SPEND',
                 style: GoogleFonts.inter(
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
-                  letterSpacing: 1.5,
-                  color: scheme.onSurface.withOpacity(0.4),
+                  letterSpacing: 1.4,
+                  color: scheme.onSurfaceVariant.withValues(alpha: 0.45),
                 ),
               ),
             ),
@@ -358,16 +384,23 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
       borderRadius: BorderRadius.circular(12),
       child: Container(
         decoration: BoxDecoration(
-          color: isActive ? scheme.primary.withOpacity(0.1) : Colors.transparent,
+          color: isActive
+              ? scheme.primary.withValues(alpha: 0.15)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
           border: Border(
-            right: isActive ? BorderSide(color: scheme.primary, width: 4) : BorderSide.none,
+            right: isActive
+                ? BorderSide(color: scheme.primary, width: 4)
+                : BorderSide.none,
           ),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
-            Icon(icon, color: isActive ? scheme.primary : scheme.onSurfaceVariant),
+            Icon(
+              icon,
+              color: isActive ? scheme.primary : scheme.onSurfaceVariant,
+            ),
             const SizedBox(width: 16),
             Text(
               label,
@@ -407,7 +440,9 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
               tooltip: 'Categories',
               onPressed: () {
                 Navigator.of(context).push<void>(
-                  MaterialPageRoute<void>(builder: (_) => const ManageCategoriesScreen()),
+                  MaterialPageRoute<void>(
+                    builder: (_) => const ManageCategoriesScreen(),
+                  ),
                 );
               },
               icon: const Icon(Icons.category_outlined),
@@ -416,7 +451,9 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
               tooltip: 'Settings',
               onPressed: () {
                 Navigator.of(context).push<void>(
-                  MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
+                  MaterialPageRoute<void>(
+                    builder: (_) => const SettingsScreen(),
+                  ),
                 );
               },
               icon: const Icon(Icons.settings_outlined),
@@ -434,7 +471,9 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
                 if (signedIn) {
                   await ref.read(authControllerProvider.notifier).signOut();
                 } else if (isGuest) {
-                  await ref.read(guestModeControllerProvider.notifier).exitGuestMode();
+                  await ref
+                      .read(guestModeControllerProvider.notifier)
+                      .exitGuestMode();
                 }
               },
               icon: Icon(signedIn ? Icons.logout : Icons.login),
@@ -463,26 +502,46 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
     );
   }
 
-  Widget _buildBottomNavBar(ColorScheme scheme, VaultSpendThemeExtension ext) {
+  Widget _buildBottomNavBar(BuildContext context, ColorScheme scheme) {
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+
     return ClipRRect(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       child: BackdropFilter(
         filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
         child: Container(
-          height: 80,
+          height: 80 + bottomInset,
           decoration: BoxDecoration(
-            color: scheme.surfaceContainerHighest.withOpacity(0.9),
+            color: scheme.surfaceContainerLow.withValues(alpha: 0.9),
             border: Border(
-              top: BorderSide(color: Colors.white.withOpacity(0.05)),
+              top: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
             ),
           ),
-          padding: const EdgeInsets.only(bottom: 8),
+          padding: EdgeInsets.only(bottom: 8 + bottomInset),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildBottomNavItem(0, Icons.payments, Icons.payments_outlined, 'Expenses', scheme),
-              _buildBottomNavItem(1, Icons.subscriptions, Icons.subscriptions_outlined, 'Subscriptions', scheme),
-              _buildBottomNavItem(2, Icons.query_stats, Icons.query_stats_outlined, 'Insights', scheme),
+              _buildBottomNavItem(
+                0,
+                Icons.payments,
+                Icons.payments_outlined,
+                'Expenses',
+                scheme,
+              ),
+              _buildBottomNavItem(
+                1,
+                Icons.subscriptions,
+                Icons.subscriptions_outlined,
+                'Subscriptions',
+                scheme,
+              ),
+              _buildBottomNavItem(
+                2,
+                Icons.query_stats,
+                Icons.query_stats_outlined,
+                'Insights',
+                scheme,
+              ),
             ],
           ),
         ),
@@ -490,7 +549,13 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
     );
   }
 
-  Widget _buildBottomNavItem(int index, IconData activeIcon, IconData inactiveIcon, String label, ColorScheme scheme) {
+  Widget _buildBottomNavItem(
+    int index,
+    IconData activeIcon,
+    IconData inactiveIcon,
+    String label,
+    ColorScheme scheme,
+  ) {
     final isActive = _index == index;
     final color = isActive ? scheme.primary : scheme.outline;
     return Expanded(
@@ -508,7 +573,7 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
                 fontSize: 10,
                 fontWeight: FontWeight.w700,
                 color: color,
-                letterSpacing: 0.8,
+                letterSpacing: 1.2,
               ),
             ),
             const SizedBox(height: 4),
@@ -530,12 +595,16 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
     if (syncStatusAsync == null) return null;
     final dateFmt = DateFormat('MMM d, yyyy h:mm a');
     return syncStatusAsync.when(
-      loading: () => 'Checking Cloud sync status…',
+      loading: () => 'Checking Cloud sync status...',
       error: (_, _) => 'Cloud status unavailable right now.',
       data: (status) {
-        if (status.totalCount == 0) return 'Connected to Cloud. No synced records yet.';
+        if (status.totalCount == 0) {
+          return 'Connected to Cloud. No synced records yet.';
+        }
         final latest = status.latestUpdatedAt;
-        if (latest == null) return 'Connected to Cloud. Waiting for first sync timestamp.';
+        if (latest == null) {
+          return 'Connected to Cloud. Waiting for first sync timestamp.';
+        }
         return 'Last Cloud update: ${dateFmt.format(latest.toLocal())}';
       },
     );
@@ -570,11 +639,12 @@ class _ShellStatusBanner extends StatelessWidget {
     final IconData icon = signedIn
         ? (syncing ? Icons.sync_rounded : Icons.check_circle_rounded)
         : Icons.person_outline_rounded;
-    final String title = signedIn
+    final title = signedIn
         ? (syncing ? 'SYNCING DATA' : 'HEALTHY SYNC STATUS')
         : 'GUEST MODE ACTIVE';
-    final String? actionLabel =
-        signedIn ? (online ? (syncing ? null : 'REFRESH') : 'OFFLINE') : null;
+    final String? actionLabel = signedIn
+        ? (online ? (syncing ? null : 'REFRESH') : 'OFFLINE')
+        : null;
 
     final bgColor = signedIn
         ? scheme.primary.withValues(alpha: 0.1)
@@ -596,9 +666,7 @@ class _ShellStatusBanner extends StatelessWidget {
               decoration: BoxDecoration(
                 color: bgColor,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: fgColor.withValues(alpha: 0.1),
-                ),
+                border: Border.all(color: fgColor.withValues(alpha: 0.1)),
               ),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
@@ -607,11 +675,7 @@ class _ShellStatusBanner extends StatelessWidget {
                   Expanded(
                     child: Row(
                       children: [
-                        _PulseIcon(
-                          icon: icon,
-                          color: fgColor,
-                          active: syncing,
-                        ),
+                        _PulseIcon(icon: icon, color: fgColor, active: syncing),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
@@ -634,7 +698,7 @@ class _ShellStatusBanner extends StatelessWidget {
                                   style: GoogleFonts.inter(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w500,
-                                    color: fgColor.withOpacity(0.7),
+                                    color: fgColor.withValues(alpha: 0.7),
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -699,7 +763,8 @@ class _PulseIcon extends StatefulWidget {
   State<_PulseIcon> createState() => _PulseIconState();
 }
 
-class _PulseIconState extends State<_PulseIcon> with SingleTickerProviderStateMixin {
+class _PulseIconState extends State<_PulseIcon>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
 
   @override
