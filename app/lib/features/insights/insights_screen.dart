@@ -19,9 +19,9 @@ import '../../core/logging/app_logging.dart';
 import '../../core/widgets/obsidian_app_bar.dart';
 import '../../core/widgets/obsidian_card.dart';
 import '../../core/widgets/responsive_layout.dart';
-import '../auth/auth_providers.dart';
 import '../../data/models/expense.dart';
 import '../../data/models/subscription.dart';
+import '../auth/auth_providers.dart';
 import '../subscriptions/add_subscription_screen.dart';
 import '../expenses/expense_providers.dart';
 import '../subscriptions/subscription_providers.dart';
@@ -145,19 +145,28 @@ class InsightsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(insightsDataProvider);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      extendBodyBehindAppBar: true,
+      extendBodyBehindAppBar: false,
       appBar: ObsidianAppBar(
-        title: const Text('Insights'),
+        centerTitle: false,
+        title: Text(
+          'Insights',
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.2,
+          ),
+        ),
         leading: onOpenDrawer != null
             ? IconButton(icon: const Icon(Icons.menu), onPressed: onOpenDrawer)
             : null,
         actions: [
           PopupMenuButton<String>(
-            tooltip: 'Export report',
-            icon: const Icon(Icons.download_rounded),
+            tooltip: 'Export',
+            icon: const Icon(Icons.ios_share_rounded),
             onSelected: (value) {
               if (value == 'csv') {
                 _exportInsightsCsv(context, ref);
@@ -170,7 +179,7 @@ class InsightsScreen extends ConsumerWidget {
                 value: 'csv',
                 child: Row(
                   children: [
-                    Icon(Icons.table_chart, size: 18),
+                    Icon(Icons.table_chart_rounded, size: 18),
                     SizedBox(width: 8),
                     Text('Export as CSV'),
                   ],
@@ -180,7 +189,7 @@ class InsightsScreen extends ConsumerWidget {
                 value: 'pdf',
                 child: Row(
                   children: [
-                    Icon(Icons.picture_as_pdf, size: 18),
+                    Icon(Icons.picture_as_pdf_rounded, size: 18),
                     SizedBox(width: 8),
                     Text('Export as PDF'),
                   ],
@@ -188,7 +197,17 @@ class InsightsScreen extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(width: 8),
+          Container(
+            width: 32,
+            height: 32,
+            margin: const EdgeInsets.only(right: 16),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: scheme.primary.withValues(alpha: 0.2)),
+              color: scheme.surfaceContainerLow,
+            ),
+            child: Icon(Icons.person, size: 18, color: scheme.primary),
+          ),
         ],
       ),
       body: ResponsiveBody(
@@ -323,6 +342,10 @@ class _InsightsDashboardState extends ConsumerState<_InsightsDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    final bottomPadding = math.max(
+      120.0,
+      MediaQuery.paddingOf(context).bottom + kBottomNavigationBarHeight + 24,
+    );
     final preferredCurrency = ref.watch(preferredCurrencyProvider);
     final fxSnapshot = ref
         .watch(fxRatesProvider)
@@ -418,8 +441,33 @@ class _InsightsDashboardState extends ConsumerState<_InsightsDashboard> {
 
     final recentExpenses = filteredExpenses.toList()
       ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
-    final recentSubscriptions = effectiveSubscriptions.toList()
-      ..sort((a, b) => b.nextBillingDate.compareTo(a.nextBillingDate));
+    final today = DateTime(now.year, now.month, now.day);
+    final upcomingSubscriptions =
+        effectiveSubscriptions
+            .where(
+              (subscription) => !DateTime(
+                subscription.nextBillingDate.year,
+                subscription.nextBillingDate.month,
+                subscription.nextBillingDate.day,
+              ).isBefore(today),
+            )
+            .toList()
+          ..sort((a, b) => a.nextBillingDate.compareTo(b.nextBillingDate));
+    final overdueSubscriptions =
+        effectiveSubscriptions
+            .where(
+              (subscription) => DateTime(
+                subscription.nextBillingDate.year,
+                subscription.nextBillingDate.month,
+                subscription.nextBillingDate.day,
+              ).isBefore(today),
+            )
+            .toList()
+          ..sort((a, b) => b.nextBillingDate.compareTo(a.nextBillingDate));
+    final recentSubscriptions = [
+      ...upcomingSubscriptions,
+      ...overdueSubscriptions,
+    ];
     final recurringExpenses = filteredExpenses.where((e) => e.isRecurring);
     final recurringByCurrency = <String, double>{};
     for (final expense in recurringExpenses) {
@@ -442,7 +490,6 @@ class _InsightsDashboardState extends ConsumerState<_InsightsDashboard> {
         ifAbsent: () => subscription.amount,
       );
     }
-    final upcomingTrialCount = upcomingBillings.where((s) => s.isTrial).length;
     final activeTrialCount = effectiveSubscriptions.where((subscription) {
       if (!subscription.isTrial) {
         return false;
@@ -538,7 +585,7 @@ class _InsightsDashboardState extends ConsumerState<_InsightsDashboard> {
           ],
         ),
         _InfoCard(
-          title: 'Top Categories (This Month)',
+          title: 'Top Categories (${_rangeTitle()})',
           lines: topCategories.isEmpty
               ? const ['No category spend yet']
               : topCategories
@@ -586,7 +633,6 @@ class _InsightsDashboardState extends ConsumerState<_InsightsDashboard> {
         _UpcomingBillingCard(
           subscriptions: upcomingBillings,
           totalsByCurrency: upcomingByCurrency,
-          trialCount: upcomingTrialCount,
           window: _billingWindow,
           onWindowChanged: (window) => setState(() => _billingWindow = window),
           onSubscriptionTap: (subscription) async {
@@ -609,21 +655,33 @@ class _InsightsDashboardState extends ConsumerState<_InsightsDashboard> {
     ];
 
     return ListView(
-      padding: EdgeInsets.fromLTRB(
-        16,
-        72 + MediaQuery.paddingOf(context).top,
-        16,
-        120,
-      ),
+      padding: EdgeInsets.fromLTRB(16, 12, 16, bottomPadding),
       children: [
-        _ReportViewSelector(
-          value: _reportView,
-          onChanged: (value) => unawaited(_setReportView(value)),
-        ),
-        const SizedBox(height: 12),
-        _RangeSelector(
-          value: _range,
-          onChanged: (value) => setState(() => _range = value),
+        ObsidianCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const _ControlSectionLabel(
+                icon: Icons.tune_rounded,
+                label: 'Report View',
+              ),
+              const SizedBox(height: 8),
+              _ReportViewSelector(
+                value: _reportView,
+                onChanged: (value) => unawaited(_setReportView(value)),
+              ),
+              const SizedBox(height: 14),
+              const _ControlSectionLabel(
+                icon: Icons.date_range_rounded,
+                label: 'Date Range',
+              ),
+              const SizedBox(height: 8),
+              _RangeSelector(
+                value: _range,
+                onChanged: (value) => setState(() => _range = value),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
         _KeyMetricsStrip(
@@ -771,7 +829,12 @@ class _InsightsDashboardState extends ConsumerState<_InsightsDashboard> {
       return 'Monthly';
     }
     if (lower.contains('week') &&
-        (lower.contains('bi-') || lower.contains('biweek'))) {
+        (lower.contains('bi-') ||
+            lower.contains('biweek') ||
+            lower.contains('bi week'))) {
+      return 'Bi-weekly';
+    }
+    if (lower.contains('fortnight')) {
       return 'Bi-weekly';
     }
     if (lower.contains('week')) {
@@ -937,14 +1000,17 @@ class _InsightsDashboardState extends ConsumerState<_InsightsDashboard> {
     if (lower.contains('month')) {
       return amount;
     }
+    if (lower.contains('bi-week') ||
+        lower.contains('biweek') ||
+        lower.contains('bi week') ||
+        lower.contains('fortnight')) {
+      return amount * 2.17;
+    }
     if (lower.contains('week')) {
       return amount * 4.33;
     }
     if (lower.contains('day')) {
       return amount * 30;
-    }
-    if (lower.contains('bi-week') || lower.contains('biweek')) {
-      return amount * 2.17;
     }
     return amount;
   }
@@ -1000,193 +1066,85 @@ class _MetricItem {
   final String value;
 }
 
+class _ControlSectionLabel extends StatelessWidget {
+  const _ControlSectionLabel({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: scheme.primary),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: scheme.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.2,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _RangeSelector extends StatelessWidget {
   const _RangeSelector({required this.value, required this.onChanged});
 
   final _InsightsRange value;
   final ValueChanged<_InsightsRange> onChanged;
 
-  Future<void> _openPicker(BuildContext context) async {
-    final options = <_InsightsRange, ({String label, String hint})>{
-      _InsightsRange.sevenDays: (label: '7D', hint: 'Last 7 days'),
-      _InsightsRange.thirtyDays: (label: '30D', hint: 'Last 30 days'),
-      _InsightsRange.ninetyDays: (label: '90D', hint: 'Last 90 days'),
-      _InsightsRange.all: (label: 'All', hint: 'All available data'),
-    };
-
-    final selected = await showModalBottomSheet<_InsightsRange>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) {
-        final scheme = Theme.of(sheetContext).colorScheme;
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Date range',
-                  style: Theme.of(sheetContext).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Select the time window for insights.',
-                  style: Theme.of(sheetContext).textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                ...options.entries.map((entry) {
-                  final selectedRange = value == entry.key;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Material(
-                      color: selectedRange
-                          ? scheme.primaryContainer
-                          : scheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(14),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(14),
-                        onTap: () => Navigator.pop(sheetContext, entry.key),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 12,
-                          ),
-                          child: Row(
-                            children: [
-                              Text(
-                                entry.value.label,
-                                style: Theme.of(sheetContext)
-                                    .textTheme
-                                    .titleSmall
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.w700,
-                                      color: selectedRange
-                                          ? scheme.onPrimaryContainer
-                                          : scheme.onSurface,
-                                    ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  entry.value.hint,
-                                  style: Theme.of(sheetContext)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.copyWith(
-                                        color: selectedRange
-                                            ? scheme.onPrimaryContainer
-                                                  .withValues(alpha: 0.9)
-                                            : scheme.onSurfaceVariant,
-                                      ),
-                                ),
-                              ),
-                              if (selectedRange)
-                                Icon(
-                                  Icons.check_circle,
-                                  size: 18,
-                                  color: scheme.primary,
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                }),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-
-    if (selected != null) {
-      onChanged(selected);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final label = switch (value) {
-      _InsightsRange.sevenDays => '7D',
-      _InsightsRange.thirtyDays => '30D',
-      _InsightsRange.ninetyDays => '90D',
-      _InsightsRange.all => 'All',
-    };
+    final options = <(_InsightsRange, String)>[
+      (_InsightsRange.sevenDays, '7D'),
+      (_InsightsRange.thirtyDays, '30D'),
+      (_InsightsRange.ninetyDays, '90D'),
+      (_InsightsRange.all, 'All'),
+    ];
 
-    final hint = switch (value) {
-      _InsightsRange.sevenDays => 'Last 7 days',
-      _InsightsRange.thirtyDays => 'Last 30 days',
-      _InsightsRange.ninetyDays => 'Last 90 days',
-      _InsightsRange.all => 'All available data',
-    };
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Date range',
-          style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 6),
-        InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () => _openPicker(context),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: scheme.outlineVariant.withOpacity(0.5),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: constraints.maxWidth),
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerLowest,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: scheme.outlineVariant.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final option in options)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: _SegmentPill(
+                          label: option.$2,
+                          selected: value == option.$1,
+                          onPressed: () => onChanged(option.$1),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
-            child: Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: scheme.primary,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    label,
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: scheme.onPrimary,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    hint,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-                Icon(
-                  Icons.unfold_more_rounded,
-                  size: 18,
-                  color: scheme.onSurfaceVariant,
-                ),
-              ],
-            ),
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 }
@@ -1197,258 +1155,147 @@ class _ReportViewSelector extends StatelessWidget {
   final _InsightsReportView value;
   final ValueChanged<_InsightsReportView> onChanged;
 
-  Future<void> _openPicker(BuildContext context) async {
-    final options = <_InsightsReportView, ({String label, String hint})>{
-      _InsightsReportView.overview: (
-        label: 'Overview',
-        hint: 'Balanced summary',
-      ),
-      _InsightsReportView.spendingFocus: (
-        label: 'Spending',
-        hint: 'Expenses and categories',
-      ),
-      _InsightsReportView.subscriptionFocus: (
-        label: 'Subscriptions',
-        hint: 'Recurring tracking',
-      ),
-      _InsightsReportView.billingWatch: (
-        label: 'Billing Watch',
-        hint: 'Due dates and trials',
-      ),
-      _InsightsReportView.currencyBreakdown: (
-        label: 'Currencies',
-        hint: 'Currency-wise breakdown',
-      ),
-    };
-
-    final selected = await showModalBottomSheet<_InsightsReportView>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        final scheme = Theme.of(sheetContext).colorScheme;
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Report view',
-                  style: Theme.of(sheetContext).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Pick the report style you want to see.',
-                  style: Theme.of(sheetContext).textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                ...options.entries.map((entry) {
-                  final selectedView = entry.key == value;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Material(
-                      color: selectedView
-                          ? scheme.primaryContainer
-                          : scheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(14),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(14),
-                        onTap: () => Navigator.pop(sheetContext, entry.key),
-                        child: Padding(
-                          padding: const EdgeInsets.all(14),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 34,
-                                height: 34,
-                                decoration: BoxDecoration(
-                                  color: selectedView
-                                      ? scheme.primary
-                                      : scheme.surface,
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Icon(
-                                  switch (entry.key) {
-                                    _InsightsReportView.overview =>
-                                      Icons.dashboard_outlined,
-                                    _InsightsReportView.spendingFocus =>
-                                      Icons.trending_up_outlined,
-                                    _InsightsReportView.subscriptionFocus =>
-                                      Icons.subscriptions_outlined,
-                                    _InsightsReportView.billingWatch =>
-                                      Icons.event_note_outlined,
-                                    _InsightsReportView.currencyBreakdown =>
-                                      Icons.currency_exchange,
-                                  },
-                                  size: 18,
-                                  color: selectedView
-                                      ? scheme.onPrimary
-                                      : scheme.primary,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      entry.value.label,
-                                      style: Theme.of(sheetContext)
-                                          .textTheme
-                                          .titleSmall
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w700,
-                                            color: selectedView
-                                                ? scheme.onPrimaryContainer
-                                                : scheme.onSurface,
-                                          ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      entry.value.hint,
-                                      style: Theme.of(sheetContext)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(
-                                            color: selectedView
-                                                ? scheme.onPrimaryContainer
-                                                      .withValues(alpha: 0.9)
-                                                : scheme.onSurfaceVariant,
-                                          ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              if (selectedView)
-                                Icon(
-                                  Icons.check_circle,
-                                  size: 18,
-                                  color: scheme.primary,
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                }),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-
-    if (selected != null) {
-      onChanged(selected);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Report focus',
-          style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 6),
-        InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () => _openPicker(context),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: scheme.outlineVariant.withOpacity(0.5),
-              ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
+    final options = <({_InsightsReportView view, String label, IconData icon})>[
+      (
+        view: _InsightsReportView.overview,
+        label: 'Overview',
+        icon: Icons.dashboard_outlined,
+      ),
+      (
+        view: _InsightsReportView.spendingFocus,
+        label: 'Spending',
+        icon: Icons.paid_outlined,
+      ),
+      (
+        view: _InsightsReportView.subscriptionFocus,
+        label: 'Subscriptions',
+        icon: Icons.subscriptions_outlined,
+      ),
+      (
+        view: _InsightsReportView.billingWatch,
+        label: 'Billing',
+        icon: Icons.calendar_month_outlined,
+      ),
+      (
+        view: _InsightsReportView.currencyBreakdown,
+        label: 'Currency',
+        icon: Icons.currency_exchange,
+      ),
+    ];
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final option in options)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: InkWell(
+                onTap: () => onChanged(option.view),
+                borderRadius: BorderRadius.circular(999),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 140),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
-                    color: scheme.primary,
-                    borderRadius: BorderRadius.circular(8),
+                    color: value == option.view
+                        ? scheme.secondaryContainer
+                        : scheme.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: value == option.view
+                          ? scheme.secondary.withValues(alpha: 0.45)
+                          : scheme.outlineVariant.withValues(alpha: 0.22),
+                    ),
                   ),
-                  child: Icon(
-                    switch (value) {
-                      _InsightsReportView.overview => Icons.grid_view_rounded,
-                      _InsightsReportView.spendingFocus =>
-                        Icons.insights_rounded,
-                      _InsightsReportView.subscriptionFocus =>
-                        Icons.auto_awesome_motion_rounded,
-                      _InsightsReportView.billingWatch =>
-                        Icons.event_note_rounded,
-                      _InsightsReportView.currencyBreakdown =>
-                        Icons.currency_exchange_rounded,
-                    },
-                    size: 16,
-                    color: scheme.onPrimary,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        switch (value) {
-                          _InsightsReportView.overview => 'Overview',
-                          _InsightsReportView.spendingFocus => 'Spending',
-                          _InsightsReportView.subscriptionFocus =>
-                            'Subscriptions',
-                          _InsightsReportView.billingWatch => 'Billing Watch',
-                          _InsightsReportView.currencyBreakdown => 'Currencies',
-                        },
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                      Icon(
+                        option.icon,
+                        size: 14,
+                        color: value == option.view
+                            ? scheme.onSecondaryContainer
+                            : scheme.onSurfaceVariant,
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(width: 6),
                       Text(
-                        switch (value) {
-                          _InsightsReportView.overview => 'Balanced summary',
-                          _InsightsReportView.spendingFocus =>
-                            'Expenses and categories',
-                          _InsightsReportView.subscriptionFocus =>
-                            'Recurring tracking',
-                          _InsightsReportView.billingWatch =>
-                            'Due dates and trials',
-                          _InsightsReportView.currencyBreakdown =>
-                            'Currency-wise breakdown',
-                        },
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
+                        option.label,
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: value == option.view
+                              ? scheme.onSecondaryContainer
+                              : scheme.onSurfaceVariant,
+                          fontWeight: value == option.view
+                              ? FontWeight.w700
+                              : FontWeight.w600,
                         ),
                       ),
                     ],
                   ),
                 ),
-                Icon(
-                  Icons.unfold_more_rounded,
-                  size: 18,
-                  color: scheme.onSurfaceVariant,
-                ),
-              ],
+              ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SegmentPill extends StatelessWidget {
+  const _SegmentPill({
+    required this.label,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(999),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected ? scheme.primaryContainer : Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected
+                ? scheme.primary.withValues(alpha: 0.28)
+                : Colors.transparent,
+          ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: scheme.shadow.withValues(alpha: 0.12),
+                    blurRadius: 5,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Text(
+          label,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: selected
+                ? scheme.onPrimaryContainer
+                : scheme.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
           ),
         ),
-      ],
+      ),
     );
   }
 }
@@ -1478,14 +1325,23 @@ class _TrendChartCard extends StatelessWidget {
         children: [
           Text(
             title,
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Daily spend trend',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: 12),
           if (points.isEmpty)
             const Text('No trend data yet')
           else ...[
             Text(
-              '${numberFmt.format(points.last.amount)} $valueSuffix',
+              _formatTrendHeadline(numberFmt, points.last.amount, valueSuffix),
               style: theme.textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.w800,
                 color: scheme.primary,
@@ -1500,7 +1356,7 @@ class _TrendChartCard extends StatelessWidget {
                   points: points,
                   maxValue: peakValue,
                   lineColor: scheme.primary,
-                  fillColor: scheme.primary.withOpacity(0.1),
+                  fillColor: scheme.primary.withValues(alpha: 0.1),
                   gridColor: scheme.outlineVariant,
                 ),
               ),
@@ -1523,6 +1379,18 @@ class _TrendChartCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _formatTrendHeadline(
+    NumberFormat formatter,
+    double amount,
+    String? suffix,
+  ) {
+    final formattedAmount = formatter.format(amount);
+    if (suffix == null || suffix.isEmpty) {
+      return formattedAmount;
+    }
+    return '$formattedAmount $suffix';
   }
 }
 
@@ -1628,62 +1496,95 @@ class _KeyMetricsStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const spacing = 8.0;
-        const maxColumns = 4;
-        const minTileWidth = 148.0;
-        final maxWidth = constraints.maxWidth;
-        final estimatedColumns = (maxWidth / (minTileWidth + spacing))
-            .floor()
-            .clamp(1, maxColumns);
-        final columns = estimatedColumns.toInt();
-        final tileWidth = (maxWidth - (spacing * (columns - 1))) / columns;
-
-        return Wrap(
-          spacing: spacing,
-          runSpacing: spacing,
-          children: [
-            for (final metric in metrics)
-              SizedBox(
-                width: tileWidth,
-                child: _MetricTile(label: metric.label, value: metric.value),
-              ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _MetricTile extends StatelessWidget {
-  const _MetricTile({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return ObsidianCard(
-      level: ObsidianCardTonalLevel.low,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            value,
-            style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+    final scheme = theme.colorScheme;
+
+    return SizedBox(
+      height: 92,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: metrics.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final metric = metrics[index];
+          return Container(
+            width: 154,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: scheme.outlineVariant.withValues(alpha: 0.25),
+              ),
             ),
-          ),
-        ],
+            child: Stack(
+              children: [
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    height: 2,
+                    color: scheme.primary.withValues(alpha: 0.28),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            _iconForLabel(metric.label),
+                            size: 14,
+                            color: scheme.primary,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              metric.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        metric.value,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: scheme.onSurface,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
+  }
+
+  IconData _iconForLabel(String label) {
+    final lower = label.toLowerCase();
+    if (lower.contains('expense')) return Icons.paid_outlined;
+    if (lower.contains('category')) return Icons.category_outlined;
+    if (lower.contains('subscription')) return Icons.subscriptions_outlined;
+    if (lower.contains('trial')) return Icons.hourglass_bottom_outlined;
+    if (lower.contains('mom')) return Icons.trending_up_rounded;
+    return Icons.insights_outlined;
   }
 }
 
@@ -1706,7 +1607,9 @@ class _MonthOverMonthCard extends StatelessWidget {
         children: [
           Text(
             'Month-over-Month Spend',
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 12),
           if (comparison.rows.isEmpty)
@@ -1739,7 +1642,9 @@ class _MonthOverMonthCard extends StatelessWidget {
                       width: 46,
                       child: Text(
                         row.currency,
-                        style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -1796,7 +1701,9 @@ class _CategoryDistributionCard extends StatelessWidget {
         children: [
           Text(
             title,
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 32),
           if (entries.isEmpty)
@@ -1819,13 +1726,12 @@ class _CategoryDistributionCard extends StatelessWidget {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          'Total',
-                          style: theme.textTheme.labelLarge,
-                        ),
+                        Text('Total', style: theme.textTheme.labelLarge),
                         Text(
                           numberFmt.format(total),
-                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ],
                     ),
@@ -1859,7 +1765,9 @@ class _CategoryDistributionCard extends StatelessWidget {
                           child: Text(
                             entry.key,
                             overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -1974,7 +1882,9 @@ class _CurrencyBreakdownCard extends StatelessWidget {
         children: [
           Text(
             title,
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 12),
           if (entries.isEmpty)
@@ -2006,7 +1916,9 @@ class _CurrencyBreakdownCard extends StatelessWidget {
                             const SizedBox(width: 8),
                             Text(
                               entry.key,
-                              style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ],
                         ),
@@ -2053,7 +1965,9 @@ class _LargeSubscriptionsCard extends StatelessWidget {
         children: [
           Text(
             'Largest Subscriptions',
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 12),
           if (subscriptions.isEmpty)
@@ -2073,15 +1987,20 @@ class _LargeSubscriptionsCard extends StatelessWidget {
                           Text(
                             subscription.name,
                             overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                           if (subscription.isTrial) ...[
                             const SizedBox(height: 4),
                             Text(
                               trialStatus ?? 'Trial',
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: subscription.trialEndsAt != null &&
-                                        subscription.trialEndsAt!.isBefore(today)
+                                color:
+                                    subscription.trialEndsAt != null &&
+                                        subscription.trialEndsAt!.isBefore(
+                                          today,
+                                        )
                                     ? scheme.error
                                     : scheme.onSurfaceVariant,
                                 fontWeight: FontWeight.w500,
@@ -2122,7 +2041,6 @@ class _UpcomingBillingCard extends StatelessWidget {
   const _UpcomingBillingCard({
     required this.subscriptions,
     required this.totalsByCurrency,
-    required this.trialCount,
     required this.window,
     required this.onWindowChanged,
     required this.onSubscriptionTap,
@@ -2131,7 +2049,6 @@ class _UpcomingBillingCard extends StatelessWidget {
 
   final List<Subscription> subscriptions;
   final Map<String, double> totalsByCurrency;
-  final int trialCount;
   final _BillingWindow window;
   final ValueChanged<_BillingWindow> onWindowChanged;
   final ValueChanged<Subscription> onSubscriptionTap;
@@ -2300,7 +2217,9 @@ class _UpcomingBillingCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   title,
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -2353,33 +2272,36 @@ class _UpcomingBillingCard extends StatelessWidget {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: (subscription.isTrial
-                            ? scheme.tertiary
-                            : urgent
+                    color:
+                        (subscription.isTrial
+                                ? scheme.tertiary
+                                : urgent
                                 ? scheme.error
                                 : scheme.primary)
-                        .withOpacity(0.1),
+                            .withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
                     subscription.isTrial
                         ? Icons.hourglass_bottom
                         : isOverdue
-                            ? Icons.warning_rounded
-                            : urgent
-                                ? Icons.notifications_active
-                                : Icons.receipt_long,
+                        ? Icons.warning_rounded
+                        : urgent
+                        ? Icons.notifications_active
+                        : Icons.receipt_long,
                     size: 20,
                     color: subscription.isTrial
                         ? scheme.tertiary
                         : urgent
-                            ? scheme.error
-                            : scheme.primary,
+                        ? scheme.error
+                        : scheme.primary,
                   ),
                 ),
                 title: Text(
                   subscription.name,
-                  style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 subtitle: Text(
                   '${dateFmt.format(subscription.nextBillingDate)} · ${subscription.currency} ${numberFmt.format(subscription.amount)}',
@@ -2391,7 +2313,11 @@ class _UpcomingBillingCard extends StatelessWidget {
                         isExpired: _isTrialExpired(subscription, today),
                         isEndingSoon: _isTrialEndingSoon(subscription, today),
                       )
-                    : Icon(Icons.chevron_right, size: 16, color: scheme.onSurfaceVariant),
+                    : Icon(
+                        Icons.chevron_right,
+                        size: 16,
+                        color: scheme.onSurfaceVariant,
+                      ),
                 onTap: () => onSubscriptionTap(subscription),
               );
             }),
@@ -2481,6 +2407,17 @@ class _RecentActivityCard extends StatelessWidget {
     final scheme = theme.colorScheme;
     final dateFmt = DateFormat('MMM d');
     final today = DateTime.now();
+    final nextSubscription = recentSubscriptions.isEmpty
+        ? null
+        : recentSubscriptions.first;
+    final nextBillingDays = nextSubscription == null
+        ? null
+        : dayDifferenceFromToday(nextSubscription.nextBillingDate, now: today);
+    final nextBillingLabel = switch (nextBillingDays) {
+      null => 'Next billing',
+      < 0 => 'Billing overdue',
+      _ => 'Next billing',
+    };
 
     return ObsidianCard(
       child: Column(
@@ -2488,7 +2425,9 @@ class _RecentActivityCard extends StatelessWidget {
         children: [
           Text(
             'Recent Activity',
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 12),
           if (recentExpenses.isEmpty && recentSubscriptions.isEmpty)
@@ -2497,7 +2436,9 @@ class _RecentActivityCard extends StatelessWidget {
             if (recentExpenses.isNotEmpty) ...[
               Text(
                 'Latest expense',
-                style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
+                style: theme.textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               const SizedBox(height: 6),
               Text(
@@ -2508,21 +2449,30 @@ class _RecentActivityCard extends StatelessWidget {
             ],
             if (recentSubscriptions.isNotEmpty) ...[
               Text(
-                'Next billing',
-                style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
+                nextBillingLabel,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: nextBillingDays != null && nextBillingDays < 0
+                      ? scheme.error
+                      : null,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               const SizedBox(height: 6),
               Text(
                 '${recentSubscriptions.first.name} · ${dateFmt.format(recentSubscriptions.first.nextBillingDate)}',
                 style: theme.textTheme.bodyMedium,
               ),
-              if (_trialStatusText(recentSubscriptions.first, today) != null) ...[
+              if (_trialStatusText(recentSubscriptions.first, today) !=
+                  null) ...[
                 const SizedBox(height: 2),
                 Text(
                   _trialStatusText(recentSubscriptions.first, today)!,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: recentSubscriptions.first.trialEndsAt != null &&
-                            recentSubscriptions.first.trialEndsAt!.isBefore(today)
+                    color:
+                        recentSubscriptions.first.trialEndsAt != null &&
+                            recentSubscriptions.first.trialEndsAt!.isBefore(
+                              today,
+                            )
                         ? scheme.error
                         : scheme.onSurfaceVariant,
                     fontWeight: FontWeight.w500,
@@ -2559,7 +2509,9 @@ class _InfoCard extends StatelessWidget {
         children: [
           Text(
             title,
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 8),
           ...lines.map(
@@ -2612,7 +2564,10 @@ class _WindowSelector extends StatelessWidget {
 }
 
 class _UrgentAlert extends StatelessWidget {
-  const _UrgentAlert({required this.overdueCount, required this.expiredTrialCount});
+  const _UrgentAlert({
+    required this.overdueCount,
+    required this.expiredTrialCount,
+  });
   final int overdueCount;
   final int expiredTrialCount;
 
@@ -2623,9 +2578,9 @@ class _UrgentAlert extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: scheme.errorContainer.withOpacity(0.15),
+        color: scheme.errorContainer.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: scheme.error.withOpacity(0.3)),
+        border: Border.all(color: scheme.error.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
