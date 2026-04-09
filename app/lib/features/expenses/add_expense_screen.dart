@@ -12,7 +12,6 @@ import '../../core/logging/app_logging.dart';
 import '../../core/notifications/reminder_sync_helper.dart';
 import '../../core/ocr/receipt_ocr_service.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/widgets/fx_reference_strip.dart';
 import '../../core/widgets/obsidian_app_bar.dart';
 import '../../core/widgets/obsidian_button.dart';
 import '../../core/widgets/responsive_layout.dart';
@@ -124,6 +123,24 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     final t = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(_when),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: Theme.of(context).colorScheme.copyWith(
+            surface: ext.surfaceContainerLow,
+            primary: scheme.primary,
+            onPrimary: scheme.onPrimary,
+          ),
+          timePickerTheme: TimePickerThemeData(
+            backgroundColor: ext.surfaceContainerLow,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(
+                ext.addExpenseModalCornerRadius,
+              ),
+            ),
+          ),
+        ),
+        child: child!,
+      ),
     );
     if (t == null || !mounted) return;
     setState(() {
@@ -143,7 +160,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       backgroundColor: scheme.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(
-          top: Radius.circular(ext.addExpenseCardRadius),
+          top: Radius.circular(ext.addExpenseModalCornerRadius),
         ),
       ),
       builder: (ctx) => SafeArea(
@@ -213,7 +230,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       backgroundColor: scheme.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(
-          top: Radius.circular(ext.addExpenseCardRadius),
+          top: Radius.circular(ext.addExpenseModalCornerRadius),
         ),
       ),
       builder: (ctx) => StatefulBuilder(
@@ -350,7 +367,6 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       body: ResponsiveBody(
         child: Column(
           children: [
-            const FxReferenceStrip(),
             Expanded(
               child: catsAsync.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
@@ -375,15 +391,15 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
                   return ListView(
                     padding: EdgeInsets.fromLTRB(
-                      24,
+                      ext.addExpenseContentHorizontalPadding,
                       8,
-                      24,
+                      ext.addExpenseContentHorizontalPadding,
                       ext.addExpenseBottomActionSpacing + bottomInset,
                     ),
                     children: [
                       _buildAmountHero(theme, scheme, ext),
 
-                      const SizedBox(height: 20),
+                      SizedBox(height: ext.addExpenseSectionSpacing),
 
                       _buildCategoryCurrencyBlock(
                         theme,
@@ -393,23 +409,23 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                         cats,
                       ),
 
-                      const SizedBox(height: 14),
+                      SizedBox(height: ext.addExpenseCardGap),
 
                       _buildDateTimeCard(theme, scheme, ext),
 
-                      const SizedBox(height: 14),
+                      SizedBox(height: ext.addExpenseCardGap),
 
                       _buildRecurringCard(theme, scheme, ext),
 
-                      const SizedBox(height: 14),
+                      SizedBox(height: ext.addExpenseCardGap),
 
                       _buildNoteCard(theme, scheme, ext),
 
-                      const SizedBox(height: 14),
+                      SizedBox(height: ext.addExpenseCardGap),
 
                       _buildReceiptTiles(theme, scheme, ext),
 
-                      const SizedBox(height: 24),
+                      SizedBox(height: ext.addExpenseSectionSpacing),
 
                       ObsidianButton(
                         onPressed: _saving ? null : _save,
@@ -483,7 +499,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               ),
               const SizedBox(width: 8),
               SizedBox(
-                width: 220,
+                width: ext.addExpenseAmountFieldWidth,
                 child: TextField(
                   controller: _amountCtrl,
                   keyboardType: const TextInputType.numberWithOptions(
@@ -516,7 +532,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                 color: ext.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: BorderRadius.circular(
+                  ext.addExpenseCurrencyChipRadius,
+                ),
                 border: Border.all(
                   color: scheme.outline.withValues(alpha: 0.2),
                 ),
@@ -635,14 +653,18 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           return Row(
             children: [
               Expanded(child: categoryCard),
-              const SizedBox(width: 12),
+              SizedBox(width: ext.addExpenseSplitCardGap),
               Expanded(child: currencyCard),
             ],
           );
         }
 
         return Column(
-          children: [categoryCard, const SizedBox(height: 12), currencyCard],
+          children: [
+            categoryCard,
+            SizedBox(height: ext.addExpenseSplitCardGap),
+            currencyCard,
+          ],
         );
       },
     );
@@ -808,7 +830,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           child: GestureDetector(
             onTap: _scanReceipt,
             child: Container(
-              height: 96,
+              height: ext.addExpenseReceiptTileHeight,
               decoration: BoxDecoration(
                 color: ext.surfaceContainerLow,
                 borderRadius: BorderRadius.circular(ext.addExpenseCardRadius),
@@ -842,7 +864,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         const SizedBox(width: 10),
         Expanded(
           child: Container(
-            height: 96,
+            height: ext.addExpenseReceiptTileHeight,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(ext.addExpenseCardRadius),
               gradient: LinearGradient(
@@ -886,91 +908,150 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     );
   }
 
-  void _showCurrencyPicker() {
+  Future<T?> _showSelectionSheet<T>({
+    required String title,
+    required List<T> options,
+    required String Function(T option) labelBuilder,
+    Widget Function(T option)? leadingBuilder,
+    bool Function(T option)? selectedPredicate,
+  }) {
     final scheme = Theme.of(context).colorScheme;
     final ext = Theme.of(context).vaultSpend;
 
-    showModalBottomSheet(
+    return showModalBottomSheet<T>(
       context: context,
       backgroundColor: scheme.surface,
       showDragHandle: true,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(
-          top: Radius.circular(ext.addExpenseCardRadius),
+          top: Radius.circular(ext.addExpenseModalCornerRadius),
         ),
       ),
-      builder: (ctx) => SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Text(
-                'Select Currency',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ),
-            ..._currencies.map(
-              (c) => ListTile(
-                title: Text(
-                  c,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontWeight: _currency == c
-                        ? FontWeight.bold
-                        : FontWeight.normal,
-                    color: _currency == c ? scheme.primary : null,
+      builder: (ctx) {
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    title.toUpperCase(),
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.2,
+                    ),
                   ),
                 ),
-                onTap: () {
-                  setState(() => _currency = c);
-                  Navigator.pop(ctx);
-                },
-              ),
+                const SizedBox(height: 10),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 320),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: options.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
+                    itemBuilder: (context, i) {
+                      final option = options[i];
+                      final selected = selectedPredicate?.call(option) ?? false;
+
+                      return Material(
+                        color: selected
+                            ? ext.surfaceContainerHigh
+                            : ext.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(
+                          ext.addExpenseModalOptionRadius,
+                        ),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(
+                            ext.addExpenseModalOptionRadius,
+                          ),
+                          onTap: () => Navigator.of(ctx).pop(option),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(
+                                ext.addExpenseModalOptionRadius,
+                              ),
+                              border: Border.all(
+                                color: selected
+                                    ? scheme.primary.withValues(alpha: 0.45)
+                                    : scheme.outline.withValues(alpha: 0.2),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                if (leadingBuilder != null) ...[
+                                  leadingBuilder(option),
+                                  const SizedBox(width: 10),
+                                ],
+                                Expanded(
+                                  child: Text(
+                                    labelBuilder(option),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          fontWeight: selected
+                                              ? FontWeight.w700
+                                              : FontWeight.w600,
+                                          color: selected
+                                              ? scheme.primary
+                                              : scheme.onSurface,
+                                        ),
+                                  ),
+                                ),
+                                if (selected)
+                                  Icon(
+                                    Icons.check_circle_rounded,
+                                    size: 18,
+                                    color: scheme.primary,
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
-  void _showCategoryPicker(List<Category> cats) {
-    final scheme = Theme.of(context).colorScheme;
-    final ext = Theme.of(context).vaultSpend;
+  Future<void> _showCurrencyPicker() async {
+    final selected = await _showSelectionSheet<String>(
+      title: 'Select Currency',
+      options: _currencies,
+      labelBuilder: (c) => '$c (${_currencySymbols[c] ?? c})',
+      selectedPredicate: (c) => c == _currency,
+    );
+    if (selected == null || !mounted) return;
+    setState(() => _currency = selected);
+  }
 
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: scheme.surface,
-      showDragHandle: true,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(ext.addExpenseCardRadius),
-        ),
-      ),
-      builder: (ctx) => ListView.builder(
-        shrinkWrap: true,
-        itemCount: cats.length,
-        itemBuilder: (context, i) {
-          final c = cats[i];
-          final color = resolveCategoryColor(context, c.color);
-          return ListTile(
-            leading: Icon(resolveCategoryIcon(c.iconKey), color: color),
-            title: Text(
-              c.name,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-            trailing: _categoryId == c.id
-                ? Icon(Icons.check_circle_rounded, color: color)
-                : null,
-            onTap: () {
-              setState(() => _categoryId = c.id);
-              Navigator.pop(ctx);
-            },
-          );
-        },
+  Future<void> _showCategoryPicker(List<Category> cats) async {
+    final selected = await _showSelectionSheet<Category>(
+      title: 'Select Category',
+      options: cats,
+      labelBuilder: (c) => c.name,
+      selectedPredicate: (c) => c.id == _categoryId,
+      leadingBuilder: (c) => Icon(
+        resolveCategoryIcon(c.iconKey),
+        color: resolveCategoryColor(context, c.color),
+        size: 18,
       ),
     );
+    if (selected == null || !mounted) return;
+    setState(() => _categoryId = selected.id);
   }
 }

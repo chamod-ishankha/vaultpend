@@ -42,6 +42,12 @@ class VaultSpendThemeExtension
   final double addExpenseBottomActionSpacing;
   final double addExpenseAmountFontSize;
   final double addExpenseCurrencyChipRadius;
+  final double addExpenseAmountFieldWidth;
+  final double addExpenseCardGap;
+  final double addExpenseSplitCardGap;
+  final double addExpenseReceiptTileHeight;
+  final double addExpenseModalCornerRadius;
+  final double addExpenseModalOptionRadius;
 
   const VaultSpendThemeExtension({
     required this.primaryDark,
@@ -82,6 +88,12 @@ class VaultSpendThemeExtension
     this.addExpenseBottomActionSpacing = 96.0,
     this.addExpenseAmountFontSize = 56.0,
     this.addExpenseCurrencyChipRadius = 8.0,
+    this.addExpenseAmountFieldWidth = 280.0,
+    this.addExpenseCardGap = 14.0,
+    this.addExpenseSplitCardGap = 12.0,
+    this.addExpenseReceiptTileHeight = 128.0,
+    this.addExpenseModalCornerRadius = 24.0,
+    this.addExpenseModalOptionRadius = 14.0,
   });
 
   @override
@@ -124,6 +136,12 @@ class VaultSpendThemeExtension
     double? addExpenseBottomActionSpacing,
     double? addExpenseAmountFontSize,
     double? addExpenseCurrencyChipRadius,
+    double? addExpenseAmountFieldWidth,
+    double? addExpenseCardGap,
+    double? addExpenseSplitCardGap,
+    double? addExpenseReceiptTileHeight,
+    double? addExpenseModalCornerRadius,
+    double? addExpenseModalOptionRadius,
   }) {
     return VaultSpendThemeExtension(
       primaryDark: primaryDark ?? this.primaryDark,
@@ -190,6 +208,17 @@ class VaultSpendThemeExtension
           addExpenseAmountFontSize ?? this.addExpenseAmountFontSize,
       addExpenseCurrencyChipRadius:
           addExpenseCurrencyChipRadius ?? this.addExpenseCurrencyChipRadius,
+      addExpenseAmountFieldWidth:
+          addExpenseAmountFieldWidth ?? this.addExpenseAmountFieldWidth,
+      addExpenseCardGap: addExpenseCardGap ?? this.addExpenseCardGap,
+      addExpenseSplitCardGap:
+          addExpenseSplitCardGap ?? this.addExpenseSplitCardGap,
+      addExpenseReceiptTileHeight:
+          addExpenseReceiptTileHeight ?? this.addExpenseReceiptTileHeight,
+      addExpenseModalCornerRadius:
+          addExpenseModalCornerRadius ?? this.addExpenseModalCornerRadius,
+      addExpenseModalOptionRadius:
+          addExpenseModalOptionRadius ?? this.addExpenseModalOptionRadius,
     );
   }
 
@@ -378,6 +407,36 @@ class VaultSpendThemeExtension
         other.addExpenseCurrencyChipRadius,
         t,
       )!,
+      addExpenseAmountFieldWidth: ui.lerpDouble(
+        addExpenseAmountFieldWidth,
+        other.addExpenseAmountFieldWidth,
+        t,
+      )!,
+      addExpenseCardGap: ui.lerpDouble(
+        addExpenseCardGap,
+        other.addExpenseCardGap,
+        t,
+      )!,
+      addExpenseSplitCardGap: ui.lerpDouble(
+        addExpenseSplitCardGap,
+        other.addExpenseSplitCardGap,
+        t,
+      )!,
+      addExpenseReceiptTileHeight: ui.lerpDouble(
+        addExpenseReceiptTileHeight,
+        other.addExpenseReceiptTileHeight,
+        t,
+      )!,
+      addExpenseModalCornerRadius: ui.lerpDouble(
+        addExpenseModalCornerRadius,
+        other.addExpenseModalCornerRadius,
+        t,
+      )!,
+      addExpenseModalOptionRadius: ui.lerpDouble(
+        addExpenseModalOptionRadius,
+        other.addExpenseModalOptionRadius,
+        t,
+      )!,
     );
   }
 }
@@ -452,7 +511,7 @@ ThemeData buildVaultSpendTheme({required Brightness brightness}) {
         registerHelperSpacing: 4,
         registerPrimaryTopPadding: 24.0,
         registerFootnoteMaxWidth: 340,
-        addExpenseContentHorizontalPadding: 16,
+        addExpenseContentHorizontalPadding: 24,
         addExpenseAmountHeroVerticalPadding: 36,
         addExpenseSectionSpacing: 24,
         addExpenseSectionHeaderSpacing: 12,
@@ -461,7 +520,13 @@ ThemeData buildVaultSpendTheme({required Brightness brightness}) {
         addExpenseFormRowIconSize: 20,
         addExpenseBottomActionSpacing: 96,
         addExpenseAmountFontSize: 56,
-        addExpenseCurrencyChipRadius: 8,
+        addExpenseCurrencyChipRadius: 999,
+        addExpenseAmountFieldWidth: 280,
+        addExpenseCardGap: 14,
+        addExpenseSplitCardGap: 12,
+        addExpenseReceiptTileHeight: 128,
+        addExpenseModalCornerRadius: 24,
+        addExpenseModalOptionRadius: 14,
       ),
     ],
     textTheme: GoogleFonts.interTextTheme(baseTextTheme).copyWith(
