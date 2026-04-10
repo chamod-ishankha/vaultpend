@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/widgets/obsidian_app_bar.dart';
 import '../../core/widgets/obsidian_button.dart';
 import '../../core/widgets/obsidian_card.dart';
-import '../../core/widgets/obsidian_text_field.dart';
 import '../auth/auth_providers.dart';
 import '../auth/auth_session.dart';
 import '../auth/login_screen.dart';
@@ -77,10 +76,20 @@ class _ProfileUpdateScreenState extends ConsumerState<ProfileUpdateScreen> {
     if (_hydrated) {
       return;
     }
-    _hydrated = true;
-    _emailController.text = session.user.email;
-    _displayNameController.text = session.user.displayName;
-    _selectedCurrency = session.user.preferredCurrency;
+    if (!mounted) {
+      _hydrated = true;
+      _emailController.text = session.user.email;
+      _displayNameController.text = session.user.displayName;
+      _selectedCurrency = session.user.preferredCurrency;
+      return;
+    }
+
+    setState(() {
+      _hydrated = true;
+      _emailController.text = session.user.email;
+      _displayNameController.text = session.user.displayName;
+      _selectedCurrency = session.user.preferredCurrency;
+    });
   }
 
   bool get _passwordChangeRequested {
@@ -257,100 +266,170 @@ class _ProfileUpdateScreenState extends ConsumerState<ProfileUpdateScreen> {
     });
   }
 
+  String _compactAccountId(String id) {
+    if (id.length <= 14) {
+      return id;
+    }
+    return '${id.substring(0, 8)}...${id.substring(id.length - 4)}';
+  }
+
+  void _showEditHint() {
+    setState(() {
+      _statusMessage = 'Use the editable fields below to update your profile.';
+      _errorMessage = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final authState = ref.watch(authControllerProvider);
     final session = authState.value;
+    final user = session?.user;
     final busy = _saving || authState.isLoading;
     final signedIn = session != null;
 
     return Scaffold(
-      appBar: const ObsidianAppBar(title: Text('Account Profile')),
+      appBar: ObsidianAppBar(
+        centerTitle: false,
+        title: Text(
+          'Account Profile',
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.2,
+          ),
+        ),
+        actions: [
+          Container(
+            width: 32,
+            height: 32,
+            margin: const EdgeInsets.only(right: 16),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: scheme.primary.withValues(alpha: 0.2)),
+              color: scheme.surfaceContainerLow,
+            ),
+            child: Icon(Icons.person, size: 18, color: scheme.primary),
+          ),
+        ],
+      ),
       body: authState.isLoading && session == null
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
               children: [
-                Text(
-                  'Profile details',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
+                _SectionHeader(label: 'PROFILE DETAILS', color: scheme.primary),
                 const SizedBox(height: 8),
                 ObsidianCard(
                   level: ObsidianCardTonalLevel.low,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 56,
-                            height: 56,
-                            decoration: BoxDecoration(
-                              color: scheme.primary.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(16),
+                      Center(
+                        child: Stack(
+                          children: [
+                            Container(
+                              width: 88,
+                              height: 88,
+                              decoration: BoxDecoration(
+                                color: scheme.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(22),
+                                border: Border.all(
+                                  color: scheme.outlineVariant,
+                                ),
+                              ),
+                              child: Icon(
+                                Icons.person_rounded,
+                                size: 44,
+                                color: scheme.primary,
+                              ),
                             ),
-                            child: Icon(
-                              Icons.person_rounded,
-                              size: 28,
-                              color: scheme.primary,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  signedIn
-                                      ? session.user.displayName
-                                      : 'Guest mode',
-                                  style: theme.textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w700,
+                            Positioned(
+                              right: 0,
+                              bottom: 0,
+                              child: Material(
+                                color: scheme.primary,
+                                shape: const CircleBorder(),
+                                child: InkWell(
+                                  customBorder: const CircleBorder(),
+                                  onTap: signedIn && !busy
+                                      ? _showEditHint
+                                      : null,
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(6),
+                                    child: Icon(
+                                      Icons.edit_rounded,
+                                      size: 14,
+                                      color: scheme.onPrimary,
+                                    ),
                                   ),
                                 ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  signedIn
-                                      ? session.user.email
-                                      : 'Sign in to edit your account profile.',
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: scheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ],
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                      if (signedIn) ...[
-                        const SizedBox(height: 20),
-                        _InfoField(label: 'Account ID', value: session.user.id),
-                        const SizedBox(height: 12),
-                        _InfoField(
-                          label: 'Preferred currency',
-                          value: session.user.preferredCurrency,
+                      const SizedBox(height: 12),
+                      Center(
+                        child: Text(
+                          user?.displayName ?? 'Guest mode',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Center(
+                        child: Text(
+                          user?.email ??
+                              'Sign in to edit your account profile.',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                      if (user != null) ...[
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _ProfileDetailCorner(
+                                label: 'ACCOUNT ID',
+                                value: _compactAccountId(user.id),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _ProfileDetailCorner(
+                                label: 'CURRENCY',
+                                value: user.preferredCurrency,
+                                alignEnd: true,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                       if (_statusMessage != null) ...[
                         const SizedBox(height: 16),
                         _MessageBanner(
                           message: _statusMessage!,
-                          color: scheme.secondaryContainer.withOpacity(0.5),
+                          color: scheme.secondaryContainer.withValues(
+                            alpha: 0.5,
+                          ),
                           foreground: scheme.onSecondaryContainer,
+                          icon: Icons.check_circle_outline_rounded,
                         ),
                       ],
                       if (_errorMessage != null) ...[
                         const SizedBox(height: 16),
                         _MessageBanner(
                           message: _errorMessage!,
-                          color: scheme.errorContainer.withOpacity(0.5),
+                          color: scheme.errorContainer.withValues(alpha: 0.5),
                           foreground: scheme.onErrorContainer,
+                          icon: Icons.error_outline_rounded,
                         ),
                       ],
                       if (!signedIn) ...[
@@ -374,185 +453,242 @@ class _ProfileUpdateScreenState extends ConsumerState<ProfileUpdateScreen> {
                   ),
                 ),
                 if (signedIn) ...[
-                  Text(
-                    'Editable fields',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ObsidianCard(
-                    level: ObsidianCardTonalLevel.low,
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          ObsidianTextField(
-                            controller: _emailController,
-                            label: 'Email address',
-                            keyboardType: TextInputType.emailAddress,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Email updates are disabled. Use sign-in verification flows if account email needs to change.',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          ObsidianTextField(
-                            controller: _displayNameController,
-                            label: 'Display name',
-                            onChanged: busy ? null : (_) {},
-                            validator: _validateDisplayName,
-                          ),
-                          const SizedBox(height: 16),
-                          DropdownButtonFormField<String>(
-                            initialValue: _selectedCurrency,
-                            decoration: InputDecoration(
-                              labelText: 'Preferred currency',
-                              labelStyle: theme.textTheme.bodyMedium?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(
-                                  color: scheme.outlineVariant,
-                                ),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(
-                                  color: scheme.outlineVariant,
-                                ),
-                              ),
-                            ),
-                            items: _currencies
-                                .map(
-                                  (currency) => DropdownMenuItem(
-                                    value: currency,
-                                    child: Text(currency),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: busy
-                                ? null
-                                : (value) {
-                                    if (value == null) {
-                                      return;
-                                    }
-                                    setState(() {
-                                      _selectedCurrency = value;
-                                    });
-                                  },
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'This currency is used as the base for new amounts and account-wide display.',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          Text(
-                            'Change password',
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: scheme.onSurfaceVariant,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          ObsidianTextField(
-                            controller: _currentPasswordController,
-                            label: 'Current password',
-                            obscureText: _obscureCurrentPassword,
-                            validator: _validateCurrentPassword,
-                            suffixIcon: IconButton(
-                              onPressed: () {
-                                setState(() {
-                                  _obscureCurrentPassword =
-                                      !_obscureCurrentPassword;
-                                });
-                              },
-                              icon: Icon(
-                                _obscureCurrentPassword
-                                    ? Icons.visibility_off_rounded
-                                    : Icons.visibility_rounded,
-                                color: scheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          ObsidianTextField(
-                            controller: _newPasswordController,
-                            label: 'New password',
-                            obscureText: _obscureNewPassword,
-                            validator: _validateNewPassword,
-                            suffixIcon: IconButton(
-                              onPressed: () {
-                                setState(() {
-                                  _obscureNewPassword = !_obscureNewPassword;
-                                });
-                              },
-                              icon: Icon(
-                                _obscureNewPassword
-                                    ? Icons.visibility_off_rounded
-                                    : Icons.visibility_rounded,
-                                color: scheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          ObsidianTextField(
-                            controller: _confirmPasswordController,
-                            label: 'Confirm new password',
-                            obscureText: _obscureConfirmPassword,
-                            validator: _validateConfirmPassword,
-                            suffixIcon: IconButton(
-                              onPressed: () {
-                                setState(() {
-                                  _obscureConfirmPassword =
-                                      !_obscureConfirmPassword;
-                                });
-                              },
-                              icon: Icon(
-                                _obscureConfirmPassword
-                                    ? Icons.visibility_off_rounded
-                                    : Icons.visibility_rounded,
-                                color: scheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'Leave password fields empty if you do not want to change it.',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          Row(
+                  const SizedBox(height: 20),
+                  Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _SectionHeader(
+                          label: 'EDITABLE FIELDS',
+                          color: scheme.primary,
+                        ),
+                        const SizedBox(height: 8),
+                        ObsidianCard(
+                          level: ObsidianCardTonalLevel.low,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(
-                                child: ObsidianButton(
-                                  onPressed: busy ? null : _save,
-                                  text: 'Save Changes',
-                                  isLoading: busy,
-                                  style: ObsidianButtonStyle.primary,
+                              _InputHeader(
+                                label: 'EMAIL ADDRESS',
+                                color: scheme.primary,
+                              ),
+                              const SizedBox(height: 8),
+                              _ProfileInputField(
+                                controller: _emailController,
+                                hintText: 'Email address',
+                                readOnly: true,
+                                enabled: false,
+                                prefixIcon: Icons.lock_outline_rounded,
+                                iconColor: scheme.outline,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Email cannot be changed for security purpose.',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: scheme.onSurfaceVariant.withValues(
+                                    alpha: 0.75,
+                                  ),
+                                  fontStyle: FontStyle.italic,
                                 ),
                               ),
-                              const SizedBox(width: 12),
-                              ObsidianButton(
-                                onPressed: busy ? null : _reset,
-                                text: 'Reset',
-                                style: ObsidianButtonStyle.tertiary,
+                              const SizedBox(height: 16),
+                              _InputHeader(
+                                label: 'DISPLAY NAME',
+                                color: scheme.primary,
+                              ),
+                              const SizedBox(height: 8),
+                              _ProfileInputField(
+                                controller: _displayNameController,
+                                hintText: 'Name',
+                                prefixIcon: Icons.person_rounded,
+                                iconColor: scheme.primary,
+                                onChanged: busy ? null : (_) {},
+                                validator: _validateDisplayName,
+                              ),
+                              const SizedBox(height: 16),
+                              _InputHeader(
+                                label: 'PREFERRED CURRENCY',
+                                color: scheme.primary,
+                              ),
+                              const SizedBox(height: 8),
+                              DropdownButtonFormField<String>(
+                                initialValue: _selectedCurrency,
+                                decoration: InputDecoration(
+                                  hintText: 'Select currency',
+                                  prefixIcon: Icon(
+                                    Icons.currency_exchange_rounded,
+                                    color: scheme.primary,
+                                    size: 20,
+                                  ),
+                                  hintStyle: theme.textTheme.bodyLarge
+                                      ?.copyWith(
+                                        color: scheme.onSurfaceVariant
+                                            .withValues(alpha: 0.6),
+                                      ),
+                                  filled: true,
+                                  fillColor: scheme.surfaceContainerHighest,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 14,
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                      color: scheme.outlineVariant,
+                                    ),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                      color: scheme.outlineVariant,
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                      color: scheme.primary,
+                                    ),
+                                  ),
+                                ),
+                                items: _currencies
+                                    .map(
+                                      (currency) => DropdownMenuItem(
+                                        value: currency,
+                                        child: Text(currency),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: busy
+                                    ? null
+                                    : (value) {
+                                        if (value == null) {
+                                          return;
+                                        }
+                                        setState(() {
+                                          _selectedCurrency = value;
+                                        });
+                                      },
                               ),
                             ],
                           ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(height: 20),
+                        _SectionHeader(
+                          label: 'SECURITY SETTINGS',
+                          color: scheme.error,
+                        ),
+                        const SizedBox(height: 8),
+                        ObsidianCard(
+                          level: ObsidianCardTonalLevel.low,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'CHANGE PASSWORD',
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: scheme.error,
+                                  letterSpacing: 0.6,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              _ProfileInputField(
+                                controller: _currentPasswordController,
+                                hintText: 'Current Password',
+                                obscureText: _obscureCurrentPassword,
+                                validator: _validateCurrentPassword,
+                                prefixIcon: Icons.lock_outline_rounded,
+                                iconColor: scheme.error,
+                                suffixIcon: IconButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      _obscureCurrentPassword =
+                                          !_obscureCurrentPassword;
+                                    });
+                                  },
+                                  icon: Icon(
+                                    _obscureCurrentPassword
+                                        ? Icons.visibility_off_rounded
+                                        : Icons.visibility_rounded,
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              _ProfileInputField(
+                                controller: _newPasswordController,
+                                hintText: 'New Password',
+                                obscureText: _obscureNewPassword,
+                                validator: _validateNewPassword,
+                                prefixIcon: Icons.lock_outline_rounded,
+                                iconColor: scheme.error,
+                                suffixIcon: IconButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      _obscureNewPassword =
+                                          !_obscureNewPassword;
+                                    });
+                                  },
+                                  icon: Icon(
+                                    _obscureNewPassword
+                                        ? Icons.visibility_off_rounded
+                                        : Icons.visibility_rounded,
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              _ProfileInputField(
+                                controller: _confirmPasswordController,
+                                hintText: 'Confirm New Password',
+                                obscureText: _obscureConfirmPassword,
+                                validator: _validateConfirmPassword,
+                                prefixIcon: Icons.lock_outline_rounded,
+                                iconColor: scheme.error,
+                                suffixIcon: IconButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      _obscureConfirmPassword =
+                                          !_obscureConfirmPassword;
+                                    });
+                                  },
+                                  icon: Icon(
+                                    _obscureConfirmPassword
+                                        ? Icons.visibility_off_rounded
+                                        : Icons.visibility_rounded,
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        ObsidianButton(
+                          onPressed: busy ? null : _save,
+                          text: 'SAVE PROFILE',
+                          isLoading: busy,
+                          style: ObsidianButtonStyle.primary,
+                          width: double.infinity,
+                        ),
+                        const SizedBox(height: 8),
+                        Center(
+                          child: TextButton(
+                            onPressed: busy ? null : _reset,
+                            child: Text(
+                              'RESET ALL CHANGES',
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: scheme.onSurfaceVariant.withValues(
+                                  alpha: 0.7,
+                                ),
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -562,35 +698,169 @@ class _ProfileUpdateScreenState extends ConsumerState<ProfileUpdateScreen> {
   }
 }
 
-class _InfoField extends StatelessWidget {
-  const _InfoField({required this.label, required this.value});
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Text(
+      label,
+      style: theme.textTheme.labelLarge?.copyWith(
+        letterSpacing: 0.9,
+        fontWeight: FontWeight.w700,
+        color: color,
+      ),
+    );
+  }
+}
+
+class _InputHeader extends StatelessWidget {
+  const _InputHeader({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Text(
+      label,
+      style: theme.textTheme.labelMedium?.copyWith(
+        color: color,
+        letterSpacing: 0.7,
+        fontWeight: FontWeight.w700,
+      ),
+    );
+  }
+}
+
+class _ProfileDetailCorner extends StatelessWidget {
+  const _ProfileDetailCorner({
+    required this.label,
+    required this.value,
+    this.alignEnd = false,
+  });
 
   final String label;
   final String value;
+  final bool alignEnd;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: theme.textTheme.labelMedium?.copyWith(
-            color: scheme.onSurfaceVariant,
-            fontWeight: FontWeight.w600,
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: alignEnd
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: scheme.primary,
+              letterSpacing: 0.7,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w500,
+          const SizedBox(height: 3),
+          Text(
+            value,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurface,
+              fontWeight: FontWeight.w600,
+            ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileInputField extends StatelessWidget {
+  const _ProfileInputField({
+    required this.controller,
+    required this.hintText,
+    this.prefixIcon,
+    this.iconColor,
+    this.validator,
+    this.onChanged,
+    this.suffixIcon,
+    this.obscureText = false,
+    this.enabled = true,
+    this.readOnly = false,
+  });
+
+  final TextEditingController controller;
+  final String hintText;
+  final IconData? prefixIcon;
+  final Color? iconColor;
+  final String? Function(String?)? validator;
+  final ValueChanged<String>? onChanged;
+  final Widget? suffixIcon;
+  final bool obscureText;
+  final bool enabled;
+  final bool readOnly;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: enabled
+              ? scheme.outlineVariant
+              : scheme.outlineVariant.withValues(alpha: 0.4),
         ),
-      ],
+      ),
+      child: TextFormField(
+        controller: controller,
+        enabled: enabled,
+        readOnly: readOnly,
+        obscureText: obscureText,
+        validator: validator,
+        onChanged: onChanged,
+        style: theme.textTheme.bodyLarge?.copyWith(
+          color: enabled
+              ? scheme.onSurface
+              : scheme.onSurfaceVariant.withValues(alpha: 0.8),
+          fontWeight: FontWeight.w500,
+        ),
+        decoration: InputDecoration(
+          hintText: hintText,
+          hintStyle: theme.textTheme.bodyLarge?.copyWith(
+            color: scheme.onSurfaceVariant.withValues(alpha: 0.55),
+          ),
+          prefixIcon: prefixIcon == null
+              ? null
+              : Icon(prefixIcon, size: 20, color: iconColor ?? scheme.primary),
+          suffixIcon: suffixIcon,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 14,
+          ),
+          errorStyle: const TextStyle(height: 0, fontSize: 0),
+        ),
+      ),
     );
   }
 }
@@ -600,11 +870,13 @@ class _MessageBanner extends StatelessWidget {
     required this.message,
     required this.color,
     required this.foreground,
+    required this.icon,
   });
 
   final String message;
   final Color color;
   final Color foreground;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
@@ -617,7 +889,7 @@ class _MessageBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.info_outline_rounded, size: 20, color: foreground),
+          Icon(icon, size: 20, color: foreground),
           const SizedBox(width: 12),
           Expanded(
             child: Text(

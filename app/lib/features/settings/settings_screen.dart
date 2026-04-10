@@ -33,7 +33,29 @@ class SettingsScreen extends ConsumerWidget {
         : 'Sign in to edit email and profile preferences';
 
     return Scaffold(
-      appBar: const ObsidianAppBar(title: Text('Settings')),
+      appBar: ObsidianAppBar(
+        centerTitle: false,
+        title: Text(
+          'Settings',
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.2,
+          ),
+        ),
+        actions: [
+          Container(
+            width: 32,
+            height: 32,
+            margin: const EdgeInsets.only(right: 16),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: scheme.primary.withValues(alpha: 0.2)),
+              color: scheme.surfaceContainerLow,
+            ),
+            child: Icon(Icons.person, size: 18, color: scheme.primary),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
         children: [
@@ -50,9 +72,7 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () {
               if (!signedIn) {
                 Navigator.of(context).push<void>(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const LoginScreen(),
-                  ),
+                  MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
                 );
                 return;
               }
@@ -94,7 +114,10 @@ class SettingsScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
-                Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: scheme.onSurfaceVariant,
+                ),
               ],
             ),
           ),
@@ -120,13 +143,17 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                   title: Text(
                     'Renewal reminders',
-                    style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   subtitle: Text(
                     remindersEnabled
                         ? 'Subscription and recurring reminders are on'
                         : 'All renewal reminders are off',
-                    style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                   value: remindersEnabled,
                   onChanged: (value) {
@@ -140,16 +167,24 @@ class SettingsScreen extends ConsumerWidget {
                   child: Divider(height: 1, thickness: 0.5),
                 ),
                 SwitchListTile(
-                  secondary: Icon(Icons.subscriptions_rounded, size: 22, color: scheme.onSurfaceVariant),
+                  secondary: Icon(
+                    Icons.subscriptions_rounded,
+                    size: 22,
+                    color: scheme.onSurfaceVariant,
+                  ),
                   title: Text(
                     'Subscription reminders',
-                    style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   subtitle: Text(
                     remindersEnabled
                         ? '24h/48h reminders for subscription renewals'
                         : 'Disabled while main switch is off',
-                    style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                   value: subscriptionRemindersEnabled,
                   onChanged: (value) {
@@ -166,16 +201,24 @@ class SettingsScreen extends ConsumerWidget {
                   child: Divider(height: 1, thickness: 0.5),
                 ),
                 SwitchListTile(
-                  secondary: Icon(Icons.repeat_rounded, size: 22, color: scheme.onSurfaceVariant),
+                  secondary: Icon(
+                    Icons.repeat_rounded,
+                    size: 22,
+                    color: scheme.onSurfaceVariant,
+                  ),
                   title: Text(
                     'Recurring expense reminders',
-                    style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   subtitle: Text(
                     remindersEnabled
                         ? '24h/48h reminders for recurring expenses'
                         : 'Disabled while main switch is off',
-                    style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                   value: recurringExpenseRemindersEnabled,
                   onChanged: (value) {
@@ -204,16 +247,27 @@ class SettingsScreen extends ConsumerWidget {
             child: Column(
               children: [
                 ListTile(
-                  leading: Icon(Icons.bug_report_rounded, color: scheme.onSurfaceVariant),
+                  leading: Icon(
+                    Icons.bug_report_rounded,
+                    color: scheme.onSurfaceVariant,
+                  ),
                   title: Text(
                     'Reminder diagnostics',
-                    style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   subtitle: Text(
                     'View pending reminder jobs',
-                    style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
-                  trailing: Icon(Icons.chevron_right_rounded, size: 20, color: scheme.onSurfaceVariant),
+                  trailing: Icon(
+                    Icons.chevron_right_rounded,
+                    size: 20,
+                    color: scheme.onSurfaceVariant,
+                  ),
                   onTap: () {
                     Navigator.of(context).push<void>(
                       MaterialPageRoute<void>(
@@ -227,16 +281,27 @@ class SettingsScreen extends ConsumerWidget {
                   child: Divider(height: 1, thickness: 0.5),
                 ),
                 ListTile(
-                  leading: Icon(Icons.sync_problem_rounded, color: scheme.onSurfaceVariant),
+                  leading: Icon(
+                    Icons.sync_problem_rounded,
+                    color: scheme.onSurfaceVariant,
+                  ),
                   title: Text(
                     'Sync incidents',
-                    style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   subtitle: Text(
                     'Open incident history',
-                    style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
-                  trailing: Icon(Icons.chevron_right_rounded, size: 20, color: scheme.onSurfaceVariant),
+                  trailing: Icon(
+                    Icons.chevron_right_rounded,
+                    size: 20,
+                    color: scheme.onSurfaceVariant,
+                  ),
                   onTap: () {
                     Navigator.of(context).push<void>(
                       MaterialPageRoute<void>(
@@ -250,16 +315,27 @@ class SettingsScreen extends ConsumerWidget {
                   child: Divider(height: 1, thickness: 0.5),
                 ),
                 ListTile(
-                  leading: Icon(Icons.history_rounded, color: scheme.onSurfaceVariant),
+                  leading: Icon(
+                    Icons.history_rounded,
+                    color: scheme.onSurfaceVariant,
+                  ),
                   title: Text(
                     'Activity log',
-                    style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   subtitle: Text(
                     'See your recent actions',
-                    style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
-                  trailing: Icon(Icons.chevron_right_rounded, size: 20, color: scheme.onSurfaceVariant),
+                  trailing: Icon(
+                    Icons.chevron_right_rounded,
+                    size: 20,
+                    color: scheme.onSurfaceVariant,
+                  ),
                   onTap: () {
                     Navigator.of(context).push<void>(
                       MaterialPageRoute<void>(

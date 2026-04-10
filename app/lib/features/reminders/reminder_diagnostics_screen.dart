@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -31,7 +29,7 @@ class _ReminderDiagnosticsScreenState
   DateTime? _lastCheckedAt;
   Map<int, Expense> _expenseById = {};
   Map<int, Subscription> _subscriptionById = {};
-  
+
   int _expectedTotal = 0;
   int _pendingTotal = 0;
 
@@ -39,18 +37,22 @@ class _ReminderDiagnosticsScreenState
   void initState() {
     super.initState();
     _pendingFuture = _loadPending();
-    _pendingFuture = _loadPending();
   }
-
 
   Future<List<PendingNotificationRequest>> _loadPending() async {
     try {
       await _service.initialize();
       final remindersEnabled = ref.read(remindersEnabledProvider);
-      final subscriptionsEnabled = ref.read(subscriptionRemindersEnabledProvider);
-      final recurringEnabled = ref.read(recurringExpenseRemindersEnabledProvider);
-      
-      final subscriptions = await ref.read(subscriptionRepositoryProvider).getAll();
+      final subscriptionsEnabled = ref.read(
+        subscriptionRemindersEnabledProvider,
+      );
+      final recurringEnabled = ref.read(
+        recurringExpenseRemindersEnabledProvider,
+      );
+
+      final subscriptions = await ref
+          .read(subscriptionRepositoryProvider)
+          .getAll();
       final expenses = await ref.read(expenseRepositoryProvider).getAll();
 
       if (!remindersEnabled) {
@@ -65,13 +67,15 @@ class _ReminderDiagnosticsScreenState
       }
 
       final requests = await _service.getManagedPendingReminders();
-      
+
       if (mounted) {
         setState(() {
           _expenseById = {for (final e in expenses) e.id: e};
           _subscriptionById = {for (final s in subscriptions) s.id: s};
           _pendingTotal = requests.length;
-          _expectedTotal = subscriptions.length + expenses.where((e) => e.isRecurring).length;
+          _expectedTotal =
+              subscriptions.length +
+              expenses.where((e) => e.isRecurring).length;
           _lastCheckedAt = DateTime.now();
         });
       }
@@ -98,16 +102,24 @@ class _ReminderDiagnosticsScreenState
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final lastSyncStr = _lastCheckedAt != null 
-        ? formatTimeRemainingLabel(_lastCheckedAt!).replaceAll('In ', '').replaceAll('ago', 'ago')
-        : 'Never';
-
-    final isHealthy = _pendingTotal >= _expectedTotal;
+    final isHealthy = _expectedTotal == 0
+        ? _pendingTotal == 0
+        : _pendingTotal >= _expectedTotal;
+    final efficiency = _expectedTotal == 0
+        ? (_pendingTotal == 0 ? 100 : 0)
+        : ((_pendingTotal / _expectedTotal).clamp(0.0, 1.0) * 100).round();
 
     return Scaffold(
       backgroundColor: scheme.surface,
       appBar: ObsidianAppBar(
-        title: const Text('Reminder System'),
+        centerTitle: false,
+        title: Text(
+          'Reminder Diagnostics',
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.2,
+          ),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
@@ -122,61 +134,112 @@ class _ReminderDiagnosticsScreenState
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              // Status Cards
-              Row(
-                children: [
-                  Expanded(
-                    child: _StatusHeroCard(
-                      title: 'HEALTH',
-                      status: isHealthy ? 'EXCELLENT' : 'WARNING',
-                      description: isHealthy ? 'System is operational.' : 'Reminder mismatch.',
-                      color: isHealthy ? Colors.greenAccent : Colors.orangeAccent,
-                      isHighTonal: true,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _StatusHeroCard(
-                      title: 'SYNC',
-                      status: 'HEALTHY',
-                      description: 'Last sync $lastSyncStr',
-                      color: scheme.primary,
-                      isHighTonal: false,
-                    ),
-                  ),
-                ],
+              _DiagnosticsOverviewCard(
+                efficiency: efficiency,
+                healthy: isHealthy,
+                lastSync: _lastCheckedAt,
               ),
-              
-              const SizedBox(height: 32),
-              _buildSectionHeader(theme, scheme, 'ACTIVE TRIGGERS'),
-              const SizedBox(height: 16),
-              
+              const SizedBox(height: 28),
               FutureBuilder<List<PendingNotificationRequest>>(
                 future: _pendingFuture,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: Center(child: CircularProgressIndicator()),
+                    );
                   }
+
                   final requests = snapshot.data ?? [];
-                  if (requests.isEmpty) {
-                    return _buildEmptyState(theme, scheme, 'No active triggers');
+                  final entries = requests.map((request) {
+                    final descriptor = _describePendingReminder(request);
+                    return _ReminderLogEntry(
+                      request: request,
+                      descriptor: descriptor,
+                      triggerDate: _computeReminderTrigger(descriptor),
+                    );
+                  }).toList();
+
+                  final subEntries = entries
+                      .where(
+                        (entry) =>
+                            entry.descriptor?.kind == 'vaultspend-renewal',
+                      )
+                      .toList();
+                  final recurringEntries = entries
+                      .where(
+                        (entry) =>
+                            entry.descriptor?.kind ==
+                            'vaultspend-recurring-expense',
+                      )
+                      .toList();
+
+                  DateTime? earliest(List<_ReminderLogEntry> list) {
+                    final triggers =
+                        list
+                            .map((entry) => entry.triggerDate)
+                            .whereType<DateTime>()
+                            .toList()
+                          ..sort();
+                    return triggers.isEmpty ? null : triggers.first;
                   }
+
                   return Column(
-                    children: requests.map((r) => _TriggerItem(
-                      request: r,
-                      descriptor: _describePendingReminder(r),
-                      triggerDate: _computeReminderTrigger(_describePendingReminder(r)),
-                    )).toList(),
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildSectionHeader(theme, scheme, 'ACTIVE QUEUES'),
+                      const SizedBox(height: 12),
+                      _ActiveQueuesCard(
+                        totalJobs: entries.length,
+                        subscriptionCount: subEntries.length,
+                        recurringCount: recurringEntries.length,
+                        nextSubscriptionTrigger: earliest(subEntries),
+                        nextRecurringTrigger: earliest(recurringEntries),
+                      ),
+                      const SizedBox(height: 28),
+                      _buildSectionHeader(theme, scheme, 'PRECISION LOG'),
+                      const SizedBox(height: 12),
+                      if (entries.isEmpty)
+                        _buildEmptyState(
+                          theme,
+                          scheme,
+                          'No active diagnostic entries',
+                        )
+                      else
+                        Column(
+                          children: entries
+                              .map((entry) => _TriggerItem(entry: entry))
+                              .toList(),
+                        ),
+                      const SizedBox(height: 16),
+                      Center(
+                        child: TextButton(
+                          onPressed: _refresh,
+                          child: Text(
+                            'REFRESH LOG STACK',
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: scheme.primary,
+                              letterSpacing: 0.7,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Center(
+                        child: Text(
+                          'VaultSpend Diagnostic Interface v2.4.0',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: scheme.outline,
+                            letterSpacing: 0.4,
+                          ),
+                        ),
+                      ),
+                    ],
                   );
                 },
               ),
-              
-              const SizedBox(height: 32),
-              _buildSectionHeader(theme, scheme, 'SYSTEM LOGS'),
-              const SizedBox(height: 16),
-              _buildSystemLogs(theme, scheme),
-              
-              const SizedBox(height: 100),
+              const SizedBox(height: 64),
             ],
           ),
         ),
@@ -184,13 +247,17 @@ class _ReminderDiagnosticsScreenState
     );
   }
 
-  Widget _buildSectionHeader(ThemeData theme, ColorScheme scheme, String title) {
+  Widget _buildSectionHeader(
+    ThemeData theme,
+    ColorScheme scheme,
+    String title,
+  ) {
     return Text(
       title,
       style: theme.textTheme.labelSmall?.copyWith(
-        color: scheme.outline,
+        color: scheme.primary,
         fontWeight: FontWeight.w800,
-        letterSpacing: 1.5,
+        letterSpacing: 1.4,
       ),
     );
   }
@@ -202,39 +269,17 @@ class _ReminderDiagnosticsScreenState
       child: Center(
         child: Text(
           message,
-          style: theme.textTheme.bodyMedium?.copyWith(color: scheme.outline),
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: scheme.onSurfaceVariant,
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildSystemLogs(ThemeData theme, ColorScheme scheme) {
-    final logs = [
-      {'event': 'Background Sync', 'time': '2m ago', 'status': 'SUCCESS'},
-      {'event': 'Reminder Fired', 'time': '1h ago', 'status': 'SUCCESS'},
-      {'event': 'Service Init', 'time': '4h ago', 'status': 'INITIALIZED'},
-    ];
-
-    return ObsidianCard(
-      level: ObsidianCardTonalLevel.low,
-      padding: EdgeInsets.zero,
-      child: Column(
-        children: logs.map((log) => Container(
-          decoration: BoxDecoration(
-            border: log != logs.last ? Border(bottom: BorderSide(color: scheme.outlineVariant.withOpacity(0.1))) : null,
-          ),
-          child: ListTile(
-            dense: true,
-            title: Text(log['event']!, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
-            trailing: Text(log['time']!, style: theme.textTheme.labelSmall?.copyWith(color: scheme.outline)),
-            leading: Icon(Icons.circle, size: 8, color: log['status'] == 'SUCCESS' ? Colors.greenAccent : scheme.primary),
-          ),
-        )).toList(),
-      ),
-    );
-  }
-
-  _PendingReminderDescriptor? _describePendingReminder(PendingNotificationRequest request) {
+  _PendingReminderDescriptor? _describePendingReminder(
+    PendingNotificationRequest request,
+  ) {
     final payload = request.payload;
     if (payload == null || payload.isEmpty) return null;
     final parts = payload.split(':');
@@ -243,7 +288,9 @@ class _ReminderDiagnosticsScreenState
     final prefix = parts[0];
     final entityId = int.tryParse(parts[1]);
     final bucketToken = parts[2].toUpperCase();
-    final bucketHours = bucketToken == 'DUE' ? 0 : int.tryParse(bucketToken.replaceAll('H', ''));
+    final bucketHours = bucketToken == 'DUE'
+        ? 0
+        : int.tryParse(bucketToken.replaceAll('H', ''));
 
     String title;
     if (prefix == 'vaultspend-recurring-expense') {
@@ -275,65 +322,98 @@ class _ReminderDiagnosticsScreenState
     } else if (descriptor.kind == 'vaultspend-recurring-expense') {
       final expense = _expenseById[descriptor.entityId];
       if (expense != null) {
-        dueDate = ReminderPlanning.nextMonthlyOccurrence(expense.occurredAt, DateTime.now());
+        dueDate = ReminderPlanning.nextMonthlyOccurrence(
+          expense.occurredAt,
+          DateTime.now(),
+        );
       }
     }
     if (dueDate == null) return null;
     if (descriptor.bucketToken == 'DUE') return dueDate;
-    return descriptor.bucketHours == null ? null : dueDate.subtract(Duration(hours: descriptor.bucketHours!));
+    return descriptor.bucketHours == null
+        ? null
+        : dueDate.subtract(Duration(hours: descriptor.bucketHours!));
   }
 }
 
-class _StatusHeroCard extends StatelessWidget {
-  final String title;
-  final String status;
-  final String description;
-  final Color color;
-  final bool isHighTonal;
-
-  const _StatusHeroCard({
-    required this.title,
-    required this.status,
-    required this.description,
-    required this.color,
-    required this.isHighTonal,
+class _DiagnosticsOverviewCard extends StatelessWidget {
+  const _DiagnosticsOverviewCard({
+    required this.efficiency,
+    required this.healthy,
+    required this.lastSync,
   });
+
+  final int efficiency;
+  final bool healthy;
+  final DateTime? lastSync;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
+    final sync = lastSync == null
+        ? 'Never'
+        : formatTimeRemainingLabel(
+            lastSync!,
+          ).replaceFirst('In ', '').replaceFirst('in ', '');
+
     return ObsidianCard(
-      level: isHighTonal ? ObsidianCardTonalLevel.high : ObsidianCardTonalLevel.low,
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      level: ObsidianCardTonalLevel.high,
+      child: Row(
         children: [
-          Text(
-            title,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: isHighTonal ? color : scheme.outline,
-              fontWeight: FontWeight.w800,
-              fontSize: 9,
-              letterSpacing: 1,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$efficiency%',
+                  style: theme.textTheme.displaySmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: scheme.primary,
+                  ),
+                ),
+                Text(
+                  'Efficiency',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  healthy ? 'SYSTEM OPTIMIZED' : 'ATTENTION REQUIRED',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: healthy ? scheme.primary : scheme.tertiary,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Last full sync: $sync',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 12),
-          Text(
-            status,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w900,
-              color: isHighTonal ? Colors.white : scheme.onSurface,
+          const SizedBox(width: 12),
+          Container(
+            width: 58,
+            height: 58,
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: scheme.outlineVariant),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            description,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: isHighTonal ? Colors.white.withOpacity(0.7) : scheme.outline,
-              fontSize: 8,
-              fontWeight: FontWeight.w600,
+            child: Icon(
+              healthy
+                  ? Icons.check_circle_outline_rounded
+                  : Icons.warning_amber_rounded,
+              color: healthy ? scheme.primary : scheme.tertiary,
+              size: 28,
             ),
           ),
         ],
@@ -342,57 +422,272 @@ class _StatusHeroCard extends StatelessWidget {
   }
 }
 
-class _TriggerItem extends StatelessWidget {
-  final PendingNotificationRequest request;
-  final _PendingReminderDescriptor? descriptor;
-  final DateTime? triggerDate;
-
-  const _TriggerItem({
-    required this.request,
-    this.descriptor,
-    this.triggerDate,
+class _ActiveQueuesCard extends StatelessWidget {
+  const _ActiveQueuesCard({
+    required this.totalJobs,
+    required this.subscriptionCount,
+    required this.recurringCount,
+    required this.nextSubscriptionTrigger,
+    required this.nextRecurringTrigger,
   });
+
+  final int totalJobs;
+  final int subscriptionCount;
+  final int recurringCount;
+  final DateTime? nextSubscriptionTrigger;
+  final DateTime? nextRecurringTrigger;
+
+  String _nextLabel(DateTime? trigger) {
+    if (trigger == null) {
+      return '--';
+    }
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(trigger.year, trigger.month, trigger.day);
+    if (day == today) {
+      return 'Today, ${DateFormat('HH:mm').format(trigger)}';
+    }
+    if (day == today.add(const Duration(days: 1))) {
+      return 'Tomorrow, ${DateFormat('HH:mm').format(trigger)}';
+    }
+    return DateFormat('MMM d, HH:mm').format(trigger);
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final timeStr = triggerDate != null ? DateFormat('MMM d, h:mm a').format(triggerDate!) : 'Unknown time';
+
+    return ObsidianCard(
+      level: ObsidianCardTonalLevel.low,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$totalJobs Total Jobs',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'subscriptions',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 14),
+          _QueueLane(
+            icon: Icons.subscriptions_rounded,
+            title: 'Subscription Reminders',
+            subtitle: 'Scheduled Trackers',
+            count: subscriptionCount,
+            nextTrigger: _nextLabel(nextSubscriptionTrigger),
+          ),
+          const SizedBox(height: 10),
+          _QueueLane(
+            icon: Icons.repeat_rounded,
+            title: 'Recurring Expenses',
+            subtitle: 'Fixed Liabilities',
+            count: recurringCount,
+            nextTrigger: _nextLabel(nextRecurringTrigger),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QueueLane extends StatelessWidget {
+  const _QueueLane({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.count,
+    required this.nextTrigger,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final int count;
+  final String nextTrigger;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: scheme.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                count.toString().padLeft(2, '0'),
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              Text(
+                'Next Trigger',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+              Text(
+                nextTrigger,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: scheme.primary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TriggerItem extends StatelessWidget {
+  const _TriggerItem({required this.entry});
+
+  final _ReminderLogEntry entry;
+
+  String _dueLabel(DateTime? triggerDate) {
+    if (triggerDate == null) {
+      return 'Due date unavailable';
+    }
+    final relative = formatTimeRemainingLabel(triggerDate);
+    if (relative.toLowerCase().startsWith('in ')) {
+      return 'Due in ${relative.substring(3)}';
+    }
+    return 'Due ${relative.toLowerCase()}';
+  }
+
+  IconData _kindIcon(_PendingReminderDescriptor? descriptor) {
+    switch (descriptor?.kind) {
+      case 'vaultspend-renewal':
+        return Icons.subscriptions_rounded;
+      case 'vaultspend-recurring-expense':
+        return Icons.payments_rounded;
+      default:
+        return Icons.notifications_active_rounded;
+    }
+  }
+
+  String _kindLabel(_PendingReminderDescriptor? descriptor) {
+    switch (descriptor?.kind) {
+      case 'vaultspend-renewal':
+        return 'subscriptions';
+      case 'vaultspend-recurring-expense':
+        return 'payments';
+      default:
+        return 'reminders';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final triggerDate = entry.triggerDate;
+    final descriptor = entry.descriptor;
+    final timeStr = triggerDate != null
+        ? DateFormat('MMM d, y · HH:mm').format(triggerDate)
+        : 'Unknown time';
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: ObsidianCard(
         level: ObsidianCardTonalLevel.low,
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(14),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: scheme.outlineVariant),
+              ),
+              child: Icon(
+                _kindIcon(descriptor),
+                size: 18,
+                color: scheme.primary,
+              ),
+            ),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Text(
+                    descriptor?.title ?? entry.request.title ?? 'Reminder',
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Scheduled: $timeStr',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   Row(
                     children: [
-                      _StatusPill(label: 'PENDING', color: scheme.primary),
+                      _StatusPill(
+                        label: _dueLabel(triggerDate),
+                        color: scheme.primary,
+                      ),
                       const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          descriptor?.title ?? request.title ?? 'Reminder',
-                          style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                      Text(
+                        _kindLabel(descriptor),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    timeStr,
-                    style: theme.textTheme.labelSmall?.copyWith(color: scheme.outline),
-                  ),
                 ],
               ),
             ),
-            Icon(Icons.chevron_right_rounded, color: scheme.outline.withOpacity(0.5)),
           ],
         ),
       ),
@@ -409,23 +704,35 @@ class _StatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color.withOpacity(0.3)),
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Text(
         label,
         style: TextStyle(
           color: color,
-          fontSize: 8,
-          fontWeight: FontWeight.w900,
-          letterSpacing: 0.5,
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.3,
         ),
       ),
     );
   }
+}
+
+class _ReminderLogEntry {
+  const _ReminderLogEntry({
+    required this.request,
+    required this.descriptor,
+    required this.triggerDate,
+  });
+
+  final PendingNotificationRequest request;
+  final _PendingReminderDescriptor? descriptor;
+  final DateTime? triggerDate;
 }
 
 class _PendingReminderDescriptor {
@@ -447,4 +754,3 @@ class _PendingReminderDescriptor {
   final String title;
   final String summary;
 }
-
