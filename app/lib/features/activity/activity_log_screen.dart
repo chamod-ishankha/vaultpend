@@ -217,75 +217,94 @@ class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () => _load(reset: true),
-        child: ListView(
-          controller: _scrollController,
-          padding: const EdgeInsets.fromLTRB(12, 14, 12, 18),
-          children: [
-            if (_loadingInitial)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 30),
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (_entries.isEmpty)
-              _ActivityLogEmptyState(error: _error)
-            else ...[
-              if (_error != null)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: scheme.errorContainer.withValues(alpha: 0.7),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    'Could not refresh latest entries. Showing available records.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: scheme.onErrorContainer,
+      body: Stack(
+        children: [
+          RefreshIndicator(
+            onRefresh: () => _load(reset: true),
+            child: ListView(
+              controller: _scrollController,
+              padding: const EdgeInsets.fromLTRB(
+                12,
+                14,
+                12,
+                110,
+              ), // extra bottom padding for card
+              children: [
+                if (_loadingInitial)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 30),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (_entries.isEmpty)
+                  _ActivityLogEmptyState(error: _error)
+                else ...[
+                  if (_error != null)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: scheme.errorContainer.withValues(alpha: 0.7),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'Could not refresh latest entries. Showing available records.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onErrorContainer,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-              for (final group in grouped.entries) ...[
-                _TimelineGroupHeader(label: group.key),
-                const SizedBox(height: 10),
-                ...group.value.map(
-                  (entry) => Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: _ActivityTimelineCard(
-                      entry: entry,
-                      stamp: _formatTimelineStamp(entry.timestamp),
+                  for (final group in grouped.entries) ...[
+                    _TimelineGroupHeader(label: group.key),
+                    const SizedBox(height: 10),
+                    ...group.value.map(
+                      (entry) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _ActivityTimelineCard(
+                          entry: entry,
+                          stamp: _formatTimelineStamp(entry.timestamp),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 6),
+                    const SizedBox(height: 6),
+                  ],
+                ],
+                if (!_loadingInitial)
+                  if (_loadingMore)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_hasMore)
+                    Center(
+                      child: TextButton(
+                        onPressed: () => _load(),
+                        child: const Text('Load older activity'),
+                      ),
+                    )
+                  else
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 10),
+                      child: Center(child: Text('End of activity log')),
+                    ),
+                if (!_loadingInitial) const SizedBox(height: 8),
+                // Data Retention card moved out of scroll area
               ],
-            ],
-            if (!_loadingInitial)
-              if (_loadingMore)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (_hasMore)
-                Center(
-                  child: TextButton(
-                    onPressed: () => _load(),
-                    child: const Text('Load older activity'),
-                  ),
-                )
-              else
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 10),
-                  child: Center(child: Text('End of activity log')),
-                ),
-            if (!_loadingInitial) const SizedBox(height: 8),
-            if (!_loadingInitial) const _ActivityRetentionCard(),
-          ],
-        ),
+            ),
+          ),
+          if (!_loadingInitial)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: _ActivityRetentionCard(),
+              ),
+            ),
+        ],
       ),
     );
   }
