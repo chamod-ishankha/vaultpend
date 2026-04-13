@@ -15,6 +15,7 @@ import '../../core/widgets/fx_reference_strip.dart';
 import '../../core/widgets/obsidian_app_bar.dart';
 import '../../core/widgets/obsidian_card.dart';
 import '../../core/widgets/responsive_layout.dart';
+import '../../core/widgets/user_profile_avatar.dart';
 import '../../data/models/category.dart';
 import '../../data/models/expense.dart';
 import '../../core/theme/app_theme.dart';
@@ -24,12 +25,26 @@ import '../auth/auth_providers.dart';
 import 'add_expense_screen.dart';
 import 'expense_providers.dart';
 
-class ExpenseListScreen extends ConsumerWidget {
+class ExpenseListScreen extends ConsumerStatefulWidget {
   const ExpenseListScreen({super.key, this.onOpenDrawer});
-
   final VoidCallback? onOpenDrawer;
+
+  @override
+  ConsumerState<ExpenseListScreen> createState() => _ExpenseListScreenState();
+}
+
+class _ExpenseListScreenState extends ConsumerState<ExpenseListScreen> {
   static const _csvExportService = ExpenseCsvExportService();
   static const _pdfExportService = ExpensePdfExportService();
+
+  bool _isSearching = false;
+  final TextEditingController _searchController = TextEditingController();
+  
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   Future<void> _openEditor(BuildContext context, {Expense? expense}) async {
     await Navigator.of(context).push<void>(
@@ -37,7 +52,7 @@ class ExpenseListScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _onRefresh(WidgetRef ref) async {
+  Future<void> _onRefresh() async {
     ref.invalidate(expenseListProvider);
     ref.invalidate(fxRatesProvider);
     await Future.wait([
@@ -46,7 +61,7 @@ class ExpenseListScreen extends ConsumerWidget {
     ]);
   }
 
-  Future<void> _exportExpensesCsv(BuildContext context, WidgetRef ref) async {
+  Future<void> _exportExpensesCsv(BuildContext context) async {
     try {
       final expenses = await ref.read(expenseListProvider.future);
       if (expenses.isEmpty) {
@@ -96,7 +111,7 @@ class ExpenseListScreen extends ConsumerWidget {
     }
   }
 
-  Future<void> _exportExpensesPdf(BuildContext context, WidgetRef ref) async {
+  Future<void> _exportExpensesPdf(BuildContext context) async {
     try {
       final expenses = await ref.read(expenseListProvider.future);
       if (expenses.isEmpty) {
@@ -147,7 +162,7 @@ class ExpenseListScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final async = ref.watch(expenseListProvider);
     final currencyFormat = NumberFormat.currency(symbol: '');
     final preferredCurrency = ref.watch(preferredCurrencyProvider);
@@ -166,25 +181,54 @@ class ExpenseListScreen extends ConsumerWidget {
       extendBodyBehindAppBar: true,
       appBar: ObsidianAppBar(
         centerTitle: false,
-        title: Text(
-          'Expenses',
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.2,
-          ),
-        ),
-        leading: onOpenDrawer != null
-            ? IconButton(icon: const Icon(Icons.menu), onPressed: onOpenDrawer)
+        title: _isSearching
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Search expenses...',
+                  border: InputBorder.none,
+                  hintStyle: theme.textTheme.titleMedium?.copyWith(
+                    color: scheme.onSurfaceVariant.withOpacity(0.5),
+                  ),
+                ),
+                onChanged: (_) => setState(() {}),
+              )
+            : Text(
+                'Expenses',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.2,
+                ),
+              ),
+        leading: widget.onOpenDrawer != null
+            ? IconButton(icon: const Icon(Icons.menu), onPressed: widget.onOpenDrawer)
             : null,
         actions: [
+          IconButton(
+            icon: Icon(
+              _isSearching ? Icons.close_rounded : Icons.search_rounded,
+            ),
+            onPressed: () {
+              setState(() {
+                if (_isSearching) {
+                  _searchController.clear();
+                }
+                _isSearching = !_isSearching;
+              });
+            },
+          ),
           PopupMenuButton<String>(
             tooltip: 'Export',
             icon: const Icon(Icons.ios_share_rounded),
             onSelected: (v) {
               if (v == 'csv') {
-                _exportExpensesCsv(context, ref);
+                _exportExpensesCsv(context);
               } else if (v == 'pdf') {
-                _exportExpensesPdf(context, ref);
+                _exportExpensesPdf(context);
               }
             },
             itemBuilder: (ctx) => [
@@ -210,17 +254,7 @@ class ExpenseListScreen extends ConsumerWidget {
               ),
             ],
           ),
-          Container(
-            width: 32,
-            height: 32,
-            margin: const EdgeInsets.only(right: 16),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: scheme.primary.withValues(alpha: 0.2)),
-              color: ext.surfaceContainerLow,
-            ),
-            child: Icon(Icons.person, size: 18, color: scheme.primary),
-          ),
+          const UserProfileAvatar(margin: EdgeInsets.only(right: 16)),
         ],
       ),
       body: ResponsiveBody(
@@ -231,16 +265,37 @@ class ExpenseListScreen extends ConsumerWidget {
             Expanded(
               child: async.when(
                 data: (items) {
-                  if (items.isEmpty) {
+                  final categoriesAsync = ref.watch(categoryListProvider);
+                  final Map<int, String> categoryMap = {};
+                  if (categoriesAsync.value != null) {
+                    for (final c in categoriesAsync.value!) {
+                      categoryMap[c.id!] = c.name.toLowerCase();
+                    }
+                  }
+
+                  final query = _searchController.text.trim().toLowerCase();
+                  final filteredItems = query.isEmpty
+                      ? items
+                      : items.where((e) {
+                          final noteParts = (e.note ?? '').toLowerCase();
+                          if (noteParts.contains(query)) return true;
+                          if (e.categoryId != null) {
+                            final catName = categoryMap[e.categoryId] ?? '';
+                            if (catName.contains(query)) return true;
+                          }
+                          return false;
+                        }).toList();
+
+                  if (filteredItems.isEmpty) {
                     return RefreshIndicator(
-                      onRefresh: () => _onRefresh(ref),
+                      onRefresh: _onRefresh,
                       child: ListView(
                         children: [_buildEmptyState(theme, scheme, ext)],
                       ),
                     );
                   }
                   return RefreshIndicator(
-                    onRefresh: () => _onRefresh(ref),
+                    onRefresh: _onRefresh,
                     child: ListView.builder(
                       padding: EdgeInsets.fromLTRB(
                         16,
@@ -248,13 +303,13 @@ class ExpenseListScreen extends ConsumerWidget {
                         16,
                         120 + bottomInset,
                       ),
-                      itemCount: items.length + 1,
+                      itemCount: filteredItems.length + 1,
                       itemBuilder: (context, i) {
                         if (i == 0) {
                           return Padding(
                             padding: const EdgeInsets.only(left: 4, bottom: 16),
                             child: Text(
-                              'RECENT ACTIVITY',
+                              _isSearching && query.isNotEmpty ? 'SEARCH RESULTS' : 'RECENT ACTIVITY',
                               style: theme.textTheme.labelSmall?.copyWith(
                                 color: scheme.outline,
                                 fontWeight: FontWeight.w800,
@@ -263,7 +318,7 @@ class ExpenseListScreen extends ConsumerWidget {
                             ),
                           );
                         }
-                        final e = items[i - 1];
+                        final e = filteredItems[i - 1];
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 12),
                           child: _ExpenseCard(
@@ -275,7 +330,7 @@ class ExpenseListScreen extends ConsumerWidget {
                               await _openEditor(context, expense: e);
                               ref.invalidate(expenseListProvider);
                             },
-                            onDelete: () => _confirmDelete(context, ref, e),
+                            onDelete: () => _confirmDelete(context, e),
                           ),
                         );
                       },
@@ -306,7 +361,6 @@ class ExpenseListScreen extends ConsumerWidget {
 
   Future<void> _confirmDelete(
     BuildContext context,
-    WidgetRef ref,
     Expense e,
   ) async {
     final ok = await showDialog<bool>(

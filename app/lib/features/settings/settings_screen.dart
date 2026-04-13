@@ -8,6 +8,7 @@ import '../auth/auth_providers.dart';
 import '../auth/login_screen.dart';
 import '../reminders/reminder_diagnostics_screen.dart';
 import '../reminders/sync_incident_screen.dart';
+import '../../core/widgets/user_profile_avatar.dart';
 import 'profile_update_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -43,17 +44,7 @@ class SettingsScreen extends ConsumerWidget {
           ),
         ),
         actions: [
-          Container(
-            width: 32,
-            height: 32,
-            margin: const EdgeInsets.only(right: 16),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: scheme.primary.withValues(alpha: 0.2)),
-              color: scheme.surfaceContainerLow,
-            ),
-            child: Icon(Icons.person, size: 18, color: scheme.primary),
-          ),
+          const UserProfileAvatar(margin: EdgeInsets.only(right: 16)),
         ],
       ),
       body: ListView(

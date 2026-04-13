@@ -4,6 +4,7 @@ import '../../../core/constants/app_icons.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/widgets/user_profile_avatar.dart';
 
 class ShellSidebarDrawer extends StatelessWidget {
   const ShellSidebarDrawer({
@@ -66,14 +67,7 @@ class ShellSidebarDrawer extends StatelessWidget {
                         width: 2,
                       ),
                     ),
-                    child: CircleAvatar(
-                      backgroundColor: ext.surfaceContainerHigh,
-                      child: Icon(
-                        AppIcons.userProfile,
-                        color: scheme.primary,
-                        size: AppDimensions.iconSizeLarge,
-                      ),
-                    ),
+                    child: const UserProfileAvatar(size: 46),
                   ),
                   const SizedBox(width: AppDimensions.sp16),
                   Column(

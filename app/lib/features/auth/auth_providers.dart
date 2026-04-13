@@ -301,6 +301,7 @@ class AuthNotifier extends AsyncNotifier<AuthSession?> {
   AuthSession _sessionFromFirebaseUser(
     User user, {
     String preferredCurrency = 'USD',
+    String? photoBase64,
   }) {
     final displayName = _normalizeDisplayName(
       user.displayName,
@@ -312,6 +313,7 @@ class AuthNotifier extends AsyncNotifier<AuthSession?> {
         email: user.email ?? 'unknown@vaultspend.local',
         preferredCurrency: _normalizeCurrency(preferredCurrency),
         displayName: displayName,
+        photoBase64: photoBase64,
       ),
     );
   }
@@ -332,12 +334,13 @@ class AuthNotifier extends AsyncNotifier<AuthSession?> {
     return 'VaultSpend User';
   }
 
-  Future<String> _readPreferredCurrency(User user) async {
+  Future<(String, String?)> _readProfileSettings(User user) async {
     final storage = ref.read(tokenStorageProvider);
-    final local = _normalizeCurrency(await storage.readPreferredCurrency());
+    final localCurrency = _normalizeCurrency(await storage.readPreferredCurrency());
+    // Note: We don't cache photoBase64 locally in TokenStorage to save space, relies on Firestore.
 
     if (!isFirebaseReady || !await hasNetworkConnection()) {
-      return local;
+      return (localCurrency, null);
     }
 
     try {
@@ -348,13 +351,16 @@ class AuthNotifier extends AsyncNotifier<AuthSession?> {
           .doc('profile')
           .get()
           .timeout(const Duration(seconds: 4));
-      final remote = _normalizeCurrency(
-        (doc.data()?['preferred_currency'] as String?) ?? local,
+      
+      final remoteCurrency = _normalizeCurrency(
+        (doc.data()?['preferred_currency'] as String?) ?? localCurrency,
       );
-      await storage.writePreferredCurrency(remote);
-      return remote;
+      final photoBase64 = doc.data()?['photo_base64'] as String?;
+      
+      await storage.writePreferredCurrency(remoteCurrency);
+      return (remoteCurrency, photoBase64);
     } catch (_) {
-      return local;
+      return (localCurrency, null);
     }
   }
 
@@ -402,9 +408,52 @@ class AuthNotifier extends AsyncNotifier<AuthSession?> {
           email: session.user.email,
           preferredCurrency: normalized,
           displayName: session.user.displayName,
+          photoBase64: session.user.photoBase64,
         ),
       ),
     );
+  }
+
+  Future<void> updateProfileBase64(String? base64String) async {
+    final logger = ref.read(appLoggerProvider);
+    final session = state.value;
+    if (session == null) {
+      throw StateError('Requires a signed-in session');
+    }
+
+    if (!isFirebaseReady || !await hasNetworkConnection()) {
+      throw StateError('Needs network connection to update avatar.');
+    }
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(session.user.id)
+          .collection('settings')
+          .doc('profile')
+          .set({
+            'photo_base64': base64String,
+            'updated_at': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true))
+          .timeout(const Duration(seconds: 4));
+
+      state = AsyncValue.data(
+        AuthSession(
+          user: AuthUser(
+            id: session.user.id,
+            email: session.user.email,
+            preferredCurrency: session.user.preferredCurrency,
+            displayName: session.user.displayName,
+            photoBase64: base64String,
+          ),
+        ),
+      );
+      
+      logger.info('profile_base64_avatar_updated');
+    } catch (error, stack) {
+      logger.warning('profile_base64_avatar_update_failed', error, stack);
+      rethrow;
+    }
   }
 
   @override
@@ -436,11 +485,12 @@ class AuthNotifier extends AsyncNotifier<AuthSession?> {
     try {
       await user.reload().timeout(const Duration(seconds: 4));
       final refreshedUser = firebaseAuth.currentUser ?? user;
-      final preferredCurrency = await _readPreferredCurrency(refreshedUser);
+      final (preferredCurrency, photoBase64) = await _readProfileSettings(refreshedUser);
       logger.info('auth_restored');
       return _sessionFromFirebaseUser(
         refreshedUser,
         preferredCurrency: preferredCurrency,
+        photoBase64: photoBase64,
       );
     } on TimeoutException catch (error, stack) {
       logger.warning('auth_restore_timeout_using_cached_session', error, stack);
@@ -503,12 +553,16 @@ class AuthNotifier extends AsyncNotifier<AuthSession?> {
       if (user == null) {
         throw StateError('Firebase sign-in did not return a user.');
       }
-      final preferredCurrency = await _readPreferredCurrency(user);
+      final (preferredCurrency, photoBase64) = await _readProfileSettings(user);
       await storage.writePreferredCurrency(preferredCurrency);
       await storage.clearGuestMode();
       ref.invalidate(guestModeControllerProvider);
       state = AsyncValue.data(
-        _sessionFromFirebaseUser(user, preferredCurrency: preferredCurrency),
+        _sessionFromFirebaseUser(
+            user, 
+            preferredCurrency: preferredCurrency,
+            photoBase64: photoBase64,
+        ),
       );
       await ref
           .read(preferredCurrencyControllerProvider.notifier)
@@ -641,6 +695,7 @@ class AuthNotifier extends AsyncNotifier<AuthSession?> {
             email: session.user.email,
             preferredCurrency: session.user.preferredCurrency,
             displayName: session.user.displayName,
+            photoBase64: session.user.photoBase64,
           ),
         ),
       );
@@ -684,6 +739,7 @@ class AuthNotifier extends AsyncNotifier<AuthSession?> {
             email: session.user.email,
             preferredCurrency: session.user.preferredCurrency,
             displayName: normalized,
+            photoBase64: session.user.photoBase64,
           ),
         ),
       );

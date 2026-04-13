@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../core/widgets/obsidian_app_bar.dart';
 import '../../core/widgets/obsidian_button.dart';
@@ -169,6 +171,35 @@ class _ProfileUpdateScreenState extends ConsumerState<ProfileUpdateScreen> {
     return error.toString();
   }
 
+  Future<void> _pickAndUploadAvatar() async {
+    final picker = ImagePicker();
+    try {
+      final xFile = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 150,
+        maxHeight: 150,
+        imageQuality: 50,
+      );
+      if (xFile == null) return;
+
+      setState(() { _saving = true; });
+      final bytes = await xFile.readAsBytes();
+      final base64String = base64Encode(bytes);
+      
+      await ref.read(authControllerProvider.notifier).updateProfileBase64(base64String);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Avatar updated.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { _errorMessage = _friendlyError(e); });
+    } finally {
+      if (mounted) setState(() { _saving = false; });
+    }
+  }
+
   Future<void> _save() async {
     final session = ref.read(authControllerProvider).value;
     if (session == null) {
@@ -310,7 +341,15 @@ class _ProfileUpdateScreenState extends ConsumerState<ProfileUpdateScreen> {
               border: Border.all(color: scheme.primary.withValues(alpha: 0.2)),
               color: scheme.surfaceContainerLow,
             ),
-            child: Icon(Icons.person, size: 18, color: scheme.primary),
+            clipBehavior: Clip.antiAlias,
+            child: user?.photoBase64 != null
+                ? Image.memory(
+                    base64Decode(user!.photoBase64!),
+                    width: 32,
+                    height: 32,
+                    fit: BoxFit.cover,
+                  )
+                : Icon(Icons.person, size: 18, color: scheme.primary),
           ),
         ],
       ),
@@ -339,11 +378,19 @@ class _ProfileUpdateScreenState extends ConsumerState<ProfileUpdateScreen> {
                                   color: scheme.outlineVariant,
                                 ),
                               ),
-                              child: Icon(
-                                Icons.person_rounded,
-                                size: 44,
-                                color: scheme.primary,
-                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: user?.photoBase64 != null
+                                  ? Image.memory(
+                                      base64Decode(user!.photoBase64!),
+                                      width: 88,
+                                      height: 88,
+                                      fit: BoxFit.cover,
+                                    )
+                                  : Icon(
+                                      Icons.person_rounded,
+                                      size: 44,
+                                      color: scheme.primary,
+                                    ),
                             ),
                             Positioned(
                               right: 0,
@@ -354,7 +401,7 @@ class _ProfileUpdateScreenState extends ConsumerState<ProfileUpdateScreen> {
                                 child: InkWell(
                                   customBorder: const CircleBorder(),
                                   onTap: signedIn && !busy
-                                      ? _showEditHint
+                                      ? _pickAndUploadAvatar
                                       : null,
                                   child: Padding(
                                     padding: const EdgeInsets.all(6),

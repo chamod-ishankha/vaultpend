@@ -18,6 +18,7 @@ import '../../core/widgets/fx_reference_strip.dart';
 import '../../core/widgets/obsidian_app_bar.dart';
 import '../../core/widgets/obsidian_card.dart';
 import '../../core/widgets/responsive_layout.dart';
+import '../../core/widgets/user_profile_avatar.dart';
 import '../../data/models/subscription.dart';
 import '../auth/auth_providers.dart';
 import 'add_subscription_screen.dart';
@@ -38,6 +39,15 @@ class _SubscriptionListScreenState
   static const _csvExportService = SubscriptionCsvExportService();
   static const _pdfExportService = SubscriptionPdfExportService();
 
+  bool _isSearching = false;
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   Future<void> _openEditor(
     BuildContext context, {
     Subscription? subscription,
@@ -49,7 +59,7 @@ class _SubscriptionListScreenState
     );
   }
 
-  Future<void> _onRefresh(WidgetRef ref) async {
+  Future<void> _onRefresh() async {
     ref.invalidate(subscriptionListProvider);
     ref.invalidate(fxRatesProvider);
     await Future.wait([
@@ -58,10 +68,7 @@ class _SubscriptionListScreenState
     ]);
   }
 
-  Future<void> _exportSubscriptionsCsv(
-    BuildContext context,
-    WidgetRef ref,
-  ) async {
+  Future<void> _exportCsv(BuildContext context) async {
     final logger = ref.read(appLoggerProvider);
     logger.info('subscription_csv_export_started');
     try {
@@ -93,10 +100,7 @@ class _SubscriptionListScreenState
     }
   }
 
-  Future<void> _exportSubscriptionsPdf(
-    BuildContext context,
-    WidgetRef ref,
-  ) async {
+  Future<void> _exportPdf(BuildContext context) async {
     final logger = ref.read(appLoggerProvider);
     logger.info('subscription_pdf_export_started');
     try {
@@ -156,20 +160,49 @@ class _SubscriptionListScreenState
                 onPressed: widget.onOpenDrawer,
               )
             : null,
-        title: Text(
-          'Subscriptions',
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.2,
-          ),
-        ),
+        title: _isSearching
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Search subscriptions...',
+                  border: InputBorder.none,
+                  hintStyle: theme.textTheme.titleMedium?.copyWith(
+                    color: scheme.onSurfaceVariant.withOpacity(0.5),
+                  ),
+                ),
+                onChanged: (_) => setState(() {}),
+              )
+            : Text(
+                'Subscriptions',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.2,
+                ),
+              ),
         actions: [
+          IconButton(
+            icon: Icon(
+              _isSearching ? Icons.close_rounded : Icons.search_rounded,
+            ),
+            onPressed: () {
+              setState(() {
+                if (_isSearching) {
+                  _searchController.clear();
+                }
+                _isSearching = !_isSearching;
+              });
+            },
+          ),
           PopupMenuButton<String>(
             tooltip: 'Export',
             icon: const Icon(Icons.ios_share_rounded),
             onSelected: (v) {
-              if (v == 'csv') _exportSubscriptionsCsv(context, ref);
-              if (v == 'pdf') _exportSubscriptionsPdf(context, ref);
+              if (v == 'csv') _exportCsv(context);
+              if (v == 'pdf') _exportPdf(context);
             },
             itemBuilder: (ctx) => [
               const PopupMenuItem(
@@ -194,17 +227,7 @@ class _SubscriptionListScreenState
               ),
             ],
           ),
-          Container(
-            width: 32,
-            height: 32,
-            margin: const EdgeInsets.only(right: 16),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: scheme.primary.withValues(alpha: 0.2)),
-              color: ext.surfaceContainerLow,
-            ),
-            child: Icon(Icons.person, size: 18, color: scheme.primary),
-          ),
+          const UserProfileAvatar(margin: EdgeInsets.only(right: 16)),
         ],
       ),
       body: ResponsiveBody(
@@ -215,12 +238,33 @@ class _SubscriptionListScreenState
             Expanded(
               child: async.when(
                 data: (items) {
-                  if (items.isEmpty) {
-                    return _buildEmptyState(theme, scheme);
+                  final categoriesAsync = ref.watch(categoryListProvider);
+                  final Map<int, String> categoryMap = {};
+                  if (categoriesAsync.value != null) {
+                    for (final c in categoriesAsync.value!) {
+                      categoryMap[c.id!] = c.name.toLowerCase();
+                    }
                   }
 
-                  final trialItems = items.where((s) => s.isTrial).toList();
-                  final sortedItems = [...items]
+                  final query = _searchController.text.trim().toLowerCase();
+                  final filteredItems = query.isEmpty
+                      ? items
+                      : items.where((s) {
+                          final nameMatch = s.name.toLowerCase().contains(query);
+                          return nameMatch;
+                        }).toList();
+
+                  if (filteredItems.isEmpty) {
+                    return RefreshIndicator(
+                      onRefresh: _onRefresh,
+                      child: ListView(
+                        children: [_buildEmptyState(theme, scheme, ext)],
+                      ),
+                    );
+                  }
+
+                  final trialItems = filteredItems.where((s) => s.isTrial).toList();
+                  final sortedItems = [...filteredItems]
                     ..sort(
                       (a, b) => a.isTrial == b.isTrial
                           ? a.nextBillingDate.compareTo(b.nextBillingDate)
@@ -228,7 +272,7 @@ class _SubscriptionListScreenState
                     );
 
                   return RefreshIndicator(
-                    onRefresh: () => _onRefresh(ref),
+                    onRefresh: _onRefresh,
                     child: ListView(
                       padding: EdgeInsets.fromLTRB(
                         16,
@@ -237,15 +281,15 @@ class _SubscriptionListScreenState
                         120 + bottomInset,
                       ),
                       children: [
-                        if (trialItems.isNotEmpty)
+                        if (!_isSearching && trialItems.isNotEmpty)
                           _TrialHeroCard(trialItems: trialItems),
 
-                        if (trialItems.isNotEmpty) const SizedBox(height: 24),
+                        if (!_isSearching && trialItems.isNotEmpty) const SizedBox(height: 24),
 
                         Row(
                           children: [
                             Text(
-                              'ACTIVE PIPELINE',
+                              _isSearching && query.isNotEmpty ? 'SEARCH RESULTS' : 'ACTIVE PIPELINE',
                               style: theme.textTheme.labelSmall?.copyWith(
                                 color: scheme.outline,
                                 fontWeight: FontWeight.w800,
@@ -253,13 +297,14 @@ class _SubscriptionListScreenState
                               ),
                             ),
                             const Spacer(),
-                            Text(
-                              'Filter by: Date',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: scheme.primary,
-                                fontWeight: FontWeight.w600,
+                            if (!_isSearching)
+                              Text(
+                                'Filter by: Date',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: scheme.primary,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
-                            ),
                           ],
                         ),
                         const SizedBox(height: 12),
@@ -274,7 +319,7 @@ class _SubscriptionListScreenState
                               fxSnapshot: fxSnapshot,
                               onEdit: () =>
                                   _openEditor(context, subscription: s),
-                              onDelete: () => _confirmDelete(context, ref, s),
+                              onDelete: () => _confirmDelete(context, s),
                               surfaceContainerLow: ext.surfaceContainerLow,
                               surfaceContainerHigh: ext.surfaceContainerHigh,
                             ),
@@ -303,7 +348,7 @@ class _SubscriptionListScreenState
     );
   }
 
-  Widget _buildEmptyState(ThemeData theme, ColorScheme scheme) {
+  Widget _buildEmptyState(ThemeData theme, ColorScheme scheme, dynamic ext) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -327,7 +372,6 @@ class _SubscriptionListScreenState
 
   Future<void> _confirmDelete(
     BuildContext context,
-    WidgetRef ref,
     Subscription subscription,
   ) async {
     final ok = await showDialog<bool>(

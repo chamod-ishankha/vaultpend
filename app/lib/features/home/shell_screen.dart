@@ -32,6 +32,7 @@ class ShellScreen extends ConsumerStatefulWidget {
 
 class _ShellScreenState extends ConsumerState<ShellScreen> {
   final GlobalKey<ScaffoldState> _shellKey = GlobalKey<ScaffoldState>();
+  late final PageController _pageController;
   int _index = 0;
   bool _syncing = false;
   ProviderSubscription<AsyncValue<bool>>? _networkSub;
@@ -39,6 +40,7 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
   @override
   void initState() {
     super.initState();
+    _pageController = PageController(initialPage: _index);
     _networkSub = ref.listenManual<AsyncValue<bool>>(networkOnlineProvider, (
       previous,
       next,
@@ -56,11 +58,28 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
 
   @override
   void dispose() {
+    _pageController.dispose();
     _networkSub?.close();
     super.dispose();
   }
 
   void _openDrawer() => _shellKey.currentState?.openDrawer();
+
+  void _onPageChanged(int index) {
+    if (_index != index) {
+      setState(() => _index = index);
+    }
+  }
+
+  void _onNavSelected(int index) {
+    if (_index == index) return;
+    setState(() => _index = index);
+    _pageController.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCirc,
+    );
+  }
 
   Future<void> _syncNow() async {
     if (_syncing) return;
@@ -141,21 +160,6 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
 
     final scheme = Theme.of(context).colorScheme;
 
-    final screenChild = _index == 0
-        ? ExpenseListScreen(
-            key: const ValueKey(0),
-            onOpenDrawer: isDesktop ? null : _openDrawer,
-          )
-        : _index == 1
-        ? SubscriptionListScreen(
-            key: const ValueKey(1),
-            onOpenDrawer: isDesktop ? null : _openDrawer,
-          )
-        : InsightsScreen(
-            key: const ValueKey(2),
-            onOpenDrawer: isDesktop ? null : _openDrawer,
-          );
-
     return Scaffold(
       key: _shellKey,
       backgroundColor: scheme.surface,
@@ -198,7 +202,7 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
           if (isDesktop)
             ShellDesktopRail(
               selectedIndex: _index,
-              onDestinationSelected: (i) => setState(() => _index = i),
+              onDestinationSelected: _onNavSelected,
               signedIn: signedIn,
               isGuest: isGuest,
               isSyncing: _syncing,
@@ -235,9 +239,20 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
                       onSyncNow: signedIn && !_syncing ? _syncNow : null,
                     ),
                     Expanded(
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 200),
-                        child: screenChild,
+                      child: PageView(
+                        controller: _pageController,
+                        onPageChanged: _onPageChanged,
+                        children: [
+                          ExpenseListScreen(
+                            onOpenDrawer: isDesktop ? null : _openDrawer,
+                          ),
+                          SubscriptionListScreen(
+                            onOpenDrawer: isDesktop ? null : _openDrawer,
+                          ),
+                          InsightsScreen(
+                            onOpenDrawer: isDesktop ? null : _openDrawer,
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -249,7 +264,7 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
                     right: 0,
                     child: ShellBottomNavBar(
                       selectedIndex: _index,
-                      onDestinationSelected: (i) => setState(() => _index = i),
+                      onDestinationSelected: _onNavSelected,
                     ),
                   ),
                 ],

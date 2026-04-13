@@ -12,12 +12,25 @@ import 'category_color_resolver.dart';
 import 'category_icon_resolver.dart';
 import 'edit_category_screen.dart';
 
-class ManageCategoriesScreen extends ConsumerWidget {
+class ManageCategoriesScreen extends ConsumerStatefulWidget {
   const ManageCategoriesScreen({super.key});
 
+  @override
+  ConsumerState<ManageCategoriesScreen> createState() => _ManageCategoriesScreenState();
+}
+
+class _ManageCategoriesScreenState extends ConsumerState<ManageCategoriesScreen> {
+  bool _isSearching = false;
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   Future<void> _openEditor(
-    BuildContext context,
-    WidgetRef ref, {
+    BuildContext context, {
     Category? category,
   }) async {
     await Navigator.of(context).push<void>(
@@ -31,7 +44,6 @@ class ManageCategoriesScreen extends ConsumerWidget {
 
   Future<void> _deleteCategory(
     BuildContext context,
-    WidgetRef ref,
     Category category,
   ) async {
     final confirmed = await showDialog<bool>(
@@ -60,7 +72,7 @@ class ManageCategoriesScreen extends ConsumerWidget {
     }
   }
 
-  void _showActionMenu(BuildContext context, WidgetRef ref, Category category) {
+  void _showActionMenu(BuildContext context, Category category) {
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF131317),
@@ -74,7 +86,7 @@ class ManageCategoriesScreen extends ConsumerWidget {
               title: const Text('Edit Category'),
               onTap: () {
                 Navigator.pop(ctx);
-                _openEditor(context, ref, category: category);
+                _openEditor(context, category: category);
               },
             ),
             ListTile(
@@ -110,7 +122,7 @@ class ManageCategoriesScreen extends ConsumerWidget {
               ),
               onTap: () {
                 Navigator.pop(ctx);
-                _deleteCategory(context, ref, category);
+                _deleteCategory(context, category);
               },
             ),
           ],
@@ -120,7 +132,7 @@ class ManageCategoriesScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final async = ref.watch(categoryListProvider);
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
@@ -130,24 +142,51 @@ class ManageCategoriesScreen extends ConsumerWidget {
       backgroundColor: scheme.surface,
       appBar: ObsidianAppBar(
         centerTitle: false,
-        title: Text(
-          'Categories',
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.2,
-          ),
-        ),
+        title: _isSearching
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Search categories...',
+                  border: InputBorder.none,
+                  hintStyle: theme.textTheme.titleMedium?.copyWith(
+                    color: scheme.onSurfaceVariant.withOpacity(0.5),
+                  ),
+                ),
+                onChanged: (_) => setState(() {}),
+              )
+            : Text(
+                'Categories',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.2,
+                ),
+              ),
         actions: [
           IconButton(
-            icon: Icon(Icons.search_rounded, color: scheme.outline, size: 28),
-            onPressed: () {},
-            tooltip: 'Search Categories',
+            icon: Icon(
+              _isSearching ? Icons.close_rounded : Icons.search_rounded,
+              color: scheme.outline,
+              size: 28,
+            ),
+            onPressed: () {
+              setState(() {
+                if (_isSearching) {
+                  _searchController.clear();
+                }
+                _isSearching = !_isSearching;
+              });
+            },
+            tooltip: _isSearching ? 'Close Search' : 'Search Categories',
           ),
           const SizedBox(width: 8),
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _openEditor(context, ref),
+        onPressed: () => _openEditor(context),
         backgroundColor: scheme.primary,
         foregroundColor: const Color(0xFF003732),
         elevation: 4,
@@ -159,13 +198,20 @@ class ManageCategoriesScreen extends ConsumerWidget {
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => Center(child: Text('$e')),
           data: (items) {
-            final visibleCount = items.where((c) => c.isVisible).length;
+            final query = _searchController.text.trim().toLowerCase();
+            final filteredItems = query.isEmpty 
+                ? items
+                : items.where((c) {
+                    return c.name.toLowerCase().contains(query);
+                  }).toList();
+
+            final visibleCount = filteredItems.where((c) => c.isVisible).length;
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 24, 16, 120),
               children: [
-                _buildTopSummary(context, visibleCount),
-                const SizedBox(height: 16),
-                ...items.map((c) => _buildCategoryItem(context, c, ref)),
+                if (!_isSearching) _buildTopSummary(context, visibleCount),
+                if (!_isSearching) const SizedBox(height: 16),
+                ...filteredItems.map((c) => _buildCategoryItem(context, c)),
               ],
             );
           },
@@ -251,7 +297,7 @@ class ManageCategoriesScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildCategoryItem(BuildContext context, Category c, WidgetRef ref) {
+  Widget _buildCategoryItem(BuildContext context, Category c) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final ext = theme.vaultSpend;
@@ -268,7 +314,7 @@ class ManageCategoriesScreen extends ConsumerWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(ext.manageCategoriesCardRadius),
-          onTap: () => _openEditor(context, ref, category: c),
+          onTap: () => _openEditor(context, category: c),
           child: Padding(
             padding: EdgeInsets.all(ext.manageCategoriesCardPadding),
             child: Row(
@@ -372,7 +418,7 @@ class ManageCategoriesScreen extends ConsumerWidget {
                     Icons.more_vert_rounded,
                     color: scheme.onSurfaceVariant,
                   ),
-                  onPressed: () => _showActionMenu(context, ref, c),
+                  onPressed: () => _showActionMenu(context, c),
                 ),
               ],
             ),

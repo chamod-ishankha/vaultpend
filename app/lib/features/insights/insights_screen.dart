@@ -16,9 +16,13 @@ import '../../core/providers.dart';
 import '../../core/export/insights_csv_export_service.dart';
 import '../../core/export/insights_pdf_export_service.dart';
 import '../../core/logging/app_logging.dart';
+// import '../../core/metrics/metric_trend.dart';
+import '../../core/theme/app_theme.dart';
+import '../../core/widgets/fx_reference_strip.dart';
 import '../../core/widgets/obsidian_app_bar.dart';
 import '../../core/widgets/obsidian_card.dart';
 import '../../core/widgets/responsive_layout.dart';
+import '../../core/widgets/user_profile_avatar.dart';
 import '../../data/models/expense.dart';
 import '../../data/models/subscription.dart';
 import '../auth/auth_providers.dart';
@@ -271,17 +275,7 @@ class InsightsScreen extends ConsumerWidget {
               ),
             ],
           ),
-          Container(
-            width: 32,
-            height: 32,
-            margin: const EdgeInsets.only(right: 16),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: scheme.primary.withValues(alpha: 0.2)),
-              color: scheme.surfaceContainerLow,
-            ),
-            child: Icon(Icons.person, size: 18, color: scheme.primary),
-          ),
+          const UserProfileAvatar(margin: EdgeInsets.only(right: 16)),
         ],
       ),
       body: ResponsiveBody(
