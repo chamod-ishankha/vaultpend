@@ -16,8 +16,7 @@ class SyncStatus {
   final SyncStatusSection expenses;
   final SyncStatusSection subscriptions;
 
-  int get totalCount =>
-      categories.count + expenses.count + subscriptions.count;
+  int get totalCount => categories.count + expenses.count + subscriptions.count;
 
   DateTime? get latestUpdatedAt {
     DateTime? latest;

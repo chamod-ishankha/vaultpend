@@ -55,6 +55,10 @@ class VaultSpendThemeExtension
   final double manageCategoriesIconSize;
   final double manageCategoriesCardRadius;
   final double manageCategoriesFabSize;
+  final double editCategoryFieldRadius;
+  final double editCategoryPreviewSectionRadius;
+  final double editCategoryPreviewAvatarSize;
+  final double editCategoryBentoRadius;
 
   const VaultSpendThemeExtension({
     required this.primaryDark,
@@ -108,6 +112,10 @@ class VaultSpendThemeExtension
     this.manageCategoriesIconSize = 24.0,
     this.manageCategoriesCardRadius = 12.0,
     this.manageCategoriesFabSize = 56.0,
+    this.editCategoryFieldRadius = 12.0,
+    this.editCategoryPreviewSectionRadius = 32.0,
+    this.editCategoryPreviewAvatarSize = 96.0,
+    this.editCategoryBentoRadius = 12.0,
   });
 
   @override
@@ -163,6 +171,10 @@ class VaultSpendThemeExtension
     double? manageCategoriesIconSize,
     double? manageCategoriesCardRadius,
     double? manageCategoriesFabSize,
+    double? editCategoryFieldRadius,
+    double? editCategoryPreviewSectionRadius,
+    double? editCategoryPreviewAvatarSize,
+    double? editCategoryBentoRadius,
   }) {
     return VaultSpendThemeExtension(
       primaryDark: primaryDark ?? this.primaryDark,
@@ -254,6 +266,15 @@ class VaultSpendThemeExtension
           manageCategoriesCardRadius ?? this.manageCategoriesCardRadius,
       manageCategoriesFabSize:
           manageCategoriesFabSize ?? this.manageCategoriesFabSize,
+      editCategoryFieldRadius:
+          editCategoryFieldRadius ?? this.editCategoryFieldRadius,
+      editCategoryPreviewSectionRadius:
+          editCategoryPreviewSectionRadius ??
+          this.editCategoryPreviewSectionRadius,
+      editCategoryPreviewAvatarSize:
+          editCategoryPreviewAvatarSize ?? this.editCategoryPreviewAvatarSize,
+      editCategoryBentoRadius:
+          editCategoryBentoRadius ?? this.editCategoryBentoRadius,
     );
   }
 
@@ -507,6 +528,26 @@ class VaultSpendThemeExtension
         other.manageCategoriesFabSize,
         t,
       )!,
+      editCategoryFieldRadius: ui.lerpDouble(
+        editCategoryFieldRadius,
+        other.editCategoryFieldRadius,
+        t,
+      )!,
+      editCategoryPreviewSectionRadius: ui.lerpDouble(
+        editCategoryPreviewSectionRadius,
+        other.editCategoryPreviewSectionRadius,
+        t,
+      )!,
+      editCategoryPreviewAvatarSize: ui.lerpDouble(
+        editCategoryPreviewAvatarSize,
+        other.editCategoryPreviewAvatarSize,
+        t,
+      )!,
+      editCategoryBentoRadius: ui.lerpDouble(
+        editCategoryBentoRadius,
+        other.editCategoryBentoRadius,
+        t,
+      )!,
     );
   }
 }
@@ -604,6 +645,10 @@ ThemeData buildVaultSpendTheme({required Brightness brightness}) {
         manageCategoriesIconSize: 24.0,
         manageCategoriesCardRadius: 12.0,
         manageCategoriesFabSize: 56.0,
+        editCategoryFieldRadius: 12.0,
+        editCategoryPreviewSectionRadius: 32.0,
+        editCategoryPreviewAvatarSize: 96.0,
+        editCategoryBentoRadius: 12.0,
       ),
     ],
     textTheme: GoogleFonts.interTextTheme(baseTextTheme).copyWith(

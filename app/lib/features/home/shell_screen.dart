@@ -1,9 +1,6 @@
 import 'dart:async';
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/logging/app_logging.dart';
@@ -20,6 +17,11 @@ import '../insights/insights_screen.dart';
 import '../settings/settings_screen.dart';
 import '../subscriptions/subscription_list_screen.dart';
 import '../subscriptions/subscription_providers.dart';
+
+import 'widgets/shell_bottom_nav_bar.dart';
+import 'widgets/shell_desktop_rail.dart';
+import 'widgets/shell_sidebar_drawer.dart';
+import 'widgets/shell_status_banner.dart';
 
 class ShellScreen extends ConsumerStatefulWidget {
   const ShellScreen({super.key});
@@ -107,6 +109,25 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
     }
   }
 
+  String? _cloudSubtitle(AsyncValue<SyncStatus>? syncStatusAsync) {
+    if (syncStatusAsync == null) return null;
+    final dateFmt = DateFormat('MMM d, yyyy h:mm a');
+    return syncStatusAsync.when(
+      loading: () => 'Checking Cloud sync status...',
+      error: (_, _) => 'Cloud status unavailable right now.',
+      data: (status) {
+        if (status.totalCount == 0) {
+          return 'Connected to Cloud. No synced records yet.';
+        }
+        final latest = status.latestUpdatedAt;
+        if (latest == null) {
+          return 'Connected to Cloud. Waiting for first sync timestamp.';
+        }
+        return 'Last Cloud update: \${dateFmt.format(latest.toLocal())}';
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDesktop = isDesktopWidth(MediaQuery.sizeOf(context).width);
@@ -118,9 +139,7 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
     final email = signedIn ? authSession.user.email : 'Guest mode';
     final subtitle = signedIn ? 'Premium Member' : 'Local-only (sync disabled)';
 
-    // Theme references
     final scheme = Theme.of(context).colorScheme;
-    final ext = Theme.of(context).extension<VaultSpendThemeExtension>()!;
 
     final screenChild = _index == 0
         ? ExpenseListScreen(
@@ -143,24 +162,71 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
       extendBody: true, // Needed to let background bleed behind bottom nav
       drawer: isDesktop
           ? null
-          : _buildSidebarDrawer(
-              context,
-              scheme,
-              ext,
-              email,
-              subtitle,
-              signedIn,
-              isGuest,
+          : ShellSidebarDrawer(
+              email: email,
+              subtitle: subtitle,
+              signedIn: signedIn,
+              isGuest: isGuest,
+              onTransactionsTap: () => Navigator.pop(context),
+              onCategoriesTap: () {
+                Navigator.pop(context);
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const ManageCategoriesScreen(),
+                  ),
+                );
+              },
+              onSettingsTap: () {
+                Navigator.pop(context);
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                );
+              },
+              onAuthTap: () async {
+                Navigator.pop(context);
+                if (signedIn) {
+                  await ref.read(authControllerProvider.notifier).signOut();
+                } else if (isGuest) {
+                  await ref
+                      .read(guestModeControllerProvider.notifier)
+                      .exitGuestMode();
+                }
+              },
             ),
       body: Row(
         children: [
-          if (isDesktop) _buildDesktopRail(scheme, signedIn, isGuest),
+          if (isDesktop)
+            ShellDesktopRail(
+              selectedIndex: _index,
+              onDestinationSelected: (i) => setState(() => _index = i),
+              signedIn: signedIn,
+              isGuest: isGuest,
+              isSyncing: _syncing,
+              onCategoriesTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const ManageCategoriesScreen(),
+                ),
+              ),
+              onSettingsTap: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
+              onSyncTap: _syncNow,
+              onAuthTap: () async {
+                if (signedIn) {
+                  await ref.read(authControllerProvider.notifier).signOut();
+                } else if (isGuest) {
+                  await ref
+                      .read(guestModeControllerProvider.notifier)
+                      .exitGuestMode();
+                }
+              },
+            ),
           Expanded(
             child: Stack(
               children: [
                 Column(
                   children: [
-                    _ShellStatusBanner(
+                    ShellStatusBanner(
                       signedIn: signedIn,
                       isGuest: isGuest,
                       online: online,
@@ -177,12 +243,14 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
                   ],
                 ),
                 if (!isDesktop) ...[
-                  // Bottom Navbar
                   Positioned(
                     bottom: 0,
                     left: 0,
                     right: 0,
-                    child: _buildBottomNavBar(context, scheme),
+                    child: ShellBottomNavBar(
+                      selectedIndex: _index,
+                      onDestinationSelected: (i) => setState(() => _index = i),
+                    ),
                   ),
                 ],
               ],
@@ -190,618 +258,6 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildSidebarDrawer(
-    BuildContext context,
-    ColorScheme scheme,
-    VaultSpendThemeExtension ext,
-    String? email,
-    String subtitle,
-    bool signedIn,
-    bool isGuest,
-  ) {
-    final displayName = signedIn
-        ? (email?.split('@').first ?? 'Member')
-        : 'Guest User';
-
-    return Drawer(
-      backgroundColor: scheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.horizontal(right: Radius.circular(16)),
-      ),
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-              child: Row(
-                children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: scheme.primary.withValues(alpha: 0.3),
-                        width: 2,
-                      ),
-                    ),
-                    child: CircleAvatar(
-                      backgroundColor: ext.surfaceContainerHigh,
-                      child: Icon(
-                        Icons.person,
-                        color: scheme.primary,
-                        size: 24,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        displayName,
-                        style: GoogleFonts.manrope(
-                          fontWeight: FontWeight.w700,
-                          color: scheme.primary,
-                          fontSize: 16,
-                        ),
-                      ),
-                      Text(
-                        subtitle,
-                        style: GoogleFonts.inter(
-                          fontWeight: FontWeight.w500,
-                          color: scheme.onSurfaceVariant,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            // Drawer Items
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                children: [
-                  _buildDrawerItem(
-                    icon: Icons.currency_exchange,
-                    label: 'Transactions',
-                    isActive: true,
-                    scheme: scheme,
-                    onTap: () => Navigator.pop(context),
-                  ),
-                  const SizedBox(height: 8),
-                  _buildDrawerItem(
-                    icon: Icons.category_outlined,
-                    label: 'Categories',
-                    isActive: false,
-                    scheme: scheme,
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const ManageCategoriesScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  _buildDrawerItem(
-                    icon: Icons.settings,
-                    label: 'Settings',
-                    isActive: false,
-                    scheme: scheme,
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const SettingsScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 20),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Divider(
-                height: 1,
-                color: scheme.outlineVariant.withValues(alpha: 0.2),
-              ),
-            ),
-            const SizedBox(height: 16),
-            if (signedIn)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _buildDrawerItem(
-                  icon: Icons.logout,
-                  label: 'Sign out',
-                  isActive: false,
-                  scheme: scheme,
-                  onTap: () async {
-                    Navigator.pop(context);
-                    await ref.read(authControllerProvider.notifier).signOut();
-                  },
-                ),
-              )
-            else if (isGuest)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _buildDrawerItem(
-                  icon: Icons.login,
-                  label: 'Sign in',
-                  isActive: false,
-                  scheme: scheme,
-                  onTap: () async {
-                    Navigator.pop(context);
-                    await ref
-                        .read(guestModeControllerProvider.notifier)
-                        .exitGuestMode();
-                  },
-                ),
-              ),
-
-            const Spacer(),
-
-            // Drawer Footer
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-              child: Text(
-                'ID: VAULT-SPEND',
-                style: GoogleFonts.inter(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.4,
-                  color: scheme.onSurfaceVariant.withValues(alpha: 0.45),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDrawerItem({
-    required IconData icon,
-    required String label,
-    required bool isActive,
-    required ColorScheme scheme,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        decoration: BoxDecoration(
-          color: isActive
-              ? scheme.primary.withValues(alpha: 0.15)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-          border: Border(
-            right: isActive
-                ? BorderSide(color: scheme.primary, width: 4)
-                : BorderSide.none,
-          ),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              color: isActive ? scheme.primary : scheme.onSurfaceVariant,
-            ),
-            const SizedBox(width: 16),
-            Text(
-              label,
-              style: GoogleFonts.manrope(
-                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                color: isActive ? scheme.primary : scheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDesktopRail(ColorScheme scheme, bool signedIn, bool isGuest) {
-    return NavigationRail(
-      backgroundColor: scheme.surface,
-      selectedIndex: _index,
-      onDestinationSelected: (i) => setState(() => _index = i),
-      labelType: NavigationRailLabelType.all,
-      leading: Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: SizedBox(
-          width: 72,
-          height: 72,
-          child: Image.asset(
-            'assets/branding/app_icon.png',
-            fit: BoxFit.contain,
-          ),
-        ),
-      ),
-      trailing: Expanded(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            IconButton(
-              tooltip: 'Categories',
-              onPressed: () {
-                Navigator.of(context).push<void>(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const ManageCategoriesScreen(),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.category_outlined),
-            ),
-            IconButton(
-              tooltip: 'Settings',
-              onPressed: () {
-                Navigator.of(context).push<void>(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const SettingsScreen(),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.settings_outlined),
-            ),
-            if (signedIn)
-              IconButton(
-                tooltip: _syncing ? 'Syncing...' : 'Sync now',
-                onPressed: _syncing ? null : _syncNow,
-                icon: const Icon(Icons.sync),
-              ),
-            const SizedBox(height: 8),
-            IconButton(
-              tooltip: signedIn ? 'Sign out' : 'Sign in or create account',
-              onPressed: () async {
-                if (signedIn) {
-                  await ref.read(authControllerProvider.notifier).signOut();
-                } else if (isGuest) {
-                  await ref
-                      .read(guestModeControllerProvider.notifier)
-                      .exitGuestMode();
-                }
-              },
-              icon: Icon(signedIn ? Icons.logout : Icons.login),
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
-      destinations: const [
-        NavigationRailDestination(
-          icon: Icon(Icons.receipt_long_outlined),
-          selectedIcon: Icon(Icons.receipt_long),
-          label: Text('Expenses'),
-        ),
-        NavigationRailDestination(
-          icon: Icon(Icons.subscriptions_outlined),
-          selectedIcon: Icon(Icons.subscriptions),
-          label: Text('Subscriptions'),
-        ),
-        NavigationRailDestination(
-          icon: Icon(Icons.insights_outlined),
-          selectedIcon: Icon(Icons.insights),
-          label: Text('Insights'),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBottomNavBar(BuildContext context, ColorScheme scheme) {
-    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
-
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          height: 80 + bottomInset,
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerLow.withValues(alpha: 0.9),
-            border: Border(
-              top: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
-            ),
-          ),
-          padding: EdgeInsets.only(bottom: 8 + bottomInset),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildBottomNavItem(
-                0,
-                Icons.payments,
-                Icons.payments_outlined,
-                'Expenses',
-                scheme,
-              ),
-              _buildBottomNavItem(
-                1,
-                Icons.subscriptions,
-                Icons.subscriptions_outlined,
-                'Subscriptions',
-                scheme,
-              ),
-              _buildBottomNavItem(
-                2,
-                Icons.query_stats,
-                Icons.query_stats_outlined,
-                'Insights',
-                scheme,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBottomNavItem(
-    int index,
-    IconData activeIcon,
-    IconData inactiveIcon,
-    String label,
-    ColorScheme scheme,
-  ) {
-    final isActive = _index == index;
-    final color = isActive ? scheme.primary : scheme.outline;
-    return Expanded(
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => setState(() => _index = index),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(isActive ? activeIcon : inactiveIcon, color: color, size: 26),
-            const SizedBox(height: 4),
-            Text(
-              label.toUpperCase(),
-              style: GoogleFonts.manrope(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: color,
-                letterSpacing: 1.2,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Container(
-              width: 4,
-              height: 4,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isActive ? scheme.primary : Colors.transparent,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String? _cloudSubtitle(AsyncValue<SyncStatus>? syncStatusAsync) {
-    if (syncStatusAsync == null) return null;
-    final dateFmt = DateFormat('MMM d, yyyy h:mm a');
-    return syncStatusAsync.when(
-      loading: () => 'Checking Cloud sync status...',
-      error: (_, _) => 'Cloud status unavailable right now.',
-      data: (status) {
-        if (status.totalCount == 0) {
-          return 'Connected to Cloud. No synced records yet.';
-        }
-        final latest = status.latestUpdatedAt;
-        if (latest == null) {
-          return 'Connected to Cloud. Waiting for first sync timestamp.';
-        }
-        return 'Last Cloud update: ${dateFmt.format(latest.toLocal())}';
-      },
-    );
-  }
-}
-
-class _ShellStatusBanner extends StatelessWidget {
-  const _ShellStatusBanner({
-    required this.signedIn,
-    required this.isGuest,
-    required this.online,
-    required this.syncing,
-    required this.cloudSubtitle,
-    required this.onSyncNow,
-  });
-
-  final bool signedIn;
-  final bool isGuest;
-  final bool online;
-  final bool syncing;
-  final String? cloudSubtitle;
-  final VoidCallback? onSyncNow;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final ext = theme.vaultSpend;
-
-    if (!signedIn && !isGuest) return const SizedBox.shrink();
-
-    final IconData icon = signedIn
-        ? (syncing ? Icons.sync_rounded : Icons.check_circle_rounded)
-        : Icons.person_outline_rounded;
-    final title = signedIn
-        ? (syncing ? 'SYNCING DATA' : 'HEALTHY SYNC STATUS')
-        : 'GUEST MODE ACTIVE';
-    final String? actionLabel = signedIn
-        ? (online ? (syncing ? null : 'REFRESH') : 'OFFLINE')
-        : null;
-
-    final bgColor = signedIn
-        ? scheme.primary.withValues(alpha: 0.1)
-        : scheme.surfaceContainerHighest.withValues(alpha: 0.5);
-    final fgColor = signedIn ? scheme.primary : scheme.onSurfaceVariant;
-
-    return SafeArea(
-      bottom: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: BackdropFilter(
-            filter: ui.ImageFilter.blur(
-              sigmaX: ext.glassBlur,
-              sigmaY: ext.glassBlur,
-            ),
-            child: Container(
-              decoration: BoxDecoration(
-                color: bgColor,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: fgColor.withValues(alpha: 0.1)),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Row(
-                      children: [
-                        _PulseIcon(icon: icon, color: fgColor, active: syncing),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                title,
-                                style: GoogleFonts.manrope(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w800,
-                                  color: fgColor,
-                                  letterSpacing: 1.2,
-                                ),
-                              ),
-                              if (cloudSubtitle != null) ...[
-                                const SizedBox(height: 2),
-                                Text(
-                                  cloudSubtitle!,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w500,
-                                    color: fgColor.withValues(alpha: 0.7),
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (actionLabel != null)
-                    GestureDetector(
-                      onTap: onSyncNow,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: syncing
-                              ? Colors.transparent
-                              : fgColor.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: fgColor.withValues(alpha: 0.2),
-                          ),
-                        ),
-                        child: Text(
-                          actionLabel,
-                          style: GoogleFonts.inter(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1.2,
-                            color: fgColor,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PulseIcon extends StatefulWidget {
-  const _PulseIcon({
-    required this.icon,
-    required this.color,
-    required this.active,
-  });
-
-  final IconData icon;
-  final Color color;
-  final bool active;
-
-  @override
-  State<_PulseIcon> createState() => _PulseIconState();
-}
-
-class _PulseIconState extends State<_PulseIcon>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    );
-    if (widget.active) {
-      _controller.repeat();
-    }
-  }
-
-  @override
-  void didUpdateWidget(_PulseIcon oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.active && !_controller.isAnimating) {
-      _controller.repeat();
-    } else if (!widget.active && _controller.isAnimating) {
-      _controller.stop();
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!widget.active) return Icon(widget.icon, color: widget.color, size: 18);
-
-    return RotationTransition(
-      turns: _controller,
-      child: Icon(widget.icon, color: widget.color, size: 18),
     );
   }
 }

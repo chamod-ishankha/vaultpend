@@ -65,13 +65,13 @@ class SubscriptionReminderService {
           .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin
           >();
-        final notificationsPermission = await androidPlugin
+      final notificationsPermission = await androidPlugin
           ?.requestNotificationsPermission();
-        final exactAlarmsPermission = await androidPlugin
+      final exactAlarmsPermission = await androidPlugin
           ?.requestExactAlarmsPermission();
-        final notificationsEnabled = await androidPlugin
+      final notificationsEnabled = await androidPlugin
           ?.areNotificationsEnabled();
-        final exactAlarmsAllowed = await androidPlugin
+      final exactAlarmsAllowed = await androidPlugin
           ?.canScheduleExactNotifications();
 
       final iosPlugin = _plugin
@@ -322,7 +322,11 @@ class SubscriptionReminderService {
       _logger.warning('reminder_cancel_managed_missing_plugin', error, stack);
     } on PlatformException catch (error, stack) {
       _pluginAvailable = false;
-      _logger.warning('reminder_cancel_managed_platform_exception', error, stack);
+      _logger.warning(
+        'reminder_cancel_managed_platform_exception',
+        error,
+        stack,
+      );
     }
   }
 

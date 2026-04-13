@@ -1,6 +1,8 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import '../constants/app_dimensions.dart';
 import '../theme/app_theme.dart';
+import '../theme/app_typography.dart';
 
 class ObsidianAppBar extends StatelessWidget implements PreferredSizeWidget {
   const ObsidianAppBar({
@@ -8,7 +10,7 @@ class ObsidianAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.title,
     this.actions,
     this.leading,
-    this.height = 64.0,
+    this.height = AppDimensions.sp64,
     this.showBottomBorder = true,
     this.centerTitle = true,
   });
@@ -55,7 +57,7 @@ class ObsidianAppBar extends StatelessWidget implements PreferredSizeWidget {
             scrolledUnderElevation: 0,
             leading: leading,
             title: DefaultTextStyle.merge(
-              style: theme.textTheme.titleLarge?.copyWith(
+              style: AppTypography.subtitle1(theme)?.copyWith(
                 color: scheme.primary,
                 fontWeight: FontWeight.w700,
                 letterSpacing: -0.5,

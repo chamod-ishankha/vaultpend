@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../constants/app_dimensions.dart';
 import '../theme/app_theme.dart';
+import '../theme/app_typography.dart';
 
 enum ObsidianButtonStyle { primary, secondary, tertiary }
 
@@ -11,8 +13,8 @@ class ObsidianButton extends StatefulWidget {
     required this.text,
     this.style = ObsidianButtonStyle.primary,
     this.width,
-    this.height = 56,
-    this.borderRadius = 12.0,
+    this.height = AppDimensions.standardButtonHeight,
+    this.borderRadius = AppDimensions.radiusMedium,
     this.isLoading = false,
     this.gradientColors,
     this.shadowColor,
@@ -124,7 +126,7 @@ class _ObsidianButtonState extends State<ObsidianButton>
             )
           : Text(
               widget.text,
-              style: theme.textTheme.titleMedium?.copyWith(
+              style: AppTypography.subtitle2(theme)?.copyWith(
                 color: resolvedTextColor,
                 fontWeight: FontWeight.w700,
                 letterSpacing: -0.2,
@@ -258,10 +260,9 @@ class _ObsidianButtonState extends State<ObsidianButton>
               )
             : Text(
                 widget.text,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: scheme.primary,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: AppTypography.bodyMedium(
+                  theme,
+                )?.copyWith(color: scheme.primary, fontWeight: FontWeight.w600),
               ),
       );
     }

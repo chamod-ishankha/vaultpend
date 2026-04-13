@@ -6,11 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   testWidgets('smoke: MaterialApp builds', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: Text('VaultSpend'),
-        ),
-      ),
+      const MaterialApp(home: Scaffold(body: Text('VaultSpend'))),
     );
     expect(find.text('VaultSpend'), findsOneWidget);
   });

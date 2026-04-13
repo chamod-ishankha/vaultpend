@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../fx/fx_providers.dart';
+import '../theme/app_typography.dart';
+import '../constants/app_dimensions.dart';
 
 /// Display-only reference rates (Frankfurter v2; not financial advice).
 class FxReferenceStrip extends ConsumerWidget {
@@ -11,7 +12,8 @@ class FxReferenceStrip extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(fxRatesProvider);
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
 
     return Container(
       width: double.infinity,
@@ -26,34 +28,36 @@ class FxReferenceStrip extends ConsumerWidget {
       ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppDimensions.sp24,
+          vertical: 10,
+        ),
         child: Row(
           children: [
             Row(
               children: [
                 Text(
                   'FX RATES',
-                  style: GoogleFonts.manrope(
-                    fontSize: 10,
+                  style: AppTypography.labelSmall(theme)?.copyWith(
                     fontWeight: FontWeight.w700,
                     color: scheme.outline,
                     letterSpacing: 1.5,
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppDimensions.sp8),
                 Container(
                   width: 1,
                   height: 12,
                   color: scheme.outlineVariant.withValues(alpha: 0.3),
                 ),
-                const SizedBox(width: 24),
+                const SizedBox(width: AppDimensions.sp24),
               ],
             ),
             async.when(
               data: (snap) {
                 if (snap == null || snap.rates.isEmpty) {
                   return _buildItem(
-                    context,
+                    theme,
                     scheme,
                     'OFFLINE',
                     'Pull to refresh',
@@ -66,19 +70,19 @@ class FxReferenceStrip extends ConsumerWidget {
                 snap.rates.forEach((currency, rate) {
                   widgets.add(
                     _buildItem(
-                      context,
+                      theme,
                       scheme,
                       '$currency/${snap.base}',
                       rate.toStringAsFixed(4),
                     ),
                   );
-                  widgets.add(const SizedBox(width: 24));
+                  widgets.add(const SizedBox(width: AppDimensions.sp24));
                 });
 
                 if (snap.isStale) {
                   widgets.add(
                     _buildItem(
-                      context,
+                      theme,
                       scheme,
                       'CHCD',
                       'Cached Data',
@@ -89,9 +93,9 @@ class FxReferenceStrip extends ConsumerWidget {
 
                 return Row(children: widgets);
               },
-              loading: () => _buildItem(context, scheme, 'SYNC', 'Loading...'),
+              loading: () => _buildItem(theme, scheme, 'SYNC', 'Loading...'),
               error: (err, _) => _buildItem(
-                context,
+                theme,
                 scheme,
                 'ERR',
                 'Unavailable',
@@ -105,7 +109,7 @@ class FxReferenceStrip extends ConsumerWidget {
   }
 
   Widget _buildItem(
-    BuildContext context,
+    ThemeData theme,
     ColorScheme scheme,
     String label,
     String value, {
@@ -116,17 +120,17 @@ class FxReferenceStrip extends ConsumerWidget {
       children: [
         Text(
           label,
-          style: GoogleFonts.inter(
-            fontSize: 10,
+          style: AppTypography.labelSmall(theme)?.copyWith(
             fontWeight: FontWeight.w700,
             color: isError ? scheme.error : scheme.onSurfaceVariant,
             letterSpacing: 1.5,
+            fontSize: 10,
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: AppDimensions.sp8),
         Text(
           value,
-          style: GoogleFonts.manrope(
+          style: AppTypography.subtitle2(theme)?.copyWith(
             fontSize: 14,
             fontWeight: FontWeight.w700,
             color: isError ? scheme.error : scheme.primary,

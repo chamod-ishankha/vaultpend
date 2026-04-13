@@ -232,8 +232,8 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
         '$_currency - ${_currencyLabels[_currency] ?? _currency}';
     final currentAmount = _amountCtrl.text.trim();
     final amountTextColor = _isAmountEmptyOrZero(currentAmount)
-      ? scheme.onSurface.withValues(alpha: 0.25)
-      : scheme.onSurface;
+        ? scheme.onSurface.withValues(alpha: 0.25)
+        : scheme.onSurface;
 
     return Scaffold(
       backgroundColor: scheme.surface,
@@ -264,7 +264,12 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 720),
             child: ListView(
-              padding: EdgeInsets.fromLTRB(horizontalPadding, 24, horizontalPadding, 110),
+              padding: EdgeInsets.fromLTRB(
+                horizontalPadding,
+                24,
+                horizontalPadding,
+                110,
+              ),
               children: [
                 Center(
                   child: Column(
@@ -298,9 +303,10 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
                             width: ext.addExpenseAmountFieldWidth,
                             child: TextField(
                               controller: _amountCtrl,
-                              keyboardType: const TextInputType.numberWithOptions(
-                                decimal: true,
-                              ),
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
                               textAlign: TextAlign.left,
                               style: theme.textTheme.displayLarge?.copyWith(
                                 fontWeight: FontWeight.w900,
@@ -317,7 +323,9 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
                               ),
                               onChanged: (_) => setState(() {}),
                               inputFormatters: [
-                                FilteringTextInputFormatter.allow(RegExp(r'[\d.,]')),
+                                FilteringTextInputFormatter.allow(
+                                  RegExp(r'[\d.,]'),
+                                ),
                               ],
                             ),
                           ),
@@ -336,7 +344,9 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
                             color: ext.surfaceContainerHigh,
                             borderRadius: BorderRadius.circular(999),
                             border: Border.all(
-                              color: scheme.outlineVariant.withValues(alpha: 0.2),
+                              color: scheme.outlineVariant.withValues(
+                                alpha: 0.2,
+                              ),
                             ),
                           ),
                           child: Text(
@@ -382,7 +392,8 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
                   icon: Icons.payments_rounded,
                   iconColor: scheme.primary.withValues(alpha: 0.7),
                   label: 'Currency',
-                  value: '$_currency (${_currencySymbols[_currency] ?? _currency})',
+                  value:
+                      '$_currency (${_currencySymbols[_currency] ?? _currency})',
                   onTap: _showCurrencyPicker,
                   cardRadius: cardRadius,
                   iconTileSize: iconTileSize,
@@ -412,7 +423,10 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
                 ),
                 const SizedBox(height: 12),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
                   decoration: BoxDecoration(
                     color: ext.surfaceContainerHigh,
                     borderRadius: BorderRadius.circular(cardRadius),
@@ -689,7 +703,9 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
                 final option = entry.value;
                 final selected = option == currentValue;
                 return Container(
-                  margin: EdgeInsets.only(bottom: idx == options.length - 1 ? 0 : 8),
+                  margin: EdgeInsets.only(
+                    bottom: idx == options.length - 1 ? 0 : 8,
+                  ),
                   decoration: BoxDecoration(
                     color: selected
                         ? ext.surfaceContainerHigh
@@ -709,7 +725,9 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
                       textAlign: TextAlign.center,
                       style: theme.textTheme.bodyLarge?.copyWith(
                         color: selected ? scheme.primary : scheme.onSurface,
-                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                        fontWeight: selected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
                       ),
                     ),
                     onTap: () => Navigator.pop(ctx, option),

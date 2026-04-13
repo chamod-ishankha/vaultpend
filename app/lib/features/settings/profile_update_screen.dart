@@ -671,6 +671,7 @@ class _ProfileUpdateScreenState extends ConsumerState<ProfileUpdateScreen> {
                           isLoading: busy,
                           style: ObsidianButtonStyle.primary,
                           width: double.infinity,
+                          enableShimmer: true,
                         ),
                         const SizedBox(height: 8),
                         Center(

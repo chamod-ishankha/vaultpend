@@ -84,10 +84,7 @@ class ObsidianCard extends StatelessWidget {
                     ),
                   ),
                 ),
-              Padding(
-                padding: padding,
-                child: child,
-              ),
+              Padding(padding: padding, child: child),
             ],
           ),
         ),

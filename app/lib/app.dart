@@ -261,4 +261,3 @@ class _VaultSpendAppState extends ConsumerState<VaultSpendApp>
     );
   }
 }
-
