@@ -48,6 +48,13 @@ class VaultSpendThemeExtension
   final double addExpenseReceiptTileHeight;
   final double addExpenseModalCornerRadius;
   final double addExpenseModalOptionRadius;
+  final double manageCategoriesHeaderPadding;
+  final double manageCategoriesDecorSize;
+  final double manageCategoriesCardPadding;
+  final double manageCategoriesIconTileSize;
+  final double manageCategoriesIconSize;
+  final double manageCategoriesCardRadius;
+  final double manageCategoriesFabSize;
 
   const VaultSpendThemeExtension({
     required this.primaryDark,
@@ -94,6 +101,13 @@ class VaultSpendThemeExtension
     this.addExpenseReceiptTileHeight = 128.0,
     this.addExpenseModalCornerRadius = 24.0,
     this.addExpenseModalOptionRadius = 14.0,
+    this.manageCategoriesHeaderPadding = 24.0,
+    this.manageCategoriesDecorSize = 128.0,
+    this.manageCategoriesCardPadding = 16.0,
+    this.manageCategoriesIconTileSize = 48.0,
+    this.manageCategoriesIconSize = 24.0,
+    this.manageCategoriesCardRadius = 12.0,
+    this.manageCategoriesFabSize = 56.0,
   });
 
   @override
@@ -142,6 +156,13 @@ class VaultSpendThemeExtension
     double? addExpenseReceiptTileHeight,
     double? addExpenseModalCornerRadius,
     double? addExpenseModalOptionRadius,
+    double? manageCategoriesHeaderPadding,
+    double? manageCategoriesDecorSize,
+    double? manageCategoriesCardPadding,
+    double? manageCategoriesIconTileSize,
+    double? manageCategoriesIconSize,
+    double? manageCategoriesCardRadius,
+    double? manageCategoriesFabSize,
   }) {
     return VaultSpendThemeExtension(
       primaryDark: primaryDark ?? this.primaryDark,
@@ -219,6 +240,20 @@ class VaultSpendThemeExtension
           addExpenseModalCornerRadius ?? this.addExpenseModalCornerRadius,
       addExpenseModalOptionRadius:
           addExpenseModalOptionRadius ?? this.addExpenseModalOptionRadius,
+      manageCategoriesHeaderPadding:
+          manageCategoriesHeaderPadding ?? this.manageCategoriesHeaderPadding,
+      manageCategoriesDecorSize:
+          manageCategoriesDecorSize ?? this.manageCategoriesDecorSize,
+      manageCategoriesCardPadding:
+          manageCategoriesCardPadding ?? this.manageCategoriesCardPadding,
+      manageCategoriesIconTileSize:
+          manageCategoriesIconTileSize ?? this.manageCategoriesIconTileSize,
+      manageCategoriesIconSize:
+          manageCategoriesIconSize ?? this.manageCategoriesIconSize,
+      manageCategoriesCardRadius:
+          manageCategoriesCardRadius ?? this.manageCategoriesCardRadius,
+      manageCategoriesFabSize:
+          manageCategoriesFabSize ?? this.manageCategoriesFabSize,
     );
   }
 
@@ -437,6 +472,41 @@ class VaultSpendThemeExtension
         other.addExpenseModalOptionRadius,
         t,
       )!,
+      manageCategoriesHeaderPadding: ui.lerpDouble(
+        manageCategoriesHeaderPadding,
+        other.manageCategoriesHeaderPadding,
+        t,
+      )!,
+      manageCategoriesDecorSize: ui.lerpDouble(
+        manageCategoriesDecorSize,
+        other.manageCategoriesDecorSize,
+        t,
+      )!,
+      manageCategoriesCardPadding: ui.lerpDouble(
+        manageCategoriesCardPadding,
+        other.manageCategoriesCardPadding,
+        t,
+      )!,
+      manageCategoriesIconTileSize: ui.lerpDouble(
+        manageCategoriesIconTileSize,
+        other.manageCategoriesIconTileSize,
+        t,
+      )!,
+      manageCategoriesIconSize: ui.lerpDouble(
+        manageCategoriesIconSize,
+        other.manageCategoriesIconSize,
+        t,
+      )!,
+      manageCategoriesCardRadius: ui.lerpDouble(
+        manageCategoriesCardRadius,
+        other.manageCategoriesCardRadius,
+        t,
+      )!,
+      manageCategoriesFabSize: ui.lerpDouble(
+        manageCategoriesFabSize,
+        other.manageCategoriesFabSize,
+        t,
+      )!,
     );
   }
 }
@@ -527,6 +597,13 @@ ThemeData buildVaultSpendTheme({required Brightness brightness}) {
         addExpenseReceiptTileHeight: 128,
         addExpenseModalCornerRadius: 24,
         addExpenseModalOptionRadius: 14,
+        manageCategoriesHeaderPadding: 24.0,
+        manageCategoriesDecorSize: 128.0,
+        manageCategoriesCardPadding: 16.0,
+        manageCategoriesIconTileSize: 48.0,
+        manageCategoriesIconSize: 24.0,
+        manageCategoriesCardRadius: 12.0,
+        manageCategoriesFabSize: 56.0,
       ),
     ],
     textTheme: GoogleFonts.interTextTheme(baseTextTheme).copyWith(

@@ -1,9 +1,11 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/obsidian_app_bar.dart';
-import '../../core/widgets/obsidian_card.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../data/models/category.dart';
 import 'category_color_resolver.dart';
@@ -13,7 +15,11 @@ import 'edit_category_screen.dart';
 class ManageCategoriesScreen extends ConsumerWidget {
   const ManageCategoriesScreen({super.key});
 
-  Future<void> _openEditor(BuildContext context, WidgetRef ref, {Category? category}) async {
+  Future<void> _openEditor(
+    BuildContext context,
+    WidgetRef ref, {
+    Category? category,
+  }) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => EditCategoryScreen(category: category),
@@ -23,7 +29,11 @@ class ManageCategoriesScreen extends ConsumerWidget {
     ref.invalidate(categoryListProvider);
   }
 
-  Future<void> _deleteCategory(BuildContext context, WidgetRef ref, Category category) async {
+  Future<void> _deleteCategory(
+    BuildContext context,
+    WidgetRef ref,
+    Category category,
+  ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -50,23 +60,118 @@ class ManageCategoriesScreen extends ConsumerWidget {
     }
   }
 
+  void _showActionMenu(BuildContext context, WidgetRef ref, Category category) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF131317),
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit_rounded),
+              title: const Text('Edit Category'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _openEditor(context, ref, category: category);
+              },
+            ),
+            ListTile(
+              leading: Icon(
+                category.isVisible
+                    ? Icons.visibility_off_rounded
+                    : Icons.visibility_rounded,
+              ),
+              title: Text(
+                category.isVisible ? 'Hide Category' : 'Show Category',
+              ),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final updated = Category()
+                  ..id = category.id
+                  ..name = category.name
+                  ..iconKey = category.iconKey
+                  ..color = category.color
+                  ..description = category.description
+                  ..isVisible = !category.isVisible;
+                await ref.read(categoryRepositoryProvider).put(updated);
+                ref.invalidate(categoryListProvider);
+              },
+            ),
+            ListTile(
+              leading: Icon(
+                Icons.delete_rounded,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              title: Text(
+                'Delete',
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                _deleteCategory(context, ref, category);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(categoryListProvider);
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final ext = theme.vaultSpend;
 
     return Scaffold(
       backgroundColor: scheme.surface,
       appBar: ObsidianAppBar(
-        title: const Text('Categories'),
+        centerTitle: false,
+        title: Text(
+          'Categories',
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.2,
+          ),
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.add_rounded),
-            onPressed: () => _openEditor(context, ref),
+            icon: Icon(Icons.search_rounded, color: scheme.outline, size: 28),
+            onPressed: () {},
+            tooltip: 'Search Categories',
           ),
           const SizedBox(width: 8),
         ],
+      ),
+      floatingActionButton: Container(
+        width: ext.manageCategoriesFabSize,
+        height: ext.manageCategoriesFabSize,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [scheme.primary, scheme.primaryContainer],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: scheme.primary.withOpacity(0.3),
+              offset: const Offset(0, 8),
+              blurRadius: 30,
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(999),
+            onTap: () => _openEditor(context, ref),
+            child: Icon(Icons.add_rounded, color: scheme.onPrimary, size: 32),
+          ),
+        ),
       ),
       body: ResponsiveBody(
         child: async.when(
@@ -74,66 +179,12 @@ class ManageCategoriesScreen extends ConsumerWidget {
           error: (e, _) => Center(child: Text('$e')),
           data: (items) {
             final visibleCount = items.where((c) => c.isVisible).length;
-            final hiddenCount = items.length - visibleCount;
-
             return ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              padding: const EdgeInsets.fromLTRB(16, 24, 16, 120),
               children: [
-                _CategoryPreviewCard(categories: items.take(5).toList()),
+                _buildTopSummary(context, visibleCount),
                 const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _StatusCard(
-                        title: 'VISIBILITY',
-                        status: 'HEALTHY',
-                        description: '$visibleCount Visible, $hiddenCount Hidden',
-                        icon: Icons.visibility_rounded,
-                        accentColor: Colors.greenAccent,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _StatusCard(
-                        title: 'ANALYTICS',
-                        status: '${items.length}',
-                        description: 'Total Categories',
-                        icon: Icons.auto_graph_rounded,
-                        accentColor: scheme.primary,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 32),
-                Text(
-                  'MANAGE CATEGORIES',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: scheme.outline,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.5,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                ...items.map((c) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _CategoryListItem(
-                    category: c,
-                    onTap: () => _openEditor(context, ref, category: c),
-                    onToggleVisibility: (v) async {
-                      final updated = Category()
-                        ..id = c.id
-                        ..name = c.name
-                        ..iconKey = c.iconKey
-                        ..color = c.color
-                        ..description = c.description
-                        ..isVisible = v;
-                      await ref.read(categoryRepositoryProvider).put(updated);
-                      ref.invalidate(categoryListProvider);
-                    },
-                    onDelete: () => _deleteCategory(context, ref, c),
-                  ),
-                )),
-                const SizedBox(height: 100),
+                ...items.map((c) => _buildCategoryItem(context, c, ref)),
               ],
             );
           },
@@ -141,234 +192,215 @@ class ManageCategoriesScreen extends ConsumerWidget {
       ),
     );
   }
-}
 
-class _CategoryPreviewCard extends StatelessWidget {
-  final List<Category> categories;
-  const _CategoryPreviewCard({required this.categories});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildTopSummary(BuildContext context, int count) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final ext = theme.vaultSpend;
 
-    return ObsidianCard(
-      level: ObsidianCardTonalLevel.high,
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'CATEGORY PREVIEW',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: scheme.primary,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.5,
-            ),
-          ),
-          const SizedBox(height: 24),
-          categories.isEmpty
-              ? Text(
-                  'No categories configured',
-                  style: theme.textTheme.bodyMedium?.copyWith(color: scheme.outline),
-                )
-              : Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: categories.map((c) {
-                    final color = resolveCategoryColor(context, c.color);
-                    return Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.2),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: color.withOpacity(0.4), width: 2),
-                      ),
-                      child: Center(
-                        child: Icon(
-                          resolveCategoryIcon(c.iconKey),
-                          color: color,
-                          size: 20,
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-          const SizedBox(height: 20),
-          Text(
-            'Organize your infrastructure by deploying categories across your transaction pipeline.',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: scheme.onSurfaceVariant,
-              height: 1.4,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatusCard extends StatelessWidget {
-  final String title;
-  final String status;
-  final String description;
-  final IconData icon;
-  final Color accentColor;
-
-  const _StatusCard({
-    required this.title,
-    required this.status,
-    required this.description,
-    required this.icon,
-    required this.accentColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
-    return ObsidianCard(
-      level: ObsidianCardTonalLevel.low,
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 14, color: accentColor),
-              const SizedBox(width: 6),
-              Text(
-                title,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: accentColor,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 9,
-                  letterSpacing: 1,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            status,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w900,
-              color: scheme.onSurface,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            description,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: scheme.outline,
-              fontSize: 8,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CategoryListItem extends StatelessWidget {
-  final Category category;
-  final VoidCallback onTap;
-  final VoidCallback onDelete;
-  final Function(bool) onToggleVisibility;
-
-  const _CategoryListItem({
-    required this.category,
-    required this.onTap,
-    required this.onDelete,
-    required this.onToggleVisibility,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final color = resolveCategoryColor(context, category.color);
-    final isVisible = category.isVisible;
-
-    return Dismissible(
-      key: ValueKey(category.id),
-      direction: DismissDirection.endToStart,
-      background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
-        decoration: BoxDecoration(
-          color: scheme.error.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(16),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: EdgeInsets.all(ext.manageCategoriesHeaderPadding),
+      clipBehavior: Clip.hardEdge,
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border(
+          top: BorderSide(color: scheme.outlineVariant.withOpacity(0.8)),
         ),
-        child: Icon(Icons.delete_rounded, color: scheme.error),
       ),
-      confirmDismiss: (_) async {
-        final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Delete Category?'),
-            content: Text('Remove "${category.name}"? This cannot be undone.'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancel'),
+      child: Stack(
+        children: [
+          // Background blurred circle decor
+          Positioned(
+            right: -32,
+            top: -32,
+            child: Container(
+              width: ext.manageCategoriesDecorSize,
+              height: ext.manageCategoriesDecorSize,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: scheme.primary.withOpacity(0.04),
+                boxShadow: [
+                  BoxShadow(
+                    color: scheme.primary.withOpacity(0.05),
+                    blurRadius: 40,
+                    spreadRadius: 20,
+                  ),
+                ],
               ),
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                style: TextButton.styleFrom(foregroundColor: scheme.error),
-                child: const Text('Delete'),
+            ),
+          ),
+
+          // Content
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'VAULT STRUCTURE',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 2,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '$count Active Categories',
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: scheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: MediaQuery.sizeOf(context).width * 0.7,
+                child: Text(
+                  'Organize your capital across obsidian-grade vaults. Define flows and monitor velocity per sector.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    height: 1.4,
+                  ),
+                ),
               ),
             ],
           ),
-        );
-        return confirmed == true;
-      },
-      onDismissed: (_) => onDelete(),
-      child: ObsidianCard(
-        level: ObsidianCardTonalLevel.low,
-        padding: EdgeInsets.zero,
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Center(
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryItem(BuildContext context, Category c, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final ext = theme.vaultSpend;
+    final color = resolveCategoryColor(context, c.color);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(ext.manageCategoriesCardRadius),
+        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05))),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(ext.manageCategoriesCardRadius),
+          onTap: () => _openEditor(context, ref, category: c),
+          child: Padding(
+            padding: EdgeInsets.all(ext.manageCategoriesCardPadding),
+            child: Row(
+              children: [
+                // Icon block
+                Container(
+                  width: ext.manageCategoriesIconTileSize,
+                  height: ext.manageCategoriesIconTileSize,
+                  margin: const EdgeInsets.only(right: 16),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: color.withOpacity(0.2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: color.withOpacity(0.1),
+                        blurRadius: 15,
+                        spreadRadius: 0,
+                      ),
+                    ],
+                  ),
                   child: Icon(
-                    resolveCategoryIcon(category.iconKey),
+                    resolveCategoryIcon(c.iconKey),
                     color: color,
-                    size: 20,
+                    size: ext.manageCategoriesIconSize,
                   ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  category.name,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
+
+                // Content block
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              c.name,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: scheme.onSurface,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          if (c.isVisible)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: scheme.primary.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Text(
+                                'ACTIVE',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800,
+                                  color: scheme.primary,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          if (!c.isVisible)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: scheme.onSurfaceVariant.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Text(
+                                'HIDDEN',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800,
+                                  color: scheme.onSurfaceVariant,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        c.description?.isNotEmpty == true
+                            ? c.description!
+                            : 'Asset class tracking',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          fontSize: 12,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
                 ),
-              ),
-              IconButton(
-                icon: Icon(
-                  isVisible ? Icons.visibility_rounded : Icons.visibility_off_rounded,
-                  color: isVisible ? scheme.primary : scheme.outline,
-                  size: 20,
+                // Action block
+                IconButton(
+                  icon: Icon(
+                    Icons.more_vert_rounded,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                  onPressed: () => _showActionMenu(context, ref, c),
                 ),
-                onPressed: () => onToggleVisibility(!isVisible),
-              ),
-              Icon(Icons.chevron_right_rounded, color: scheme.outline.withOpacity(0.5)),
-            ],
+              ],
+            ),
           ),
         ),
       ),
