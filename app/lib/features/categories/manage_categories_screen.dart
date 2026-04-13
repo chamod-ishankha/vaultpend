@@ -146,32 +146,13 @@ class ManageCategoriesScreen extends ConsumerWidget {
           const SizedBox(width: 8),
         ],
       ),
-      floatingActionButton: Container(
-        width: ext.manageCategoriesFabSize,
-        height: ext.manageCategoriesFabSize,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [scheme.primary, scheme.primaryContainer],
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: scheme.primary.withOpacity(0.3),
-              offset: const Offset(0, 8),
-              blurRadius: 30,
-            ),
-          ],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(999),
-            onTap: () => _openEditor(context, ref),
-            child: Icon(Icons.add_rounded, color: scheme.onPrimary, size: 32),
-          ),
-        ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _openEditor(context, ref),
+        backgroundColor: scheme.primary,
+        foregroundColor: const Color(0xFF003732),
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: const Icon(Icons.add, size: 28),
       ),
       body: ResponsiveBody(
         child: async.when(
@@ -298,15 +279,9 @@ class ManageCategoriesScreen extends ConsumerWidget {
                   height: ext.manageCategoriesIconTileSize,
                   margin: const EdgeInsets.only(right: 16),
                   decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: color.withOpacity(0.2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: color.withOpacity(0.1),
-                        blurRadius: 15,
-                        spreadRadius: 0,
-                      ),
-                    ],
+                    color: color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: color.withValues(alpha: 0.1)),
                   ),
                   child: Icon(
                     resolveCategoryIcon(c.iconKey),
