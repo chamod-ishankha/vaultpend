@@ -1,13 +1,13 @@
 - `[x]` **Phase 1: Profile State & Auth Infrastructure**
   - `[x]` Modify `AuthUser` in `auth_session.dart` to store `photoBase64`
   - `[x]` Modify `AuthNotifier` in `auth_providers.dart` to read/write `photo_base64` from Firestore profile doc
-- `[ ]` **Phase 2: Avatar & Shell Integrations**
+- `[x]` **Phase 2: Avatar & Shell Integrations**
   - `[x]` Modify `profile_update_screen.dart` with `image_picker` logic, compression bounds (150x150, 50% qual), and upload handling
   - `[x]` Support dynamic avatar bytes in `shell_sidebar_drawer.dart` and `shell_status_banner.dart`
   - `[x]` Migrate `ShellScreen` from `AnimatedSwitcher` to `PageView` for swipe gestures
-- `[ ]` **Phase 3: Search Implementation (Local Filtering)**
+- `[x]` **Phase 3: Search Implementation (Local Filtering)**
   - `[x]` Implement local search bar UI and logic in `expense_list_screen.dart`
   - `[x]` Implement local search bar UI and logic in `subscription_list_screen.dart`
   - `[x]` Implement local search bar UI and logic in `manage_categories_screen.dart`
-- `[ ]` **Phase 4: Dashboard Enhancements**
+- `[x]` **Phase 4: Dashboard Enhancements**
   - `[x]` Inject `FxReferenceStrip` into `insights_screen.dart`

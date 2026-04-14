@@ -17,7 +17,6 @@ import '../../core/export/insights_csv_export_service.dart';
 import '../../core/export/insights_pdf_export_service.dart';
 import '../../core/logging/app_logging.dart';
 // import '../../core/metrics/metric_trend.dart';
-import '../../core/theme/app_theme.dart';
 import '../../core/widgets/fx_reference_strip.dart';
 import '../../core/widgets/obsidian_app_bar.dart';
 import '../../core/widgets/obsidian_card.dart';
@@ -224,7 +223,6 @@ class InsightsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(insightsDataProvider);
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -279,13 +277,20 @@ class InsightsScreen extends ConsumerWidget {
         ],
       ),
       body: ResponsiveBody(
-        child: async.when(
-          data: (data) => _InsightsContent(data: data),
-          loading: () => const _InsightsLoadingState(),
-          error: (error, _) => _InsightsErrorState(
-            message: '$error',
-            onRetry: () => ref.invalidate(insightsDataProvider),
-          ),
+        child: Column(
+          children: [
+            const FxReferenceStrip(),
+            Expanded(
+              child: async.when(
+                data: (data) => _InsightsContent(data: data),
+                loading: () => const _InsightsLoadingState(),
+                error: (error, _) => _InsightsErrorState(
+                  message: '$error',
+                  onRetry: () => ref.invalidate(insightsDataProvider),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

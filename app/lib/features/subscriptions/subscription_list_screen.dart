@@ -242,7 +242,7 @@ class _SubscriptionListScreenState
                   final Map<int, String> categoryMap = {};
                   if (categoriesAsync.value != null) {
                     for (final c in categoriesAsync.value!) {
-                      categoryMap[c.id!] = c.name.toLowerCase();
+                      categoryMap[c.id] = c.name.toLowerCase();
                     }
                   }
 

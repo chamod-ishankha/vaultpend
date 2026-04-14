@@ -166,13 +166,14 @@ service cloud.firestore {
     function isValidUserSettingsDoc() {
       return request.resource.data.keys().hasOnly([
           'preferred_currency',
+          'photo_base64',
           'updated_at',
         ])
-        && request.resource.data.keys().hasAll([
-          'preferred_currency',
-          'updated_at',
-        ])
-        && isCurrency(request.resource.data.preferred_currency)
+        && request.resource.data.keys().hasAll(['updated_at'])
+        && (!request.resource.data.keys().hasAny(['preferred_currency'])
+            || isCurrency(request.resource.data.preferred_currency))
+        && (!request.resource.data.keys().hasAny(['photo_base64'])
+            || isNullableString(request.resource.data.photo_base64))
         && hasServerUpdatedAt();
     }
 

@@ -6,7 +6,6 @@ import 'package:intl/intl.dart';
 import '../../core/logging/app_logging.dart';
 import '../../core/network/network_providers.dart';
 import '../../core/providers.dart';
-import '../../core/theme/app_theme.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../auth/auth_providers.dart';
 import '../auth/sync_status.dart';

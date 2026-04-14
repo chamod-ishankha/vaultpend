@@ -480,7 +480,7 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
                 child: Switch(
                   value: _isVisible,
                   onChanged: (v) => setState(() => _isVisible = v),
-                  activeColor: scheme.primary,
+                  activeThumbColor: scheme.primary,
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
               ),
