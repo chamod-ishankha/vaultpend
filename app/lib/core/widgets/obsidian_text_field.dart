@@ -103,7 +103,7 @@ class _ObsidianTextFieldState extends State<ObsidianTextField> {
                 decoration: InputDecoration(
                   hintText: widget.hintText,
                   hintStyle: theme.textTheme.bodyLarge?.copyWith(
-                    color: scheme.onSurfaceVariant.withOpacity(0.4),
+                    color: scheme.onSurfaceVariant.withValues(alpha: 0.4),
                   ),
                   prefixIcon: widget.prefixIcon != null
                       ? IconTheme(
@@ -151,7 +151,7 @@ class _ObsidianTextFieldState extends State<ObsidianTextField> {
                     boxShadow: _isFocused
                         ? [
                             BoxShadow(
-                              color: scheme.primary.withOpacity(0.5),
+                              color: scheme.primary.withValues(alpha: 0.5),
                               blurRadius: 8,
                               offset: const Offset(0, -1),
                             ),

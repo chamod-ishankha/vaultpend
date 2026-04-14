@@ -192,7 +192,7 @@ class _ExpenseListScreenState extends ConsumerState<ExpenseListScreen> {
                   hintText: 'Search expenses...',
                   border: InputBorder.none,
                   hintStyle: theme.textTheme.titleMedium?.copyWith(
-                    color: scheme.onSurfaceVariant.withOpacity(0.5),
+                    color: scheme.onSurfaceVariant.withValues(alpha: 0.5),
                   ),
                 ),
                 onChanged: (_) => setState(() {}),

@@ -49,7 +49,7 @@ class ObsidianCard extends StatelessWidget {
         boxShadow: showGlow
             ? [
                 BoxShadow(
-                  color: theme.colorScheme.primary.withOpacity(0.04),
+                  color: theme.colorScheme.primary.withValues(alpha: 0.04),
                   blurRadius: 32,
                   spreadRadius: 4,
                   offset: const Offset(0, 8),
@@ -74,8 +74,8 @@ class ObsidianCard extends StatelessWidget {
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          theme.colorScheme.primary.withOpacity(0.15),
-                          theme.colorScheme.primary.withOpacity(0.05),
+                          theme.colorScheme.primary.withValues(alpha: 0.15),
+                          theme.colorScheme.primary.withValues(alpha: 0.05),
                         ],
                       ),
                       borderRadius: BorderRadius.vertical(

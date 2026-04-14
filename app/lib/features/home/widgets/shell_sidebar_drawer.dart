@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_dimensions.dart';
 import '../../../core/constants/app_icons.dart';
 import '../../../core/constants/app_strings.dart';
-import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/user_profile_avatar.dart';
 
@@ -31,7 +30,6 @@ class ShellSidebarDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final ext = Theme.of(context).vaultSpend;
     final displayName = signedIn
         ? (email?.split('@').first ?? 'Member')
         : 'Guest User';

@@ -129,7 +129,6 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
 
   String? _cloudSubtitle(AsyncValue<SyncStatus>? syncStatusAsync) {
     if (syncStatusAsync == null) return null;
-    final dateFmt = DateFormat('MMM d, yyyy h:mm a');
     return syncStatusAsync.when(
       loading: () => 'Checking Cloud sync status...',
       error: (_, _) => 'Cloud status unavailable right now.',
@@ -141,7 +140,7 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
         if (latest == null) {
           return 'Connected to Cloud. Waiting for first sync timestamp.';
         }
-        return 'Last Cloud update: \${dateFmt.format(latest.toLocal())}';
+        return 'Last Cloud update: ${DateFormat('MMM d, yyyy h:mm a').format(latest.toLocal())}';
       },
     );
   }

@@ -114,7 +114,10 @@ class _SplashScreenState extends State<SplashScreen>
               gradient: RadialGradient(
                 center: Alignment.center,
                 radius: 1.2,
-                colors: [primary.withOpacity(0.04), surface.withOpacity(0.14)],
+                colors: [
+                  primary.withValues(alpha: 0.04),
+                  surface.withValues(alpha: 0.14),
+                ],
                 stops: const [0.0, 0.75],
               ),
             ),
@@ -128,7 +131,7 @@ class _SplashScreenState extends State<SplashScreen>
               height: 500,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: primary.withOpacity(0.03), // primary/3
+                color: primary.withValues(alpha: 0.03), // primary/3
               ),
               child: BackdropFilter(
                 filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
@@ -181,7 +184,7 @@ class _SplashScreenState extends State<SplashScreen>
                           height: 110,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: scheme.primary.withOpacity(0.2),
+                            color: scheme.primary.withValues(alpha: 0.2),
                           ),
                           child: BackdropFilter(
                             filter: ui.ImageFilter.blur(
@@ -205,7 +208,7 @@ class _SplashScreenState extends State<SplashScreen>
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: scheme.primary.withOpacity(0.04),
+                              color: scheme.primary.withValues(alpha: 0.04),
                               blurRadius: 32,
                               offset: Offset.zero,
                             ),
@@ -305,15 +308,15 @@ class _SplashScreenState extends State<SplashScreen>
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
                                     colors: [
-                                      primary.withOpacity(0.2),
+                                      primary.withValues(alpha: 0.2),
                                       primary,
-                                      primary.withOpacity(0.2),
+                                      primary.withValues(alpha: 0.2),
                                     ],
                                     stops: const [0.0, 0.5, 1.0],
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: primary.withOpacity(0.5),
+                                      color: primary.withValues(alpha: 0.5),
                                       blurRadius: 8,
                                     ),
                                   ],
@@ -333,10 +336,10 @@ class _SplashScreenState extends State<SplashScreen>
                         vertical: 8,
                       ),
                       decoration: BoxDecoration(
-                        color: surfaceContainerLow.withOpacity(0.5),
+                        color: surfaceContainerLow.withValues(alpha: 0.5),
                         borderRadius: BorderRadius.circular(24),
                         border: Border.all(
-                          color: outlineVariant.withOpacity(0.1),
+                          color: outlineVariant.withValues(alpha: 0.1),
                         ),
                       ),
                       child: ClipRRect(
@@ -380,14 +383,14 @@ class _SplashScreenState extends State<SplashScreen>
                 Container(
                   width: 32,
                   height: 1,
-                  color: outlineVariant.withOpacity(0.3),
+                  color: outlineVariant.withValues(alpha: 0.3),
                 ),
                 const SizedBox(width: 16),
                 Text(
                   'Fintech Obsidian Series',
                   style: GoogleFonts.manrope(
                     fontWeight: FontWeight.w700,
-                    color: onSurface.withOpacity(0.4),
+                    color: onSurface.withValues(alpha: 0.4),
                     fontSize: 14,
                     letterSpacing: -0.5,
                   ),
@@ -396,7 +399,7 @@ class _SplashScreenState extends State<SplashScreen>
                 Container(
                   width: 32,
                   height: 1,
-                  color: outlineVariant.withOpacity(0.3),
+                  color: outlineVariant.withValues(alpha: 0.3),
                 ),
               ],
             ),

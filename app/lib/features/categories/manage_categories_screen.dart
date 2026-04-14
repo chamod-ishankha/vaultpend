@@ -135,7 +135,6 @@ class _ManageCategoriesScreenState extends ConsumerState<ManageCategoriesScreen>
     final async = ref.watch(categoryListProvider);
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final ext = theme.vaultSpend;
 
     return Scaffold(
       backgroundColor: scheme.surface,
@@ -152,7 +151,7 @@ class _ManageCategoriesScreenState extends ConsumerState<ManageCategoriesScreen>
                   hintText: 'Search categories...',
                   border: InputBorder.none,
                   hintStyle: theme.textTheme.titleMedium?.copyWith(
-                    color: scheme.onSurfaceVariant.withOpacity(0.5),
+                    color: scheme.onSurfaceVariant.withValues(alpha: 0.5),
                   ),
                 ),
                 onChanged: (_) => setState(() {}),
@@ -232,7 +231,7 @@ class _ManageCategoriesScreenState extends ConsumerState<ManageCategoriesScreen>
         color: scheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(16),
         border: Border(
-          top: BorderSide(color: scheme.outlineVariant.withOpacity(0.8)),
+          top: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.8)),
         ),
       ),
       child: Stack(
@@ -246,10 +245,10 @@ class _ManageCategoriesScreenState extends ConsumerState<ManageCategoriesScreen>
               height: ext.manageCategoriesDecorSize,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: scheme.primary.withOpacity(0.04),
+                color: scheme.primary.withValues(alpha: 0.04),
                 boxShadow: [
                   BoxShadow(
-                    color: scheme.primary.withOpacity(0.05),
+                    color: scheme.primary.withValues(alpha: 0.05),
                     blurRadius: 40,
                     spreadRadius: 20,
                   ),
@@ -307,7 +306,7 @@ class _ManageCategoriesScreenState extends ConsumerState<ManageCategoriesScreen>
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(ext.manageCategoriesCardRadius),
-        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05))),
+        border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.05))),
       ),
       child: Material(
         color: Colors.transparent,
@@ -361,7 +360,7 @@ class _ManageCategoriesScreenState extends ConsumerState<ManageCategoriesScreen>
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: scheme.primary.withOpacity(0.1),
+                                color: scheme.primary.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(16),
                               ),
                               child: Text(
@@ -381,7 +380,7 @@ class _ManageCategoriesScreenState extends ConsumerState<ManageCategoriesScreen>
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: scheme.onSurfaceVariant.withOpacity(0.1),
+                                color: scheme.onSurfaceVariant.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(16),
                               ),
                               child: Text(

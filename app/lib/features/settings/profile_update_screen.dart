@@ -304,13 +304,6 @@ class _ProfileUpdateScreenState extends ConsumerState<ProfileUpdateScreen> {
     return '${id.substring(0, 8)}...${id.substring(id.length - 4)}';
   }
 
-  void _showEditHint() {
-    setState(() {
-      _statusMessage = 'Use the editable fields below to update your profile.';
-      _errorMessage = null;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);

@@ -1,5 +1,3 @@
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -309,10 +307,10 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
               height: 256,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: scheme.primary.withOpacity(0.05),
+                color: scheme.primary.withValues(alpha: 0.05),
                 boxShadow: [
                   BoxShadow(
-                    color: scheme.primary.withOpacity(0.08),
+                    color: scheme.primary.withValues(alpha: 0.08),
                     blurRadius: 80,
                     spreadRadius: 20,
                   ),
@@ -341,15 +339,15 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [previewColor, previewColor.withOpacity(0.6)],
+                    colors: [previewColor, previewColor.withValues(alpha: 0.6)],
                   ),
                   border: Border.all(
-                    color: Colors.white.withOpacity(0.15),
+                    color: Colors.white.withValues(alpha: 0.15),
                     width: 1.5,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: previewColor.withOpacity(0.2),
+                      color: previewColor.withValues(alpha: 0.2),
                       blurRadius: 40,
                       spreadRadius: 5,
                     ),
@@ -553,9 +551,9 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: scheme.error.withOpacity(0.1),
+          color: scheme.error.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: scheme.error.withOpacity(0.3)),
+          border: Border.all(color: scheme.error.withValues(alpha: 0.3)),
         ),
         child: Row(
           children: [
@@ -614,7 +612,7 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
                         color: isSelected
                             ? Theme.of(
                                 context,
-                              ).colorScheme.primary.withOpacity(0.1)
+                              ).colorScheme.primary.withValues(alpha: 0.1)
                             : Theme.of(
                                 context,
                               ).colorScheme.surfaceContainerHigh,
@@ -686,7 +684,7 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
                         boxShadow: isSelected
                             ? [
                                 BoxShadow(
-                                  color: color.withOpacity(0.5),
+                                  color: color.withValues(alpha: 0.5),
                                   blurRadius: 10,
                                 ),
                               ]
