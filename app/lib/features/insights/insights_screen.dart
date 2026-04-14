@@ -16,10 +16,15 @@ import '../../core/providers.dart';
 import '../../core/export/insights_csv_export_service.dart';
 import '../../core/export/insights_pdf_export_service.dart';
 import '../../core/logging/app_logging.dart';
+// import '../../core/metrics/metric_trend.dart';
+import '../../core/widgets/fx_reference_strip.dart';
+import '../../core/widgets/obsidian_app_bar.dart';
+import '../../core/widgets/obsidian_card.dart';
 import '../../core/widgets/responsive_layout.dart';
-import '../auth/auth_providers.dart';
+import '../../core/widgets/user_profile_avatar.dart';
 import '../../data/models/expense.dart';
 import '../../data/models/subscription.dart';
+import '../auth/auth_providers.dart';
 import '../subscriptions/add_subscription_screen.dart';
 import '../expenses/expense_providers.dart';
 import '../subscriptions/subscription_providers.dart';
@@ -43,25 +48,93 @@ class InsightsScreen extends ConsumerWidget {
   final VoidCallback? onOpenDrawer;
   static const _csvExportService = InsightsCsvExportService();
   static const _pdfExportService = InsightsPdfExportService();
+  static _InsightsRange _activeRange = _InsightsRange.thirtyDays;
+
+  static _InsightsRange get _activeRangeValue => _activeRange;
+
+  static void _updateActiveRange(_InsightsRange range) {
+    _activeRange = range;
+  }
+
+  DateTime _rangeStart(_InsightsRange range, DateTime now) {
+    return switch (range) {
+      _InsightsRange.sevenDays => DateTime(now.year, now.month, now.day - 6),
+      _InsightsRange.thirtyDays => DateTime(now.year, now.month, now.day - 29),
+      _InsightsRange.ninetyDays => DateTime(now.year, now.month, now.day - 89),
+      _InsightsRange.all => DateTime.fromMillisecondsSinceEpoch(0),
+    };
+  }
+
+  String _rangeTitle(_InsightsRange range) {
+    return switch (range) {
+      _InsightsRange.sevenDays => 'Last 7 Days',
+      _InsightsRange.thirtyDays => 'Last 30 Days',
+      _InsightsRange.ninetyDays => 'Last 90 Days',
+      _InsightsRange.all => 'All Time',
+    };
+  }
+
+  _InsightsExportScope _buildExportScope(
+    _InsightsData data,
+    _InsightsRange range,
+  ) {
+    if (range == _InsightsRange.all) {
+      return _InsightsExportScope(
+        rangeTitle: _rangeTitle(range),
+        expenses: data.expenses,
+        subscriptions: data.subscriptions,
+      );
+    }
+
+    final now = DateTime.now();
+    final start = _rangeStart(range, now);
+    final end = DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
+
+    final scopedExpenses = data.expenses
+        .where((expense) {
+          final occurredAt = expense.occurredAt;
+          return !occurredAt.isBefore(start) && !occurredAt.isAfter(end);
+        })
+        .toList(growable: false);
+
+    final scopedSubscriptions = data.subscriptions
+        .where((subscription) {
+          final billing = subscription.nextBillingDate;
+          return !billing.isBefore(start) && !billing.isAfter(end);
+        })
+        .toList(growable: false);
+
+    return _InsightsExportScope(
+      rangeTitle: _rangeTitle(range),
+      expenses: scopedExpenses,
+      subscriptions: scopedSubscriptions,
+    );
+  }
 
   Future<void> _exportInsightsCsv(BuildContext context, WidgetRef ref) async {
     final logger = ref.read(appLoggerProvider);
     logger.info('insights_csv_export_started');
     try {
       final data = await ref.read(insightsDataProvider.future);
-      if (data.expenses.isEmpty && data.subscriptions.isEmpty) {
+      final selectedRange = InsightsScreen._activeRangeValue;
+      final scope = _buildExportScope(data, selectedRange);
+      if (scope.expenses.isEmpty && scope.subscriptions.isEmpty) {
         logger.info('insights_csv_export_skipped_no_data');
         if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No insights data to export yet.')),
+          SnackBar(
+            content: Text(
+              'No insights data to export for ${scope.rangeTitle.toLowerCase()}.',
+            ),
+          ),
         );
         return;
       }
 
       final csv = _csvExportService.buildCsv(
-        rangeTitle: 'All Time',
-        expenses: data.expenses,
-        subscriptions: data.subscriptions,
+        rangeTitle: scope.rangeTitle,
+        expenses: scope.expenses,
+        subscriptions: scope.subscriptions,
         categoryNames: data.categoryNames,
       );
       final stamp = DateFormat('yyyy-MM-dd_HH-mm').format(DateTime.now());
@@ -96,19 +169,25 @@ class InsightsScreen extends ConsumerWidget {
     logger.info('insights_pdf_export_started');
     try {
       final data = await ref.read(insightsDataProvider.future);
-      if (data.expenses.isEmpty && data.subscriptions.isEmpty) {
+      final selectedRange = InsightsScreen._activeRangeValue;
+      final scope = _buildExportScope(data, selectedRange);
+      if (scope.expenses.isEmpty && scope.subscriptions.isEmpty) {
         logger.info('insights_pdf_export_skipped_no_data');
         if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No insights data to export yet.')),
+          SnackBar(
+            content: Text(
+              'No insights data to export for ${scope.rangeTitle.toLowerCase()}.',
+            ),
+          ),
         );
         return;
       }
 
       final pdfDoc = await _pdfExportService.buildPdf(
-        rangeTitle: 'All Time',
-        expenses: data.expenses,
-        subscriptions: data.subscriptions,
+        rangeTitle: scope.rangeTitle,
+        expenses: scope.expenses,
+        subscriptions: scope.subscriptions,
         categoryNames: data.categoryNames,
       );
       final stamp = DateFormat('yyyy-MM-dd_HH-mm').format(DateTime.now());
@@ -143,17 +222,27 @@ class InsightsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(insightsDataProvider);
+    final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(
+      backgroundColor: Colors.transparent,
+      extendBodyBehindAppBar: false,
+      appBar: ObsidianAppBar(
+        centerTitle: false,
+        title: Text(
+          'Insights',
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.2,
+          ),
+        ),
         leading: onOpenDrawer != null
             ? IconButton(icon: const Icon(Icons.menu), onPressed: onOpenDrawer)
             : null,
-        title: const Text('Insights'),
         actions: [
           PopupMenuButton<String>(
-            tooltip: 'Export report',
-            icon: const Icon(Icons.download_outlined),
+            tooltip: 'Export',
+            icon: const Icon(Icons.ios_share_rounded),
             onSelected: (value) {
               if (value == 'csv') {
                 _exportInsightsCsv(context, ref);
@@ -166,7 +255,7 @@ class InsightsScreen extends ConsumerWidget {
                 value: 'csv',
                 child: Row(
                   children: [
-                    Icon(Icons.table_chart, size: 18),
+                    Icon(Icons.table_chart_rounded, size: 18),
                     SizedBox(width: 8),
                     Text('Export as CSV'),
                   ],
@@ -176,7 +265,7 @@ class InsightsScreen extends ConsumerWidget {
                 value: 'pdf',
                 child: Row(
                   children: [
-                    Icon(Icons.picture_as_pdf, size: 18),
+                    Icon(Icons.picture_as_pdf_rounded, size: 18),
                     SizedBox(width: 8),
                     Text('Export as PDF'),
                   ],
@@ -184,13 +273,24 @@ class InsightsScreen extends ConsumerWidget {
               ),
             ],
           ),
+          const UserProfileAvatar(margin: EdgeInsets.only(right: 16)),
         ],
       ),
       body: ResponsiveBody(
-        child: async.when(
-          data: (data) => _InsightsContent(data: data),
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => Center(child: Text('$error')),
+        child: Column(
+          children: [
+            const FxReferenceStrip(),
+            Expanded(
+              child: async.when(
+                data: (data) => _InsightsContent(data: data),
+                loading: () => const _InsightsLoadingState(),
+                error: (error, _) => _InsightsErrorState(
+                  message: '$error',
+                  onRetry: () => ref.invalidate(insightsDataProvider),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -209,14 +309,58 @@ enum _InsightsReportView {
   currencyBreakdown,
 }
 
-const _insightPalette = [
-  Color(0xFF00A6FB),
-  Color(0xFFFF006E),
-  Color(0xFFFB5607),
-  Color(0xFF8338EC),
-  Color(0xFF3A86FF),
-  Color(0xFF06D6A0),
-];
+List<Color> _buildInsightPalette(ThemeData theme) {
+  final scheme = theme.colorScheme;
+  return [
+    scheme.primary,
+    scheme.secondary,
+    scheme.tertiary,
+    Color.alphaBlend(
+      scheme.primaryContainer.withValues(alpha: 0.92),
+      scheme.surface,
+    ),
+    Color.alphaBlend(
+      scheme.secondaryContainer.withValues(alpha: 0.92),
+      scheme.surface,
+    ),
+    Color.alphaBlend(
+      scheme.tertiaryContainer.withValues(alpha: 0.92),
+      scheme.surface,
+    ),
+    Color.alphaBlend(
+      scheme.primary.withValues(alpha: 0.72),
+      scheme.surfaceBright,
+    ),
+    Color.alphaBlend(
+      scheme.secondary.withValues(alpha: 0.68),
+      scheme.surfaceBright,
+    ),
+    Color.alphaBlend(
+      scheme.tertiary.withValues(alpha: 0.68),
+      scheme.surfaceBright,
+    ),
+    Color.alphaBlend(
+      scheme.onSurfaceVariant.withValues(alpha: 0.82),
+      scheme.surfaceContainerHigh,
+    ),
+    Color.alphaBlend(
+      scheme.outline.withValues(alpha: 0.9),
+      scheme.surfaceBright,
+    ),
+  ];
+}
+
+class _InsightsExportScope {
+  const _InsightsExportScope({
+    required this.rangeTitle,
+    required this.expenses,
+    required this.subscriptions,
+  });
+
+  final String rangeTitle;
+  final List<Expense> expenses;
+  final List<Subscription> subscriptions;
+}
 
 class _InsightsData {
   _InsightsData({
@@ -271,6 +415,7 @@ class _InsightsDashboardState extends ConsumerState<_InsightsDashboard> {
       _reportView = parsed;
       _applyReportViewDefaults(parsed);
     });
+    InsightsScreen._updateActiveRange(_range);
   }
 
   Future<void> _setReportView(_InsightsReportView view) async {
@@ -278,7 +423,13 @@ class _InsightsDashboardState extends ConsumerState<_InsightsDashboard> {
       _reportView = view;
       _applyReportViewDefaults(view);
     });
+    InsightsScreen._updateActiveRange(_range);
     await ref.read(tokenStorageProvider).writeInsightsReportView(view.name);
+  }
+
+  void _setRange(_InsightsRange value) {
+    setState(() => _range = value);
+    InsightsScreen._updateActiveRange(value);
   }
 
   void _applyReportViewDefaults(_InsightsReportView view) {
@@ -318,6 +469,10 @@ class _InsightsDashboardState extends ConsumerState<_InsightsDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    final bottomPadding = math.max(
+      120.0,
+      MediaQuery.paddingOf(context).bottom + kBottomNavigationBarHeight + 24,
+    );
     final preferredCurrency = ref.watch(preferredCurrencyProvider);
     final fxSnapshot = ref
         .watch(fxRatesProvider)
@@ -409,12 +564,33 @@ class _InsightsDashboardState extends ConsumerState<_InsightsDashboard> {
       ..sort((a, b) => b.value.monthlyBurn.compareTo(a.value.monthlyBurn));
 
     final largestSubscriptions = effectiveSubscriptions.toList()
-      ..sort((a, b) => b.amount.compareTo(a.amount));
+      ..sort((a, b) {
+        final aMonthly = _estimateMonthlyAmount(a.amount, a.cycle);
+        final bMonthly = _estimateMonthlyAmount(b.amount, b.cycle);
+        final byMonthly = bMonthly.compareTo(aMonthly);
+        if (byMonthly != 0) {
+          return byMonthly;
+        }
+        return b.amount.compareTo(a.amount);
+      });
 
     final recentExpenses = filteredExpenses.toList()
       ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+    final today = DateTime(now.year, now.month, now.day);
+    final overdueSubscriptions =
+        effectiveSubscriptions
+            .where(
+              (subscription) =>
+                  dayDifferenceFromToday(
+                    subscription.nextBillingDate,
+                    now: today,
+                  ) <
+                  0,
+            )
+            .toList()
+          ..sort((a, b) => b.nextBillingDate.compareTo(a.nextBillingDate));
     final recentSubscriptions = effectiveSubscriptions.toList()
-      ..sort((a, b) => b.nextBillingDate.compareTo(a.nextBillingDate));
+      ..sort((a, b) => _compareBillingUrgency(a, b, today));
     final recurringExpenses = filteredExpenses.where((e) => e.isRecurring);
     final recurringByCurrency = <String, double>{};
     for (final expense in recurringExpenses) {
@@ -437,25 +613,27 @@ class _InsightsDashboardState extends ConsumerState<_InsightsDashboard> {
         ifAbsent: () => subscription.amount,
       );
     }
-    final upcomingTrialCount = upcomingBillings.where((s) => s.isTrial).length;
+    final overdueBillingCount = overdueSubscriptions.length;
+    final dueSoonBillingCount = effectiveSubscriptions.where((subscription) {
+      final days = dayDifferenceFromToday(
+        subscription.nextBillingDate,
+        now: today,
+      );
+      return days >= 0 && days <= 3;
+    }).length;
     final activeTrialCount = effectiveSubscriptions.where((subscription) {
       if (!subscription.isTrial) {
         return false;
       }
       final trialEnds = subscription.trialEndsAt;
-      return trialEnds == null || !trialEnds.isBefore(now);
+      return trialEnds == null ||
+          dayDifferenceFromToday(trialEnds, now: today) >= 0;
     }).length;
     final expiredTrialCount = effectiveSubscriptions.where((subscription) {
       if (!subscription.isTrial || subscription.trialEndsAt == null) {
         return false;
       }
-      final trialEndDay = DateTime(
-        subscription.trialEndsAt!.year,
-        subscription.trialEndsAt!.month,
-        subscription.trialEndsAt!.day,
-      );
-      final todayDay = DateTime(now.year, now.month, now.day);
-      return trialEndDay.difference(todayDay).inDays < 0;
+      return dayDifferenceFromToday(subscription.trialEndsAt!, now: today) < 0;
     }).length;
 
     final numberFmt = NumberFormat('#,##0.00');
@@ -533,7 +711,7 @@ class _InsightsDashboardState extends ConsumerState<_InsightsDashboard> {
           ],
         ),
         _InfoCard(
-          title: 'Top Categories (This Month)',
+          title: 'Top Categories (${_rangeTitle()})',
           lines: topCategories.isEmpty
               ? const ['No category spend yet']
               : topCategories
@@ -580,8 +758,12 @@ class _InsightsDashboardState extends ConsumerState<_InsightsDashboard> {
       if (_showsBillingSections(_reportView))
         _UpcomingBillingCard(
           subscriptions: upcomingBillings,
+          overdueSubscriptions: overdueSubscriptions,
           totalsByCurrency: upcomingByCurrency,
-          trialCount: upcomingTrialCount,
+          overdueCount: overdueBillingCount,
+          dueSoonCount: dueSoonBillingCount,
+          activeTrialCount: activeTrialCount,
+          expiredTrialCount: expiredTrialCount,
           window: _billingWindow,
           onWindowChanged: (window) => setState(() => _billingWindow = window),
           onSubscriptionTap: (subscription) async {
@@ -604,16 +786,30 @@ class _InsightsDashboardState extends ConsumerState<_InsightsDashboard> {
     ];
 
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.fromLTRB(16, 12, 16, bottomPadding),
       children: [
-        _ReportViewSelector(
-          value: _reportView,
-          onChanged: (value) => unawaited(_setReportView(value)),
-        ),
-        const SizedBox(height: 12),
-        _RangeSelector(
-          value: _range,
-          onChanged: (value) => setState(() => _range = value),
+        ObsidianCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const _ControlSectionLabel(
+                icon: Icons.tune_rounded,
+                label: 'Report View',
+              ),
+              const SizedBox(height: 8),
+              _ReportViewSelector(
+                value: _reportView,
+                onChanged: (value) => unawaited(_setReportView(value)),
+              ),
+              const SizedBox(height: 14),
+              const _ControlSectionLabel(
+                icon: Icons.date_range_rounded,
+                label: 'Date Range',
+              ),
+              const SizedBox(height: 8),
+              _RangeSelector(value: _range, onChanged: _setRange),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
         _KeyMetricsStrip(
@@ -627,12 +823,18 @@ class _InsightsDashboardState extends ConsumerState<_InsightsDashboard> {
               label: 'Subscriptions',
               value: '${widget.data.subscriptions.length}',
             ),
-            _MetricItem(label: 'Trials', value: '$activeTrialCount'),
-            _MetricItem(label: 'Trial Expired', value: '$expiredTrialCount'),
+            _MetricItem(label: 'Trials Active', value: '$activeTrialCount'),
+            _MetricItem(label: 'Trials Expired', value: '$expiredTrialCount'),
             _MetricItem(label: 'MoM Up', value: '$increasingCurrencies'),
           ],
         ),
         const SizedBox(height: 12),
+        const _DashboardSectionHeader(
+          title: 'Performance',
+          subtitle:
+              'Daily trend and calendar-month movement (independent of selected range)',
+        ),
+        const SizedBox(height: 8),
         _TrendChartCard(
           title: _rangeTitle(),
           points: trendPoints,
@@ -643,7 +845,12 @@ class _InsightsDashboardState extends ConsumerState<_InsightsDashboard> {
         const SizedBox(height: 12),
         _MonthOverMonthCard(comparison: monthComparison, numberFmt: numberFmt),
         const SizedBox(height: 12),
-        ..._withSpacing(detailCards),
+        const _DashboardSectionHeader(
+          title: 'Detailed Analysis',
+          subtitle: 'Breakdowns, subscriptions, billing, and activity',
+        ),
+        const SizedBox(height: 8),
+        _AdaptiveCardGrid(cards: detailCards, spacing: 12),
       ],
     );
   }
@@ -726,17 +933,6 @@ class _InsightsDashboardState extends ConsumerState<_InsightsDashboard> {
       ..trialEndsAt = subscription.trialEndsAt;
   }
 
-  List<Widget> _withSpacing(List<Widget> widgets) {
-    final out = <Widget>[];
-    for (var i = 0; i < widgets.length; i++) {
-      out.add(widgets[i]);
-      if (i != widgets.length - 1) {
-        out.add(const SizedBox(height: 12));
-      }
-    }
-    return out;
-  }
-
   List<Expense> _filteredExpenses(List<Expense> expenses) {
     final now = DateTime.now();
     final start = _rangeStart(now);
@@ -761,7 +957,12 @@ class _InsightsDashboardState extends ConsumerState<_InsightsDashboard> {
       return 'Monthly';
     }
     if (lower.contains('week') &&
-        (lower.contains('bi-') || lower.contains('biweek'))) {
+        (lower.contains('bi-') ||
+            lower.contains('biweek') ||
+            lower.contains('bi week'))) {
+      return 'Bi-weekly';
+    }
+    if (lower.contains('fortnight')) {
       return 'Bi-weekly';
     }
     if (lower.contains('week')) {
@@ -771,6 +972,47 @@ class _InsightsDashboardState extends ConsumerState<_InsightsDashboard> {
       return 'Daily';
     }
     return cycle.isEmpty ? 'Other' : cycle;
+  }
+
+  int _billingUrgencyRank(Subscription subscription, DateTime today) {
+    final days = dayDifferenceFromToday(
+      subscription.nextBillingDate,
+      now: today,
+    );
+    if (days < 0) {
+      return 0;
+    }
+    if (days <= 3) {
+      return 1;
+    }
+    return 2;
+  }
+
+  int _compareBillingUrgency(
+    Subscription left,
+    Subscription right,
+    DateTime today,
+  ) {
+    final leftRank = _billingUrgencyRank(left, today);
+    final rightRank = _billingUrgencyRank(right, today);
+    final byRank = leftRank.compareTo(rightRank);
+    if (byRank != 0) {
+      return byRank;
+    }
+
+    if (leftRank == 0) {
+      final byDate = right.nextBillingDate.compareTo(left.nextBillingDate);
+      if (byDate != 0) {
+        return byDate;
+      }
+    } else {
+      final byDate = left.nextBillingDate.compareTo(right.nextBillingDate);
+      if (byDate != 0) {
+        return byDate;
+      }
+    }
+
+    return right.amount.compareTo(left.amount);
   }
 
   List<Subscription> _upcomingBillings(
@@ -927,14 +1169,17 @@ class _InsightsDashboardState extends ConsumerState<_InsightsDashboard> {
     if (lower.contains('month')) {
       return amount;
     }
+    if (lower.contains('bi-week') ||
+        lower.contains('biweek') ||
+        lower.contains('bi week') ||
+        lower.contains('fortnight')) {
+      return amount * 2.17;
+    }
     if (lower.contains('week')) {
       return amount * 4.33;
     }
     if (lower.contains('day')) {
       return amount * 30;
-    }
-    if (lower.contains('bi-week') || lower.contains('biweek')) {
-      return amount * 2.17;
     }
     return amount;
   }
@@ -990,192 +1235,316 @@ class _MetricItem {
   final String value;
 }
 
+class _InsightsLoadingState extends StatelessWidget {
+  const _InsightsLoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+      children: [
+        const SizedBox(height: 12),
+        ObsidianCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 140,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        const Center(child: CircularProgressIndicator()),
+      ],
+    );
+  }
+}
+
+class _InsightsErrorState extends StatelessWidget {
+  const _InsightsErrorState({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480),
+        child: ObsidianCard(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.error_outline_rounded, size: 40, color: scheme.error),
+              const SizedBox(height: 10),
+              Text(
+                'Unable to load insights',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 14),
+              FilledButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DashboardSectionHeader extends StatelessWidget {
+  const _DashboardSectionHeader({required this.title, required this.subtitle});
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Semantics(
+      header: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DashboardCardHeader extends StatelessWidget {
+  const _DashboardCardHeader({
+    required this.title,
+    this.subtitle,
+    this.trailing,
+  });
+
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (subtitle != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  subtitle!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (trailing != null) ...[const SizedBox(width: 10), trailing!],
+      ],
+    );
+  }
+}
+
+class _AdaptiveCardGrid extends StatelessWidget {
+  const _AdaptiveCardGrid({required this.cards, this.spacing = 12});
+
+  final List<Widget> cards;
+  final double spacing;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final columns = width >= 1200
+            ? 3
+            : width >= 760
+            ? 2
+            : 1;
+
+        if (columns == 1) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var i = 0; i < cards.length; i++) ...[
+                SizedBox(width: double.infinity, child: cards[i]),
+                if (i != cards.length - 1) SizedBox(height: spacing),
+              ],
+            ],
+          );
+        }
+
+        final rows = <Widget>[];
+        for (var i = 0; i < cards.length; i += columns) {
+          final rowChildren = <Widget>[];
+          for (var j = 0; j < columns; j++) {
+            final index = i + j;
+            if (j > 0) {
+              rowChildren.add(SizedBox(width: spacing));
+            }
+            rowChildren.add(
+              Expanded(
+                child: index < cards.length
+                    ? SizedBox(width: double.infinity, child: cards[index])
+                    : const SizedBox.shrink(),
+              ),
+            );
+          }
+
+          rows.add(
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: rowChildren,
+            ),
+          );
+          if (i + columns < cards.length) {
+            rows.add(SizedBox(height: spacing));
+          }
+        }
+
+        return Column(children: rows);
+      },
+    );
+  }
+}
+
+class _ControlSectionLabel extends StatelessWidget {
+  const _ControlSectionLabel({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: scheme.primary),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: scheme.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.2,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _RangeSelector extends StatelessWidget {
   const _RangeSelector({required this.value, required this.onChanged});
 
   final _InsightsRange value;
   final ValueChanged<_InsightsRange> onChanged;
 
-  Future<void> _openPicker(BuildContext context) async {
-    final options = <_InsightsRange, ({String label, String hint})>{
-      _InsightsRange.sevenDays: (label: '7D', hint: 'Last 7 days'),
-      _InsightsRange.thirtyDays: (label: '30D', hint: 'Last 30 days'),
-      _InsightsRange.ninetyDays: (label: '90D', hint: 'Last 90 days'),
-      _InsightsRange.all: (label: 'All', hint: 'All available data'),
-    };
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final options = <(_InsightsRange, String)>[
+      (_InsightsRange.sevenDays, '7D'),
+      (_InsightsRange.thirtyDays, '30D'),
+      (_InsightsRange.ninetyDays, '90D'),
+      (_InsightsRange.all, 'All'),
+    ];
 
-    final selected = await showModalBottomSheet<_InsightsRange>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) {
-        final scheme = Theme.of(sheetContext).colorScheme;
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Date range',
-                  style: Theme.of(sheetContext).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: constraints.maxWidth),
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerLowest,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: scheme.outlineVariant.withValues(alpha: 0.3),
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Select the time window for insights.',
-                  style: Theme.of(sheetContext).textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                ...options.entries.map((entry) {
-                  final selectedRange = value == entry.key;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Material(
-                      color: selectedRange
-                          ? scheme.primaryContainer
-                          : scheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(14),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(14),
-                        onTap: () => Navigator.pop(sheetContext, entry.key),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 12,
-                          ),
-                          child: Row(
-                            children: [
-                              Text(
-                                entry.value.label,
-                                style: Theme.of(sheetContext)
-                                    .textTheme
-                                    .titleSmall
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.w700,
-                                      color: selectedRange
-                                          ? scheme.onPrimaryContainer
-                                          : scheme.onSurface,
-                                    ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  entry.value.hint,
-                                  style: Theme.of(sheetContext)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.copyWith(
-                                        color: selectedRange
-                                            ? scheme.onPrimaryContainer
-                                                  .withValues(alpha: 0.9)
-                                            : scheme.onSurfaceVariant,
-                                      ),
-                                ),
-                              ),
-                              if (selectedRange)
-                                Icon(
-                                  Icons.check_circle,
-                                  size: 18,
-                                  color: scheme.primary,
-                                ),
-                            ],
-                          ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final option in options)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: _SegmentPill(
+                          label: option.$2,
+                          selected: value == option.$1,
+                          onPressed: () => onChanged(option.$1),
                         ),
                       ),
-                    ),
-                  );
-                }),
-              ],
+                  ],
+                ),
+              ),
             ),
           ),
         );
       },
-    );
-
-    if (selected != null) {
-      onChanged(selected);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final label = switch (value) {
-      _InsightsRange.sevenDays => '7D',
-      _InsightsRange.thirtyDays => '30D',
-      _InsightsRange.ninetyDays => '90D',
-      _InsightsRange.all => 'All',
-    };
-
-    final hint = switch (value) {
-      _InsightsRange.sevenDays => 'Last 7 days',
-      _InsightsRange.thirtyDays => 'Last 30 days',
-      _InsightsRange.ninetyDays => 'Last 90 days',
-      _InsightsRange.all => 'All available data',
-    };
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Date range',
-          style: Theme.of(
-            context,
-          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 6),
-        InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: () => _openPicker(context),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: Theme.of(context).colorScheme.outlineVariant,
-              ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    label,
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: Theme.of(context).colorScheme.onPrimary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    hint,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-                Icon(
-                  Icons.keyboard_arrow_down,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
@@ -1186,257 +1555,147 @@ class _ReportViewSelector extends StatelessWidget {
   final _InsightsReportView value;
   final ValueChanged<_InsightsReportView> onChanged;
 
-  Future<void> _openPicker(BuildContext context) async {
-    final options = <_InsightsReportView, ({String label, String hint})>{
-      _InsightsReportView.overview: (
-        label: 'Overview',
-        hint: 'Balanced summary',
-      ),
-      _InsightsReportView.spendingFocus: (
-        label: 'Spending',
-        hint: 'Expenses and categories',
-      ),
-      _InsightsReportView.subscriptionFocus: (
-        label: 'Subscriptions',
-        hint: 'Recurring tracking',
-      ),
-      _InsightsReportView.billingWatch: (
-        label: 'Billing Watch',
-        hint: 'Due dates and trials',
-      ),
-      _InsightsReportView.currencyBreakdown: (
-        label: 'Currencies',
-        hint: 'Currency-wise breakdown',
-      ),
-    };
-
-    final selected = await showModalBottomSheet<_InsightsReportView>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        final scheme = Theme.of(sheetContext).colorScheme;
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Report view',
-                  style: Theme.of(sheetContext).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Pick the report style you want to see.',
-                  style: Theme.of(sheetContext).textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                ...options.entries.map((entry) {
-                  final selectedView = entry.key == value;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Material(
-                      color: selectedView
-                          ? scheme.primaryContainer
-                          : scheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(14),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(14),
-                        onTap: () => Navigator.pop(sheetContext, entry.key),
-                        child: Padding(
-                          padding: const EdgeInsets.all(14),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 34,
-                                height: 34,
-                                decoration: BoxDecoration(
-                                  color: selectedView
-                                      ? scheme.primary
-                                      : scheme.surface,
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Icon(
-                                  switch (entry.key) {
-                                    _InsightsReportView.overview =>
-                                      Icons.dashboard_outlined,
-                                    _InsightsReportView.spendingFocus =>
-                                      Icons.trending_up_outlined,
-                                    _InsightsReportView.subscriptionFocus =>
-                                      Icons.subscriptions_outlined,
-                                    _InsightsReportView.billingWatch =>
-                                      Icons.event_note_outlined,
-                                    _InsightsReportView.currencyBreakdown =>
-                                      Icons.currency_exchange,
-                                  },
-                                  size: 18,
-                                  color: selectedView
-                                      ? scheme.onPrimary
-                                      : scheme.primary,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      entry.value.label,
-                                      style: Theme.of(sheetContext)
-                                          .textTheme
-                                          .titleSmall
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w700,
-                                            color: selectedView
-                                                ? scheme.onPrimaryContainer
-                                                : scheme.onSurface,
-                                          ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      entry.value.hint,
-                                      style: Theme.of(sheetContext)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(
-                                            color: selectedView
-                                                ? scheme.onPrimaryContainer
-                                                      .withValues(alpha: 0.9)
-                                                : scheme.onSurfaceVariant,
-                                          ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              if (selectedView)
-                                Icon(
-                                  Icons.check_circle,
-                                  size: 18,
-                                  color: scheme.primary,
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                }),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-
-    if (selected != null) {
-      onChanged(selected);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Report view',
-          style: Theme.of(
-            context,
-          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 6),
-        InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: () => _openPicker(context),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: Theme.of(context).colorScheme.outlineVariant,
-              ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 34,
-                  height: 34,
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final options = <({_InsightsReportView view, String label, IconData icon})>[
+      (
+        view: _InsightsReportView.overview,
+        label: 'Overview',
+        icon: Icons.dashboard_outlined,
+      ),
+      (
+        view: _InsightsReportView.spendingFocus,
+        label: 'Spending',
+        icon: Icons.paid_outlined,
+      ),
+      (
+        view: _InsightsReportView.subscriptionFocus,
+        label: 'Subscriptions',
+        icon: Icons.subscriptions_outlined,
+      ),
+      (
+        view: _InsightsReportView.billingWatch,
+        label: 'Billing',
+        icon: Icons.calendar_month_outlined,
+      ),
+      (
+        view: _InsightsReportView.currencyBreakdown,
+        label: 'Currency',
+        icon: Icons.currency_exchange,
+      ),
+    ];
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final option in options)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: InkWell(
+                onTap: () => onChanged(option.view),
+                borderRadius: BorderRadius.circular(999),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 140),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary,
-                    borderRadius: BorderRadius.circular(10),
+                    color: value == option.view
+                        ? scheme.secondaryContainer
+                        : scheme.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: value == option.view
+                          ? scheme.secondary.withValues(alpha: 0.45)
+                          : scheme.outlineVariant.withValues(alpha: 0.22),
+                    ),
                   ),
-                  child: Icon(
-                    switch (value) {
-                      _InsightsReportView.overview => Icons.dashboard_outlined,
-                      _InsightsReportView.spendingFocus =>
-                        Icons.trending_up_outlined,
-                      _InsightsReportView.subscriptionFocus =>
-                        Icons.subscriptions_outlined,
-                      _InsightsReportView.billingWatch =>
-                        Icons.event_note_outlined,
-                      _InsightsReportView.currencyBreakdown =>
-                        Icons.currency_exchange,
-                    },
-                    size: 18,
-                    color: Theme.of(context).colorScheme.onPrimary,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        switch (value) {
-                          _InsightsReportView.overview => 'Overview',
-                          _InsightsReportView.spendingFocus => 'Spending',
-                          _InsightsReportView.subscriptionFocus =>
-                            'Subscriptions',
-                          _InsightsReportView.billingWatch => 'Billing Watch',
-                          _InsightsReportView.currencyBreakdown => 'Currencies',
-                        },
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                      Icon(
+                        option.icon,
+                        size: 14,
+                        color: value == option.view
+                            ? scheme.onSecondaryContainer
+                            : scheme.onSurfaceVariant,
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(width: 6),
                       Text(
-                        switch (value) {
-                          _InsightsReportView.overview => 'Balanced summary',
-                          _InsightsReportView.spendingFocus =>
-                            'Expenses and categories',
-                          _InsightsReportView.subscriptionFocus =>
-                            'Recurring tracking',
-                          _InsightsReportView.billingWatch =>
-                            'Due dates and trials',
-                          _InsightsReportView.currencyBreakdown =>
-                            'Currency-wise breakdown',
-                        },
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        option.label,
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: value == option.view
+                              ? scheme.onSecondaryContainer
+                              : scheme.onSurfaceVariant,
+                          fontWeight: value == option.view
+                              ? FontWeight.w700
+                              : FontWeight.w600,
                         ),
                       ),
                     ],
                   ),
                 ),
-                Icon(
-                  Icons.keyboard_arrow_down,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ],
+              ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SegmentPill extends StatelessWidget {
+  const _SegmentPill({
+    required this.label,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(999),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected ? scheme.primaryContainer : Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected
+                ? scheme.primary.withValues(alpha: 0.28)
+                : Colors.transparent,
+          ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: scheme.shadow.withValues(alpha: 0.12),
+                    blurRadius: 5,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Text(
+          label,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: selected
+                ? scheme.onPrimaryContainer
+                : scheme.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
           ),
         ),
-      ],
+      ),
     );
   }
 }
@@ -1458,68 +1717,83 @@ class _TrendChartCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return ObsidianCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Daily spend trend',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (points.isEmpty)
+            const _CardEmptyState(
+              icon: Icons.show_chart_rounded,
+              message: 'No trend data yet for this range',
+            )
+          else ...[
             Text(
-              '$title Trend',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              _formatTrendHeadline(numberFmt, points.last.amount, valueSuffix),
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: scheme.primary,
+              ),
             ),
             const SizedBox(height: 16),
-            if (points.isEmpty)
-              const Text('No expense data in this range yet')
-            else ...[
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Peak: ${numberFmt.format(peakValue)}${valueSuffix == null ? '' : ' $valueSuffix'}',
-                    style: Theme.of(context).textTheme.labelMedium,
-                  ),
-                  Text(
-                    'Days: ${points.length}',
-                    style: Theme.of(context).textTheme.labelMedium,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                height: 190,
-                child: CustomPaint(
-                  painter: _TrendLineChartPainter(
-                    points: points,
-                    maxValue: peakValue,
-                    lineColor: _insightPalette.first,
-                    fillColor: _insightPalette.first.withValues(alpha: 0.16),
-                    gridColor: Theme.of(context).colorScheme.outlineVariant,
-                  ),
+            SizedBox(
+              height: 140,
+              width: double.infinity,
+              child: CustomPaint(
+                painter: _TrendLineChartPainter(
+                  points: points,
+                  maxValue: peakValue,
+                  lineColor: scheme.primary,
+                  fillColor: scheme.primary.withValues(alpha: 0.1),
+                  gridColor: scheme.outlineVariant,
                 ),
               ),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    DateFormat('MMM d, yyyy h:mm a').format(points.first.day),
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-                  Text(
-                    DateFormat('MMM d, yyyy h:mm a').format(points.last.day),
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-                ],
-              ),
-            ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  DateFormat('MMM d').format(points.first.day),
+                  style: theme.textTheme.labelSmall,
+                ),
+                Text(
+                  DateFormat('MMM d').format(points.last.day),
+                  style: theme.textTheme.labelSmall,
+                ),
+              ],
+            ),
           ],
-        ),
+        ],
       ),
     );
+  }
+
+  String _formatTrendHeadline(
+    NumberFormat formatter,
+    double amount,
+    String? suffix,
+  ) {
+    final formattedAmount = formatter.format(amount);
+    if (suffix == null || suffix.isEmpty) {
+      return formattedAmount;
+    }
+    return '$formattedAmount $suffix';
   }
 }
 
@@ -1627,61 +1901,129 @@ class _KeyMetricsStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        const spacing = 8.0;
-        const maxColumns = 4;
-        const minTileWidth = 148.0;
-        final maxWidth = constraints.maxWidth;
-        final estimatedColumns = (maxWidth / (minTileWidth + spacing))
-            .floor()
-            .clamp(1, maxColumns);
-        final columns = estimatedColumns.toInt();
-        final tileWidth = (maxWidth - (spacing * (columns - 1))) / columns;
+        final width = constraints.maxWidth;
+        if (width >= 760) {
+          final columns = width >= 1180
+              ? 6
+              : width >= 980
+              ? 4
+              : 3;
+          const spacing = 8.0;
+          final tileWidth = (width - (columns - 1) * spacing) / columns;
+          return Wrap(
+            spacing: spacing,
+            runSpacing: spacing,
+            children: [
+              for (final metric in metrics)
+                SizedBox(
+                  width: tileWidth,
+                  child: _MetricTile(
+                    metric: metric,
+                    icon: _iconForLabel(metric.label),
+                  ),
+                ),
+            ],
+          );
+        }
 
-        return Wrap(
-          spacing: spacing,
-          runSpacing: spacing,
-          children: [
-            for (final metric in metrics)
-              SizedBox(
-                width: tileWidth,
-                child: _MetricTile(label: metric.label, value: metric.value),
-              ),
-          ],
+        return SizedBox(
+          height: 92,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: metrics.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemBuilder: (context, index) {
+              final metric = metrics[index];
+              return SizedBox(
+                width: 154,
+                child: _MetricTile(
+                  metric: metric,
+                  icon: _iconForLabel(metric.label),
+                ),
+              );
+            },
+          ),
         );
       },
     );
   }
+
+  IconData _iconForLabel(String label) {
+    final lower = label.toLowerCase();
+    if (lower.contains('expense')) return Icons.paid_outlined;
+    if (lower.contains('category')) return Icons.category_outlined;
+    if (lower.contains('subscription')) return Icons.subscriptions_outlined;
+    if (lower.contains('trial')) return Icons.hourglass_bottom_outlined;
+    if (lower.contains('mom')) return Icons.trending_up_rounded;
+    return Icons.insights_outlined;
+  }
 }
 
 class _MetricTile extends StatelessWidget {
-  const _MetricTile({required this.label, required this.value});
+  const _MetricTile({required this.metric, required this.icon});
 
-  final String label;
-  final String value;
+  final _MetricItem metric;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              value,
-              style: Theme.of(
-                context,
-              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: scheme.outlineVariant.withValues(alpha: 0.25),
         ),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              height: 2,
+              color: scheme.primary.withValues(alpha: 0.28),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Row(
+                  children: [
+                    Icon(icon, size: 14, color: scheme.primary),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        metric.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  metric.value,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: scheme.onSurface,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1698,78 +2040,113 @@ class _MonthOverMonthCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Month-over-Month Spend',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+    return ObsidianCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _DashboardCardHeader(
+            title: 'Month-over-Month Spend',
+            subtitle:
+                'Calendar-month comparison by currency (independent of selected range)',
+          ),
+          const SizedBox(height: 12),
+          if (comparison.rows.isEmpty)
+            const _CardEmptyState(
+              icon: Icons.query_stats_rounded,
+              message: 'Not enough expense data for month comparison yet',
+            )
+          else
+            ...comparison.rows.map(
+              (row) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _MoMStatusRow(row: row, numberFmt: numberFmt),
+              ),
             ),
-            const SizedBox(height: 12),
-            if (comparison.rows.isEmpty)
-              const Text('Not enough expense data yet')
-            else
-              ...comparison.rows.map((row) {
-                final isNew = row.pct == null;
-                final isUp = row.delta > 0;
-                final isDown = row.delta < 0;
-                final directionIcon = isNew
-                    ? Icons.fiber_new
-                    : isUp
-                    ? Icons.trending_up
-                    : isDown
-                    ? Icons.trending_down
-                    : Icons.trending_flat;
-                final directionColor = isNew
-                    ? Theme.of(context).colorScheme.secondary
-                    : isUp
-                    ? Theme.of(context).colorScheme.error
-                    : isDown
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).colorScheme.outline;
+        ],
+      ),
+    );
+  }
+}
 
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 46,
-                        child: Text(
-                          row.currency,
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          '${numberFmt.format(row.previous)} -> ${numberFmt.format(row.current)}',
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(directionIcon, size: 18, color: directionColor),
-                      if (!isNew) ...[
-                        const SizedBox(width: 4),
-                        Text(
-                          '${row.delta >= 0 ? '+' : ''}${row.pct!.toStringAsFixed(1)}%',
-                          style: TextStyle(
-                            color: directionColor,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                );
-              }),
-          ],
-        ),
+class _MoMStatusRow extends StatelessWidget {
+  const _MoMStatusRow({required this.row, required this.numberFmt});
+
+  final _MonthComparisonRow row;
+  final NumberFormat numberFmt;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isNew = row.pct == null;
+    final isUp = row.delta > 0;
+    final isDown = row.delta < 0;
+    final stateColor = isNew
+        ? scheme.secondary
+        : isUp
+        ? scheme.error
+        : isDown
+        ? scheme.primary
+        : scheme.outline;
+    final stateBg = isNew
+        ? scheme.secondaryContainer
+        : isUp
+        ? scheme.errorContainer
+        : isDown
+        ? scheme.primaryContainer
+        : scheme.surfaceContainerHighest;
+    final stateLabel = isNew
+        ? 'NEW'
+        : isUp
+        ? 'UP'
+        : isDown
+        ? 'DOWN'
+        : 'FLAT';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      decoration: BoxDecoration(
+        color: stateBg.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: stateColor.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: scheme.surface,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: scheme.outlineVariant.withValues(alpha: 0.4),
+              ),
+            ),
+            child: Text(
+              row.currency,
+              style: theme.textTheme.labelMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '${numberFmt.format(row.previous)} → ${numberFmt.format(row.current)}',
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            isNew
+                ? stateLabel
+                : '${row.delta >= 0 ? '+' : ''}${row.pct!.toStringAsFixed(1)}%',
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: stateColor,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1788,124 +2165,77 @@ class _CategoryDistributionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final insightPalette = _buildInsightPalette(theme);
     final peak = entries.isEmpty ? 0.0 : entries.first.value;
     final topEntries = entries.take(6).toList();
     final total = topEntries.fold<double>(0, (sum, entry) => sum + entry.value);
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 32),
-            if (entries.isEmpty)
-              const Text('No category spend yet')
-            else ...[
-              Center(
-                child: SizedBox(
-                  width: 168,
-                  height: 168,
-                  child: CustomPaint(
-                    painter: _DonutChartPainter(
-                      values: [for (final entry in topEntries) entry.value],
-                      colors: [
-                        for (var i = 0; i < topEntries.length; i++)
-                          _insightPalette[i % _insightPalette.length],
+    return ObsidianCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _DashboardCardHeader(
+            title: title,
+            subtitle: 'Top categories by spend share',
+          ),
+          const SizedBox(height: 20),
+          if (entries.isEmpty)
+            const _CardEmptyState(
+              icon: Icons.category_outlined,
+              message: 'No category spend yet',
+            )
+          else ...[
+            Center(
+              child: SizedBox(
+                width: 168,
+                height: 168,
+                child: CustomPaint(
+                  painter: _DonutChartPainter(
+                    values: [for (final entry in topEntries) entry.value],
+                    colors: [
+                      for (var i = 0; i < topEntries.length; i++)
+                        insightPalette[i % insightPalette.length],
+                    ],
+                    trackColor: scheme.outlineVariant.withValues(alpha: 0.45),
+                  ),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('Total', style: theme.textTheme.labelLarge),
+                        Text(
+                          numberFmt.format(total),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ],
-                      trackColor: Theme.of(
-                        context,
-                      ).colorScheme.surfaceContainerHighest,
-                    ),
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'Total',
-                            style: Theme.of(context).textTheme.labelLarge,
-                          ),
-                          Text(
-                            numberFmt.format(total),
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                        ],
-                      ),
                     ),
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
-              ...topEntries.asMap().entries.map((mapped) {
-                final index = mapped.key;
-                final entry = mapped.value;
-                final color = _insightPalette[index % _insightPalette.length];
-                final pct = total == 0 ? 0 : (entry.value / total) * 100;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 12,
-                            height: 12,
-                            decoration: BoxDecoration(
-                              color: color,
-                              borderRadius: BorderRadius.circular(99),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              entry.key,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text('${pct.toStringAsFixed(1)}%'),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(999),
-                              child: LinearProgressIndicator(
-                                minHeight: 8,
-                                value: peak == 0 ? 0 : entry.value / peak,
-                                backgroundColor: Theme.of(
-                                  context,
-                                ).colorScheme.surfaceContainerHighest,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  color,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(numberFmt.format(entry.value)),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-              }),
-            ],
+            ),
+            const SizedBox(height: 12),
+            ...topEntries.asMap().entries.map((mapped) {
+              final index = mapped.key;
+              final entry = mapped.value;
+              final color = insightPalette[index % insightPalette.length];
+              final pct = total == 0 ? 0 : (entry.value / total) * 100;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _BreakdownProgressRow(
+                  color: color,
+                  label: entry.key,
+                  amountLabel: numberFmt.format(entry.value),
+                  progress: peak == 0 ? 0 : entry.value / peak,
+                  shareLabel: '${pct.toStringAsFixed(1)}%',
+                ),
+              );
+            }),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -1979,77 +2309,160 @@ class _CurrencyBreakdownCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final insightPalette = _buildInsightPalette(theme);
     final peak = entries.isEmpty ? 0.0 : entries.first.value;
+    final total = entries.fold<double>(0, (sum, entry) => sum + entry.value);
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+    return ObsidianCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _DashboardCardHeader(
+            title: title,
+            subtitle: 'Relative weight by currency',
+          ),
+          const SizedBox(height: 12),
+          if (entries.isEmpty)
+            const _CardEmptyState(
+              icon: Icons.currency_exchange,
+              message: 'No expense currency data yet',
+            )
+          else
+            ...entries.asMap().entries.map((mapped) {
+              final index = mapped.key;
+              final entry = mapped.value;
+              final color = insightPalette[index % insightPalette.length];
+              final pct = total == 0 ? 0 : (entry.value / total) * 100;
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _BreakdownProgressRow(
+                  color: color,
+                  label: entry.key,
+                  amountLabel: numberFmt.format(entry.value),
+                  progress: peak == 0 ? 0 : entry.value / peak,
+                  shareLabel: '${pct.toStringAsFixed(1)}%',
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+}
+
+class _CardEmptyState extends StatelessWidget {
+  const _CardEmptyState({required this.icon, required this.message});
+
+  final IconData icon;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: scheme.onSurfaceVariant),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
             ),
-            const SizedBox(height: 12),
-            if (entries.isEmpty)
-              const Text('No expense currency data yet')
-            else
-              ...entries.asMap().entries.map((mapped) {
-                final index = mapped.key;
-                final entry = mapped.value;
-                final color = _insightPalette[index % _insightPalette.length];
+          ),
+        ],
+      ),
+    );
+  }
+}
 
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                width: 10,
-                                height: 10,
-                                decoration: BoxDecoration(
-                                  color: color,
-                                  borderRadius: BorderRadius.circular(99),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                entry.key,
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(fontWeight: FontWeight.w600),
-                              ),
-                            ],
-                          ),
-                          Text(numberFmt.format(entry.value)),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(999),
-                        child: LinearProgressIndicator(
-                          minHeight: 8,
-                          value: peak == 0 ? 0 : entry.value / peak,
-                          backgroundColor: Theme.of(
-                            context,
-                          ).colorScheme.surfaceContainerHighest,
-                          valueColor: AlwaysStoppedAnimation<Color>(color),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }),
+class _BreakdownProgressRow extends StatelessWidget {
+  const _BreakdownProgressRow({
+    required this.color,
+    required this.label,
+    required this.amountLabel,
+    required this.progress,
+    required this.shareLabel,
+  });
+
+  final Color color;
+  final String label;
+  final String amountLabel;
+  final double progress;
+  final String shareLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final trackColor = Color.alphaBlend(
+      color.withValues(alpha: 0.16),
+      scheme.surfaceContainerHighest,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(99),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              shareLabel,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ],
         ),
-      ),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: LinearProgressIndicator(
+                  minHeight: 8,
+                  value: progress,
+                  backgroundColor: trackColor,
+                  valueColor: AlwaysStoppedAnimation<Color>(color),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(amountLabel),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -2065,27 +2478,48 @@ class _LargeSubscriptionsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final today = DateTime.now();
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Largest Subscriptions',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 12),
-            if (subscriptions.isEmpty)
-              const Text('No subscriptions yet')
-            else
-              ...subscriptions.take(5).map((subscription) {
-                final trialStatus = _trialStatusText(subscription, today);
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return ObsidianCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _DashboardCardHeader(
+            title: 'Largest Subscriptions',
+            subtitle: 'Top recurring services by estimated monthly impact',
+          ),
+          const SizedBox(height: 12),
+          if (subscriptions.isEmpty)
+            const _CardEmptyState(
+              icon: Icons.subscriptions_outlined,
+              message: 'No subscriptions yet',
+            )
+          else
+            ...subscriptions.take(5).map((subscription) {
+              final trialStatus = _trialStatusText(subscription, today);
+              final isExpiredTrial = _isTrialExpired(subscription, today);
+              final monthlyEstimate = _estimateMonthlyAmount(
+                subscription.amount,
+                subscription.cycle,
+              );
+              final rowBg = subscription.isTrial
+                  ? (isExpiredTrial
+                        ? scheme.errorContainer.withValues(alpha: 0.22)
+                        : scheme.tertiaryContainer.withValues(alpha: 0.2))
+                  : scheme.surfaceContainerHighest.withValues(alpha: 0.45);
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 9,
+                  ),
+                  decoration: BoxDecoration(
+                    color: rowBg,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -2093,57 +2527,55 @@ class _LargeSubscriptionsCard extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    subscription.name,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(fontWeight: FontWeight.w600),
-                                  ),
-                                ),
-                              ],
+                            Text(
+                              subscription.name,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                             if (subscription.isTrial) ...[
                               const SizedBox(height: 4),
-                              Text(
-                                trialStatus ?? 'Trial',
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(
-                                      color:
-                                          subscription.trialEndsAt != null &&
-                                              subscription.trialEndsAt!
-                                                  .isBefore(today)
-                                          ? Theme.of(context).colorScheme.error
-                                          : Theme.of(
-                                              context,
-                                            ).colorScheme.onSurfaceVariant,
-                                      fontWeight: FontWeight.w500,
-                                    ),
+                              _StatusTag(
+                                label: trialStatus ?? 'Trial',
+                                backgroundColor: isExpiredTrial
+                                    ? scheme.errorContainer
+                                    : scheme.tertiaryContainer,
+                                foregroundColor: isExpiredTrial
+                                    ? scheme.onErrorContainer
+                                    : scheme.onTertiaryContainer,
                               ),
                             ],
+                            const SizedBox(height: 6),
+                            Text(
+                              'Est. monthly ${subscription.currency} ${numberFmt.format(monthlyEstimate)}',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: scheme.primary,
+                              ),
+                            ),
                             const SizedBox(height: 2),
                             Text(
-                              '${subscription.currency} ${numberFmt.format(subscription.amount)} · ${subscription.cycle}',
-                              style: Theme.of(context).textTheme.bodySmall,
+                              'Billed ${subscription.currency} ${numberFmt.format(subscription.amount)} · ${subscription.cycle}',
+                              style: theme.textTheme.bodySmall,
                             ),
                           ],
                         ),
                       ),
                       const SizedBox(width: 12),
                       Text(
-                        'Next ${DateFormat('MMM d, yyyy h:mm a').format(subscription.nextBillingDate)}',
-                        style: Theme.of(context).textTheme.bodySmall,
+                        'Next ${DateFormat('MMM d').format(subscription.nextBillingDate)}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
                   ),
-                );
-              }),
-          ],
-        ),
+                ),
+              );
+            }),
+        ],
       ),
     );
   }
@@ -2154,13 +2586,47 @@ class _LargeSubscriptionsCard extends StatelessWidget {
     }
     return formatTrialStatusLabel(subscription.trialEndsAt, now: today);
   }
+
+  bool _isTrialExpired(Subscription subscription, DateTime today) {
+    final trialEnds = subscription.trialEndsAt;
+    return subscription.isTrial &&
+        trialEnds != null &&
+        dayDifferenceFromToday(trialEnds, now: today) < 0;
+  }
+
+  double _estimateMonthlyAmount(double amount, String cycle) {
+    final lower = cycle.toLowerCase();
+    if (lower.contains('annual') || lower.contains('yearly')) {
+      return amount / 12;
+    }
+    if (lower.contains('month')) {
+      return amount;
+    }
+    if (lower.contains('bi-week') ||
+        lower.contains('biweek') ||
+        lower.contains('bi week') ||
+        lower.contains('fortnight')) {
+      return amount * 2.17;
+    }
+    if (lower.contains('week')) {
+      return amount * 4.33;
+    }
+    if (lower.contains('day')) {
+      return amount * 30;
+    }
+    return amount;
+  }
 }
 
 class _UpcomingBillingCard extends StatelessWidget {
   const _UpcomingBillingCard({
     required this.subscriptions,
+    required this.overdueSubscriptions,
     required this.totalsByCurrency,
-    required this.trialCount,
+    required this.overdueCount,
+    required this.dueSoonCount,
+    required this.activeTrialCount,
+    required this.expiredTrialCount,
     required this.window,
     required this.onWindowChanged,
     required this.onSubscriptionTap,
@@ -2168,8 +2634,12 @@ class _UpcomingBillingCard extends StatelessWidget {
   });
 
   final List<Subscription> subscriptions;
+  final List<Subscription> overdueSubscriptions;
   final Map<String, double> totalsByCurrency;
-  final int trialCount;
+  final int overdueCount;
+  final int dueSoonCount;
+  final int activeTrialCount;
+  final int expiredTrialCount;
   final _BillingWindow window;
   final ValueChanged<_BillingWindow> onWindowChanged;
   final ValueChanged<Subscription> onSubscriptionTap;
@@ -2281,9 +2751,11 @@ class _UpcomingBillingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final entries = totalsByCurrency.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-    final dateFmt = DateFormat('MMM d, yyyy h:mm a');
+    final dateFmt = DateFormat('MMM d');
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final displayedSubscriptions = [...subscriptions]
@@ -2313,160 +2785,118 @@ class _UpcomingBillingCard extends StatelessWidget {
       _BillingWindow.thirtyDays => '30D',
       _BillingWindow.sixtyDays => '60D',
     };
-    final windowHint = switch (window) {
-      _BillingWindow.sevenDays => 'Next 7 days',
-      _BillingWindow.thirtyDays => 'Next 30 days',
-      _BillingWindow.sixtyDays => 'Next 60 days',
-    };
-    final overdueCount = subscriptions
-        .where(
-          (subscription) =>
-              _dayDifferenceFromToday(subscription.nextBillingDate, today) < 0,
-        )
-        .length;
-    final dueSoonCount = subscriptions.where((subscription) {
-      final daysAway = _dayDifferenceFromToday(
-        subscription.nextBillingDate,
-        today,
-      );
-      return daysAway >= 0 && daysAway <= 3;
-    }).length;
-    final dueWithin24hCount = subscriptions.where((subscription) {
-      final diff = subscription.nextBillingDate.difference(now);
-      return !diff.isNegative && diff.inHours <= 24;
-    }).length;
-    final dueWithin48hCount = subscriptions.where((subscription) {
-      final diff = subscription.nextBillingDate.difference(now);
-      return !diff.isNegative && diff.inHours > 24 && diff.inHours <= 48;
-    }).length;
-    final expiredTrialCount = subscriptions.where((subscription) {
-      if (!subscription.isTrial || subscription.trialEndsAt == null) {
-        return false;
-      }
-      return _dayDifferenceFromToday(subscription.trialEndsAt!, today) < 0;
-    }).length;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 8),
-            InkWell(
-              borderRadius: BorderRadius.circular(14),
+    return ObsidianCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _DashboardCardHeader(
+            title: title,
+            subtitle:
+                '${subscriptions.length} billings in selected window · global chips use all subscriptions',
+            trailing: _WindowSelector(
+              label: windowLabel,
               onTap: () => _openWindowPicker(context),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              _StatusTag(
+                label: 'In Window: ${subscriptions.length}',
+                backgroundColor: scheme.secondaryContainer,
+                foregroundColor: scheme.onSecondaryContainer,
+              ),
+              _StatusTag(
+                label: 'Due Soon (Global): $dueSoonCount',
+                backgroundColor: scheme.primaryContainer,
+                foregroundColor: scheme.onPrimaryContainer,
+              ),
+              _StatusTag(
+                label: 'Active Trials (Global): $activeTrialCount',
+                backgroundColor: scheme.tertiaryContainer,
+                foregroundColor: scheme.onTertiaryContainer,
+              ),
+              if (overdueCount > 0)
+                _StatusTag(
+                  label: 'Overdue (Global): $overdueCount',
+                  backgroundColor: scheme.errorContainer,
+                  foregroundColor: scheme.onErrorContainer,
                 ),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.outlineVariant,
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (overdueCount > 0 || expiredTrialCount > 0)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _UrgentAlert(
+                overdueCount: overdueCount,
+                expiredTrialCount: expiredTrialCount,
+              ),
+            ),
+          if (entries.isEmpty)
+            const _CardEmptyState(
+              icon: Icons.receipt_long_outlined,
+              message: 'No billings in this selected window',
+            )
+          else ...[
+            ...entries.map(
+              (entry) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  '${entry.key}: ${numberFmt.format(entry.value)}',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: scheme.primary,
                   ),
                 ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primary,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        windowLabel,
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: Theme.of(context).colorScheme.onPrimary,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        windowHint,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                    Icon(
-                      Icons.keyboard_arrow_down,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ],
-                ),
               ),
             ),
-            const SizedBox(height: 8),
-            Text('Scheduled payments: ${subscriptions.length}'),
-            Text('Trial renewals in window: $trialCount'),
-            Text('Overdue: $overdueCount · Due soon: $dueSoonCount'),
-            Text('Due <24h: $dueWithin24hCount · Due <48h: $dueWithin48hCount'),
-            if (expiredTrialCount > 0)
-              Text(
-                'Expired trials: $expiredTrialCount',
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            const SizedBox(height: 8),
-            if (entries.isEmpty)
-              const Text('No upcoming billings in this window')
-            else ...[
-              if (trialCount > 0) ...[
-                const SizedBox(height: 4),
-                _UpcomingTrialSummaryRow(
-                  trialCount: trialCount,
-                  expiredTrialCount: expiredTrialCount,
-                  dueWithin24hCount: dueWithin24hCount,
-                ),
-                const SizedBox(height: 8),
-              ],
-              ...entries.map(
-                (entry) => Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Text('${entry.key}: ${numberFmt.format(entry.value)}'),
-                ),
-              ),
-              ...displayedSubscriptions.take(5).map((subscription) {
-                final daysAway = _dayDifferenceFromToday(
-                  subscription.nextBillingDate,
-                  today,
-                );
-                final isOverdue = daysAway < 0;
-                final dueToday = daysAway == 0;
-                final dueSoon = daysAway > 0 && daysAway <= 3;
-                final urgent = isOverdue || dueToday || dueSoon;
-                final billingStatus = isOverdue || dueToday || dueSoon
-                    ? formatDueStatusLabel(
-                        subscription.nextBillingDate,
-                        now: today,
-                      )
-                    : null;
-                final trialStatus = _trialStatusText(subscription, today);
-                final subtitleParts = <String>[
-                  '${dateFmt.format(subscription.nextBillingDate)} · ${subscription.currency} ${numberFmt.format(subscription.amount)}',
-                  ?trialStatus,
-                  ?billingStatus,
-                ];
+            const SizedBox(height: 12),
+            ...displayedSubscriptions.take(5).map((subscription) {
+              final daysAway = _dayDifferenceFromToday(
+                subscription.nextBillingDate,
+                today,
+              );
+              final isOverdue = daysAway < 0;
+              final dueToday = daysAway == 0;
+              final dueSoon = daysAway > 0 && daysAway <= 3;
+              final urgent = isOverdue || dueToday || dueSoon;
+              final trialStatus = _trialStatusText(subscription, today);
+              final tileBg = subscription.isTrial
+                  ? scheme.tertiaryContainer.withValues(alpha: 0.18)
+                  : urgent
+                  ? scheme.errorContainer.withValues(alpha: 0.18)
+                  : scheme.surfaceContainerHighest.withValues(alpha: 0.45);
 
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(
+              return Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                decoration: BoxDecoration(
+                  color: tileBg,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: ListTile(
+                  minVerticalPadding: 8,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 2,
+                  ),
+                  leading: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color:
+                          (subscription.isTrial
+                                  ? scheme.tertiary
+                                  : urgent
+                                  ? scheme.error
+                                  : scheme.primary)
+                              .withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
                       subscription.isTrial
                           ? Icons.hourglass_bottom
                           : isOverdue
@@ -2474,33 +2904,95 @@ class _UpcomingBillingCard extends StatelessWidget {
                           : urgent
                           ? Icons.notifications_active
                           : Icons.receipt_long,
+                      size: 20,
                       color: subscription.isTrial
-                          ? Theme.of(context).colorScheme.tertiary
-                          : isOverdue
-                          ? Theme.of(context).colorScheme.error
+                          ? scheme.tertiary
                           : urgent
-                          ? Theme.of(context).colorScheme.error
-                          : Theme.of(context).colorScheme.primary,
+                          ? scheme.error
+                          : scheme.primary,
                     ),
-                    title: Text(subscription.name),
-                    subtitle: Text(subtitleParts.join(' · ')),
-                    trailing: subscription.isTrial
-                        ? _TrialStatusChip(
-                            label: trialStatus ?? 'Trial',
-                            isExpired: _isTrialExpired(subscription, today),
-                            isEndingSoon: _isTrialEndingSoon(
-                              subscription,
-                              today,
-                            ),
-                          )
-                        : const Icon(Icons.chevron_right),
+                  ),
+                  title: Text(
+                    subscription.name,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  subtitle: Text(
+                    '${dateFmt.format(subscription.nextBillingDate)} · ${subscription.currency} ${numberFmt.format(subscription.amount)}',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  trailing: subscription.isTrial
+                      ? _TrialStatusChip(
+                          label: trialStatus ?? 'Trial',
+                          isExpired: _isTrialExpired(subscription, today),
+                          isEndingSoon: _isTrialEndingSoon(subscription, today),
+                        )
+                      : Icon(
+                          Icons.chevron_right,
+                          size: 16,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                  onTap: () => onSubscriptionTap(subscription),
+                ),
+              );
+            }),
+            if (overdueSubscriptions.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Overdue overall (inspect)',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: scheme.error,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...overdueSubscriptions.take(3).map((subscription) {
+                final daysOverdue = -_dayDifferenceFromToday(
+                  subscription.nextBillingDate,
+                  today,
+                );
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  decoration: BoxDecoration(
+                    color: scheme.errorContainer.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: ListTile(
+                    minVerticalPadding: 8,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 2,
+                    ),
+                    leading: Icon(
+                      Icons.warning_rounded,
+                      size: 20,
+                      color: scheme.error,
+                    ),
+                    title: Text(
+                      subscription.name,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      '${dateFmt.format(subscription.nextBillingDate)} · ${subscription.currency} ${numberFmt.format(subscription.amount)}',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                    trailing: Text(
+                      '$daysOverdue d overdue',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: scheme.error,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                     onTap: () => onSubscriptionTap(subscription),
                   ),
                 );
               }),
             ],
           ],
-        ),
+        ],
       ),
     );
   }
@@ -2530,37 +3022,6 @@ class _UpcomingBillingCard extends StatelessWidget {
     }
     final days = _dayDifferenceFromToday(trialEnds, today);
     return days >= 0 && days <= 7;
-  }
-}
-
-class _UpcomingTrialSummaryRow extends StatelessWidget {
-  const _UpcomingTrialSummaryRow({
-    required this.trialCount,
-    required this.expiredTrialCount,
-    required this.dueWithin24hCount,
-  });
-
-  final int trialCount;
-  final int expiredTrialCount;
-  final int dueWithin24hCount;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: scheme.secondaryContainer.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        'Trials in window: $trialCount · Expired: $expiredTrialCount · Due <24h: $dueWithin24hCount',
-        style: Theme.of(
-          context,
-        ).textTheme.bodySmall?.copyWith(color: scheme.onSecondaryContainer),
-      ),
-    );
   }
 }
 
@@ -2612,70 +3073,89 @@ class _RecentActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dateFmt = DateFormat('MMM d, yyyy h:mm a');
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final dateFmt = DateFormat('MMM d');
     final today = DateTime.now();
+    final recentExpenseSlice = recentExpenses.take(2).toList();
+    final recentSubscriptionSlice = recentSubscriptions.take(2).toList();
+    final nextSubscription = recentSubscriptions.isEmpty
+        ? null
+        : recentSubscriptions.first;
+    final nextBillingDays = nextSubscription == null
+        ? null
+        : dayDifferenceFromToday(nextSubscription.nextBillingDate, now: today);
+    final nextBillingLabel = switch (nextBillingDays) {
+      null => 'Billing priority',
+      < 0 => 'Highest priority (overdue)',
+      _ => 'Highest priority (upcoming)',
+    };
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Recent Activity',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 12),
-            if (recentExpenses.isEmpty && recentSubscriptions.isEmpty)
-              const Text('No recent activity yet')
-            else ...[
-              if (recentExpenses.isNotEmpty) ...[
-                Text(
-                  'Latest expense',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+    return ObsidianCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _DashboardCardHeader(
+            title: 'Activity & Billing Priorities',
+            subtitle: 'Latest expenses plus urgency-ranked billing items',
+          ),
+          const SizedBox(height: 12),
+          if (recentExpenses.isEmpty && recentSubscriptions.isEmpty)
+            const _CardEmptyState(
+              icon: Icons.history_toggle_off_outlined,
+              message: 'No recent activity yet',
+            )
+          else ...[
+            if (recentExpenseSlice.isNotEmpty) ...[
+              Text(
+                'Latest expenses',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  '${recentExpenses.first.currency} ${numberFmt.format(recentExpenses.first.amount)} · ${dateFmt.format(recentExpenses.first.occurredAt)}',
+              ),
+              const SizedBox(height: 8),
+              ...recentExpenseSlice.map(
+                (expense) => _ActivityLine(
+                  leading:
+                      '${expense.currency} ${numberFmt.format(expense.amount)}',
+                  trailing: dateFmt.format(expense.occurredAt),
                 ),
-                const SizedBox(height: 12),
-              ],
-              if (recentSubscriptions.isNotEmpty) ...[
-                Text(
-                  'Next billing',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (recentSubscriptionSlice.isNotEmpty) ...[
+              Text(
+                nextBillingLabel,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: nextBillingDays != null && nextBillingDays < 0
+                      ? scheme.error
+                      : null,
+                  fontWeight: FontWeight.w600,
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  '${recentSubscriptions.first.name} · ${dateFmt.format(recentSubscriptions.first.nextBillingDate)}',
+              ),
+              const SizedBox(height: 8),
+              ...recentSubscriptionSlice.map(
+                (subscription) => _ActivityLine(
+                  leading: subscription.name,
+                  trailing: dateFmt.format(subscription.nextBillingDate),
                 ),
-                if (_trialStatusText(recentSubscriptions.first, today) !=
-                    null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    _trialStatusText(recentSubscriptions.first, today)!,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color:
-                          recentSubscriptions.first.trialEndsAt != null &&
-                              recentSubscriptions.first.trialEndsAt!.isBefore(
-                                today,
-                              )
-                          ? Theme.of(context).colorScheme.error
-                          : Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w500,
-                    ),
+              ),
+              if (_trialStatusText(recentSubscriptions.first, today) !=
+                  null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  _trialStatusText(recentSubscriptions.first, today)!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: _isTrialExpired(recentSubscriptions.first, today)
+                        ? scheme.error
+                        : scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
                   ),
-                ],
+                ),
               ],
             ],
           ],
-        ),
+        ],
       ),
     );
   }
@@ -2685,6 +3165,79 @@ class _RecentActivityCard extends StatelessWidget {
       return null;
     }
     return formatTrialStatusLabel(subscription.trialEndsAt, now: today);
+  }
+
+  bool _isTrialExpired(Subscription subscription, DateTime today) {
+    final trialEnds = subscription.trialEndsAt;
+    return subscription.isTrial &&
+        trialEnds != null &&
+        dayDifferenceFromToday(trialEnds, now: today) < 0;
+  }
+}
+
+class _ActivityLine extends StatelessWidget {
+  const _ActivityLine({required this.leading, required this.trailing});
+
+  final String leading;
+  final String trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              leading,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            trailing,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusTag extends StatelessWidget {
+  const _StatusTag({
+    required this.label,
+    required this.backgroundColor,
+    required this.foregroundColor,
+  });
+
+  final String label;
+  final Color backgroundColor;
+  final Color foregroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: foregroundColor,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
   }
 }
 
@@ -2696,27 +3249,103 @@ class _InfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+    final theme = Theme.of(context);
+    return SizedBox(
+      width: double.infinity,
+      child: ObsidianCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: 8),
             ...lines.map(
               (line) => Padding(
                 padding: const EdgeInsets.only(bottom: 4),
-                child: Text(line),
+                child: Text(line, style: theme.textTheme.bodyMedium),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _WindowSelector extends StatelessWidget {
+  const _WindowSelector({required this.label, required this.onTap});
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Material(
+      color: scheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: scheme.primary,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(Icons.keyboard_arrow_down, size: 16, color: scheme.primary),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _UrgentAlert extends StatelessWidget {
+  const _UrgentAlert({
+    required this.overdueCount,
+    required this.expiredTrialCount,
+  });
+  final int overdueCount;
+  final int expiredTrialCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.errorContainer.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: scheme.error.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, size: 20, color: scheme.error),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '${overdueCount > 0 ? '$overdueCount overdue billings (global)' : ''}${overdueCount > 0 && expiredTrialCount > 0 ? ' & ' : ''}${expiredTrialCount > 0 ? '$expiredTrialCount expired trials (global)' : ''}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.error,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

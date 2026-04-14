@@ -54,6 +54,7 @@ dependencies:
   image_picker: ^1.2.1
   google_mlkit_text_recognition: ^0.15.1
   connectivity_plus: ^6.1.4
+  google_fonts: ^6.2.1
 
 dev_dependencies:
   flutter_test:
@@ -83,8 +84,10 @@ flutter:
 
   assets:
     - assets/branding/app_icon.png
+    - assets/branding/login_decorative.png
     - assets/branding/logo.png
-    - assets/branding/splash.png
+    - assets/branding/logo_pattern.png
+    - assets/branding/splash_bg.png
     - assets/category_icon_catalog.json
     - assets/category_color_catalog.json
 

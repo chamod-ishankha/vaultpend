@@ -7,26 +7,44 @@ import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/export/expense_csv_export_service.dart';
-import '../../core/providers.dart';
 import '../../core/export/expense_pdf_export_service.dart';
-import '../../core/notifications/reminder_sync_helper.dart';
+import '../../core/providers.dart';
 import '../../core/fx/currency_conversion.dart';
 import '../../core/fx/fx_providers.dart';
-import '../../core/logging/app_logging.dart';
 import '../../core/widgets/fx_reference_strip.dart';
+import '../../core/widgets/obsidian_app_bar.dart';
+import '../../core/widgets/obsidian_card.dart';
 import '../../core/widgets/responsive_layout.dart';
+import '../../core/widgets/user_profile_avatar.dart';
 import '../../data/models/category.dart';
 import '../../data/models/expense.dart';
+import '../../core/theme/app_theme.dart';
+import '../categories/category_color_resolver.dart';
+import '../categories/category_icon_resolver.dart';
 import '../auth/auth_providers.dart';
 import 'add_expense_screen.dart';
 import 'expense_providers.dart';
 
-class ExpenseListScreen extends ConsumerWidget {
+class ExpenseListScreen extends ConsumerStatefulWidget {
   const ExpenseListScreen({super.key, this.onOpenDrawer});
-
   final VoidCallback? onOpenDrawer;
+
+  @override
+  ConsumerState<ExpenseListScreen> createState() => _ExpenseListScreenState();
+}
+
+class _ExpenseListScreenState extends ConsumerState<ExpenseListScreen> {
   static const _csvExportService = ExpenseCsvExportService();
   static const _pdfExportService = ExpensePdfExportService();
+
+  bool _isSearching = false;
+  final TextEditingController _searchController = TextEditingController();
+  
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   Future<void> _openEditor(BuildContext context, {Expense? expense}) async {
     await Navigator.of(context).push<void>(
@@ -34,7 +52,7 @@ class ExpenseListScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _onRefresh(WidgetRef ref) async {
+  Future<void> _onRefresh() async {
     ref.invalidate(expenseListProvider);
     ref.invalidate(fxRatesProvider);
     await Future.wait([
@@ -43,168 +61,192 @@ class ExpenseListScreen extends ConsumerWidget {
     ]);
   }
 
-  Future<void> _exportExpensesCsv(BuildContext context, WidgetRef ref) async {
-    final logger = ref.read(appLoggerProvider);
-    logger.info('expense_csv_export_started');
+  Future<void> _exportExpensesCsv(BuildContext context) async {
     try {
       final expenses = await ref.read(expenseListProvider.future);
       if (expenses.isEmpty) {
-        logger.info('expense_csv_export_skipped_no_data');
         if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No expenses to export yet.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('No expenses to export.')));
         return;
       }
 
       final categoryRepository = ref.read(categoryRepositoryProvider);
       final categoryNames = <int, String>{};
       final categoryIds = expenses
-          .map((expense) => expense.categoryId)
+          .map((e) => e.categoryId)
           .whereType<int>()
           .toSet();
-      for (final categoryId in categoryIds) {
-        final category = await categoryRepository.getById(categoryId);
-        if (category != null) {
-          categoryNames[categoryId] = category.name;
-        }
+      for (final id in categoryIds) {
+        final cat = await categoryRepository.getById(id);
+        if (cat != null) categoryNames[id] = cat.name;
       }
 
       final csv = _csvExportService.buildCsv(
         expenses: expenses,
         categoryNames: categoryNames,
       );
-
-      final stamp = DateFormat('yyyy-MM-dd_HH-mm').format(DateTime.now());
-      final filename = 'vaultspend_expenses_$stamp.csv';
+      final stamp = DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
       final bytes = Uint8List.fromList(utf8.encode(csv));
 
       await SharePlus.instance.share(
         ShareParams(
-          subject: 'VaultSpend expenses export',
-          text: 'VaultSpend expenses CSV export',
-          files: [XFile.fromData(bytes, mimeType: 'text/csv', name: filename)],
+          subject: 'Expenses Export',
+          text: 'VaultSpend CSV Export',
+          files: [
+            XFile.fromData(
+              bytes,
+              mimeType: 'text/csv',
+              name: 'expenses_$stamp.csv',
+            ),
+          ],
         ),
       );
-
-      logger.info('expense_csv_export_succeeded');
-
+    } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('CSV export prepared: $filename')));
-    } catch (error, stack) {
-      logger.warning('expense_csv_export_failed', error, stack);
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('CSV export failed: $error')));
+      ).showSnackBar(SnackBar(content: Text('Export failed: $e')));
     }
   }
 
-  Future<void> _exportExpensesPdf(BuildContext context, WidgetRef ref) async {
-    final logger = ref.read(appLoggerProvider);
-    logger.info('expense_pdf_export_started');
+  Future<void> _exportExpensesPdf(BuildContext context) async {
     try {
       final expenses = await ref.read(expenseListProvider.future);
       if (expenses.isEmpty) {
-        logger.info('expense_pdf_export_skipped_no_data');
         if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No expenses to export yet.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('No expenses to export.')));
         return;
       }
 
       final categoryRepository = ref.read(categoryRepositoryProvider);
       final categoryNames = <int, String>{};
       final categoryIds = expenses
-          .map((expense) => expense.categoryId)
+          .map((e) => e.categoryId)
           .whereType<int>()
           .toSet();
-      for (final categoryId in categoryIds) {
-        final category = await categoryRepository.getById(categoryId);
-        if (category != null) {
-          categoryNames[categoryId] = category.name;
-        }
+      for (final id in categoryIds) {
+        final cat = await categoryRepository.getById(id);
+        if (cat != null) categoryNames[id] = cat.name;
       }
 
       final pdfDoc = await _pdfExportService.buildPdf(
         expenses: expenses,
         categoryNames: categoryNames,
       );
-
-      final stamp = DateFormat('yyyy-MM-dd_HH-mm').format(DateTime.now());
-      final filename = 'vaultspend_expenses_$stamp.pdf';
+      final stamp = DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
       final bytes = await pdfDoc.save();
 
       await SharePlus.instance.share(
         ShareParams(
-          subject: 'VaultSpend expenses report',
-          text: 'VaultSpend expenses PDF report',
+          subject: 'Expenses Report',
+          text: 'VaultSpend PDF Export',
           files: [
-            XFile.fromData(bytes, mimeType: 'application/pdf', name: filename),
+            XFile.fromData(
+              bytes,
+              mimeType: 'application/pdf',
+              name: 'expenses_$stamp.pdf',
+            ),
           ],
         ),
       );
-
-      logger.info('expense_pdf_export_succeeded');
-
+    } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('PDF export prepared: $filename')));
-    } catch (error, stack) {
-      logger.warning('expense_pdf_export_failed', error, stack);
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('PDF export failed: $error')));
+      ).showSnackBar(SnackBar(content: Text('Export failed: $e')));
     }
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final async = ref.watch(expenseListProvider);
     final currencyFormat = NumberFormat.currency(symbol: '');
     final preferredCurrency = ref.watch(preferredCurrencyProvider);
     final fxSnapshot = ref
         .watch(fxRatesProvider)
-        .maybeWhen(data: (value) => value, orElse: () => null);
+        .maybeWhen(data: (d) => d, orElse: () => null);
+
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final ext = theme.vaultSpend;
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    final shellBottomNavReservedHeight = 80.0 + bottomInset;
 
     return Scaffold(
-      appBar: AppBar(
-        leading: onOpenDrawer != null
-            ? IconButton(icon: const Icon(Icons.menu), onPressed: onOpenDrawer)
+      backgroundColor: Colors.transparent,
+      extendBodyBehindAppBar: true,
+      appBar: ObsidianAppBar(
+        centerTitle: false,
+        title: _isSearching
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Search expenses...',
+                  border: InputBorder.none,
+                  hintStyle: theme.textTheme.titleMedium?.copyWith(
+                    color: scheme.onSurfaceVariant.withValues(alpha: 0.5),
+                  ),
+                ),
+                onChanged: (_) => setState(() {}),
+              )
+            : Text(
+                'Expenses',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.2,
+                ),
+              ),
+        leading: widget.onOpenDrawer != null
+            ? IconButton(icon: const Icon(Icons.menu), onPressed: widget.onOpenDrawer)
             : null,
-        title: const Text('Expenses'),
         actions: [
+          IconButton(
+            icon: Icon(
+              _isSearching ? Icons.close_rounded : Icons.search_rounded,
+            ),
+            onPressed: () {
+              setState(() {
+                if (_isSearching) {
+                  _searchController.clear();
+                }
+                _isSearching = !_isSearching;
+              });
+            },
+          ),
           PopupMenuButton<String>(
             tooltip: 'Export',
-            icon: const Icon(Icons.download_outlined),
-            onSelected: (value) {
-              if (value == 'csv') {
-                _exportExpensesCsv(context, ref);
-              } else if (value == 'pdf') {
-                _exportExpensesPdf(context, ref);
+            icon: const Icon(Icons.ios_share_rounded),
+            onSelected: (v) {
+              if (v == 'csv') {
+                _exportExpensesCsv(context);
+              } else if (v == 'pdf') {
+                _exportExpensesPdf(context);
               }
             },
-            itemBuilder: (BuildContext context) => [
-              const PopupMenuItem<String>(
+            itemBuilder: (ctx) => [
+              const PopupMenuItem(
                 value: 'csv',
                 child: Row(
                   children: [
-                    Icon(Icons.table_chart, size: 18),
+                    Icon(Icons.table_chart_rounded, size: 18),
                     SizedBox(width: 8),
                     Text('Export as CSV'),
                   ],
                 ),
               ),
-              const PopupMenuItem<String>(
+              const PopupMenuItem(
                 value: 'pdf',
                 child: Row(
                   children: [
-                    Icon(Icons.picture_as_pdf, size: 18),
+                    Icon(Icons.picture_as_pdf_rounded, size: 18),
                     SizedBox(width: 8),
                     Text('Export as PDF'),
                   ],
@@ -212,161 +254,84 @@ class ExpenseListScreen extends ConsumerWidget {
               ),
             ],
           ),
+          const UserProfileAvatar(margin: EdgeInsets.only(right: 16)),
         ],
       ),
       body: ResponsiveBody(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            SizedBox(height: 64 + MediaQuery.paddingOf(context).top),
             const FxReferenceStrip(),
             Expanded(
               child: async.when(
                 data: (items) {
-                  if (items.isEmpty) {
+                  final categoriesAsync = ref.watch(categoryListProvider);
+                  final Map<int, String> categoryMap = {};
+                  if (categoriesAsync.value != null) {
+                    for (final c in categoriesAsync.value!) {
+                      categoryMap[c.id] = c.name.toLowerCase();
+                    }
+                  }
+
+                  final query = _searchController.text.trim().toLowerCase();
+                  final filteredItems = query.isEmpty
+                      ? items
+                      : items.where((e) {
+                          final noteParts = (e.note ?? '').toLowerCase();
+                          if (noteParts.contains(query)) return true;
+                          if (e.categoryId != null) {
+                            final catName = categoryMap[e.categoryId] ?? '';
+                            if (catName.contains(query)) return true;
+                          }
+                          return false;
+                        }).toList();
+
+                  if (filteredItems.isEmpty) {
                     return RefreshIndicator(
-                      onRefresh: () => _onRefresh(ref),
+                      onRefresh: _onRefresh,
                       child: ListView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        children: [
-                          SizedBox(
-                            height: MediaQuery.sizeOf(context).height * 0.25,
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 24),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.receipt_long_outlined,
-                                  size: 40,
-                                  color: Theme.of(context).colorScheme.outline,
-                                ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  'No expenses yet.\nTap + to add one.\nPull down to refresh.',
-                                  textAlign: TextAlign.center,
-                                  style: Theme.of(context).textTheme.bodyLarge
-                                      ?.copyWith(
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.onSurfaceVariant,
-                                      ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                        children: [_buildEmptyState(theme, scheme, ext)],
                       ),
                     );
                   }
                   return RefreshIndicator(
-                    onRefresh: () => _onRefresh(ref),
-                    child: ListView.separated(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      itemCount: items.length,
-                      separatorBuilder: (context, index) =>
-                          const Divider(height: 1),
+                    onRefresh: _onRefresh,
+                    child: ListView.builder(
+                      padding: EdgeInsets.fromLTRB(
+                        16,
+                        16,
+                        16,
+                        120 + bottomInset,
+                      ),
+                      itemCount: filteredItems.length + 1,
                       itemBuilder: (context, i) {
-                        final e = items[i];
-                        final converted = convertCurrencyAmount(
-                          amount: e.amount,
-                          from: e.currency,
-                          to: preferredCurrency,
-                          snapshot: fxSnapshot,
-                        );
-                        final showBase =
-                            converted != null &&
-                            e.currency != preferredCurrency;
-                        final amountText = showBase
-                            ? '$preferredCurrency ${currencyFormat.format(converted).trim()}'
-                            : '${e.currency} ${currencyFormat.format(e.amount).trim()}';
-                        return ListTile(
-                          title: Text(
-                            amountText,
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          subtitle: _ExpenseSubtitle(expense: e),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (e.note != null && e.note!.isNotEmpty)
-                                Icon(
-                                  Icons.notes,
-                                  color: Theme.of(context).colorScheme.outline,
-                                ),
-                              PopupMenuButton<String>(
-                                onSelected: (v) async {
-                                  if (v == 'edit') {
-                                    await _openEditor(context, expense: e);
-                                    ref.invalidate(expenseListProvider);
-                                  } else if (v == 'delete') {
-                                    final ok = await showDialog<bool>(
-                                      context: context,
-                                      builder: (ctx) => AlertDialog(
-                                        title: const Text('Delete expense?'),
-                                        content: const Text(
-                                          'This cannot be undone.',
-                                        ),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () =>
-                                                Navigator.pop(ctx, false),
-                                            child: const Text('Cancel'),
-                                          ),
-                                          FilledButton(
-                                            onPressed: () =>
-                                                Navigator.pop(ctx, true),
-                                            child: const Text('Delete'),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                    if (ok == true && context.mounted) {
-                                      final categoryName = e.categoryId == null
-                                          ? 'Uncategorized'
-                                          : (await ref
-                                                        .read(
-                                                          categoryRepositoryProvider,
-                                                        )
-                                                        .getById(e.categoryId!))
-                                                    ?.name ??
-                                                'Category #${e.categoryId}';
-                                      await ref
-                                          .read(expenseRepositoryProvider)
-                                          .delete(e.id);
-                                      await ref
-                                          .read(activityLogServiceProvider)
-                                          .add(
-                                            action: 'Expense deleted',
-                                            details:
-                                                '$categoryName · ${e.currency} ${e.amount.toStringAsFixed(2)} · ${e.isRecurring ? 'recurring' : 'one-time'}${e.note == null ? '' : ' · ${e.note}'}',
-                                          );
-                                      await syncRemindersNow(
-                                        ref,
-                                        reason: 'expense_deleted',
-                                      );
-                                      ref.invalidate(expenseListProvider);
-                                    }
-                                  }
-                                },
-                                itemBuilder: (context) => const [
-                                  PopupMenuItem(
-                                    value: 'edit',
-                                    child: Text('Edit'),
-                                  ),
-                                  PopupMenuItem(
-                                    value: 'delete',
-                                    child: Text('Delete'),
-                                  ),
-                                ],
+                        if (i == 0) {
+                          return Padding(
+                            padding: const EdgeInsets.only(left: 4, bottom: 16),
+                            child: Text(
+                              _isSearching && query.isNotEmpty ? 'SEARCH RESULTS' : 'RECENT ACTIVITY',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: scheme.outline,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 2,
                               ),
-                            ],
+                            ),
+                          );
+                        }
+                        final e = filteredItems[i - 1];
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _ExpenseCard(
+                            expense: e,
+                            currencyFormat: currencyFormat,
+                            preferredCurrency: preferredCurrency,
+                            fxSnapshot: fxSnapshot,
+                            onEdit: () async {
+                              await _openEditor(context, expense: e);
+                              ref.invalidate(expenseListProvider);
+                            },
+                            onDelete: () => _confirmDelete(context, e),
                           ),
-                          onTap: () async {
-                            await _openEditor(context, expense: e);
-                            ref.invalidate(expenseListProvider);
-                          },
                         );
                       },
                     ),
@@ -384,36 +349,293 @@ class ExpenseListScreen extends ConsumerWidget {
           await _openEditor(context);
           ref.invalidate(expenseListProvider);
         },
-        child: const Icon(Icons.add),
+        backgroundColor: scheme.primary,
+        foregroundColor: const Color(0xFF003732),
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: const Icon(Icons.add, size: 28),
       ),
+      bottomNavigationBar: SizedBox(height: shellBottomNavReservedHeight),
+    );
+  }
+
+  Future<void> _confirmDelete(
+    BuildContext context,
+    Expense e,
+  ) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Expense?'),
+        content: const Text('This will permanently remove this record.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await ref.read(expenseRepositoryProvider).delete(e.id);
+      ref.invalidate(expenseListProvider);
+    }
+  }
+
+  Widget _buildEmptyState(
+    ThemeData theme,
+    ColorScheme scheme,
+    VaultSpendThemeExtension ext,
+  ) {
+    return Column(
+      children: [
+        const SizedBox(height: 120),
+        Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: scheme.primary.withValues(alpha: 0.08),
+              ),
+            ),
+            Container(
+              width: 88,
+              height: 88,
+              decoration: BoxDecoration(
+                color: ext.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: scheme.primary.withValues(alpha: 0.2),
+                ),
+              ),
+              child: Icon(Icons.receipt_long, size: 44, color: scheme.primary),
+            ),
+          ],
+        ),
+        const SizedBox(height: 28),
+        Text(
+          'No expenses yet',
+          style: theme.textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Tap + to add one.\nPull down to refresh.',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: scheme.onSurfaceVariant,
+            height: 1.5,
+          ),
+        ),
+      ],
     );
   }
 }
 
-class _ExpenseSubtitle extends ConsumerWidget {
-  const _ExpenseSubtitle({required this.expense});
+class _ExpenseCard extends ConsumerWidget {
+  const _ExpenseCard({
+    required this.expense,
+    required this.currencyFormat,
+    required this.preferredCurrency,
+    required this.fxSnapshot,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   final Expense expense;
+  final NumberFormat currencyFormat;
+  final String preferredCurrency;
+  final dynamic fxSnapshot;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final dateStr = DateFormat('MMM d, yyyy h:mm a').format(expense.occurredAt);
-    final id = expense.categoryId;
-    if (id == null) {
-      return Text(_line('Uncategorized', dateStr));
-    }
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    final converted = convertCurrencyAmount(
+      amount: expense.amount,
+      from: expense.currency,
+      to: preferredCurrency,
+      snapshot: fxSnapshot,
+    );
+    final showBase = converted != null && expense.currency != preferredCurrency;
+    final amountText = showBase
+        ? '-$preferredCurrency ${currencyFormat.format(converted).trim()}'
+        : '-${expense.currency} ${currencyFormat.format(expense.amount).trim()}';
+
+    final dateStr = _formatDate(expense.occurredAt);
+
     return FutureBuilder<Category?>(
-      future: ref.read(categoryRepositoryProvider).getById(id),
+      future: expense.categoryId != null
+          ? ref.read(categoryRepositoryProvider).getById(expense.categoryId!)
+          : Future.value(null),
       builder: (context, snap) {
-        final name = snap.data?.name ?? 'Category';
-        return Text(_line(name, dateStr));
+        final category = snap.data;
+        final categoryName = category?.name ?? 'Uncategorized';
+        final title = expense.note != null && expense.note!.isNotEmpty
+            ? expense.note!
+            : categoryName;
+        final subtitleText = '$categoryName · $dateStr';
+
+        return GestureDetector(
+          onLongPress: () => _showOptions(context),
+          child: ObsidianCard(
+            level: ObsidianCardTonalLevel.low,
+            borderRadius: 16,
+            showTopBorder: false,
+            padding: EdgeInsets.zero,
+            onTap: onEdit,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  _CategoryIcon(category: category),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.2,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          subtitleText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        amountText,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: scheme.onSurface,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
       },
     );
   }
 
-  String _line(String categoryName, String dateStr) {
-    final parts = <String>[categoryName, dateStr];
-    if (expense.isRecurring) parts.add('Recurring');
-    return parts.join(' · ');
+  void _showOptions(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit_rounded),
+              title: const Text('Edit Transaction'),
+              onTap: () {
+                Navigator.pop(ctx);
+                onEdit();
+              },
+            ),
+            ListTile(
+              leading: const Icon(
+                Icons.delete_rounded,
+                color: Colors.redAccent,
+              ),
+              title: const Text(
+                'Delete Transaction',
+                style: TextStyle(color: Colors.redAccent),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                onDelete();
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    if (DateTime(date.year, date.month, date.day) == today) {
+      return 'Today, ${DateFormat('h:mm a').format(date)}';
+    }
+    return DateFormat('MMM d, h:mm a').format(date);
+  }
+}
+
+class _CategoryIcon extends StatelessWidget {
+  const _CategoryIcon({this.category});
+  final Category? category;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    Color color = scheme.primary;
+    IconData iconData = Icons.receipt_long_rounded;
+
+    if (category != null) {
+      color = resolveCategoryColor(context, category!.color);
+      iconData = resolveCategoryIcon(category!.iconKey);
+    }
+
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.1)),
+      ),
+      child: Center(child: Icon(iconData, color: color, size: 24)),
+    );
   }
 }

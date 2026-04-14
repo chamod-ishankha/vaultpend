@@ -6,17 +6,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../core/providers.dart';
 import '../../core/export/subscription_csv_export_service.dart';
 import '../../core/export/subscription_pdf_export_service.dart';
-import '../../core/formatters/time_remaining_formatter.dart';
 import '../../core/fx/currency_conversion.dart';
 import '../../core/fx/fx_providers.dart';
 import '../../core/fx/fx_snapshot.dart';
 import '../../core/logging/app_logging.dart';
-import '../../core/notifications/reminder_sync_helper.dart';
-import '../../core/providers.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/fx_reference_strip.dart';
+import '../../core/widgets/obsidian_app_bar.dart';
+import '../../core/widgets/obsidian_card.dart';
 import '../../core/widgets/responsive_layout.dart';
+import '../../core/widgets/user_profile_avatar.dart';
 import '../../data/models/subscription.dart';
 import '../auth/auth_providers.dart';
 import 'add_subscription_screen.dart';
@@ -37,6 +39,15 @@ class _SubscriptionListScreenState
   static const _csvExportService = SubscriptionCsvExportService();
   static const _pdfExportService = SubscriptionPdfExportService();
 
+  bool _isSearching = false;
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   Future<void> _openEditor(
     BuildContext context, {
     Subscription? subscription,
@@ -48,7 +59,7 @@ class _SubscriptionListScreenState
     );
   }
 
-  Future<void> _onRefresh(WidgetRef ref) async {
+  Future<void> _onRefresh() async {
     ref.invalidate(subscriptionListProvider);
     ref.invalidate(fxRatesProvider);
     await Future.wait([
@@ -57,97 +68,69 @@ class _SubscriptionListScreenState
     ]);
   }
 
-  Future<void> _exportSubscriptionsCsv(
-    BuildContext context,
-    WidgetRef ref,
-  ) async {
+  Future<void> _exportCsv(BuildContext context) async {
     final logger = ref.read(appLoggerProvider);
     logger.info('subscription_csv_export_started');
     try {
       final subscriptions = await ref.read(subscriptionListProvider.future);
-      if (subscriptions.isEmpty) {
-        logger.info('subscription_csv_export_skipped_no_data');
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No subscriptions to export yet.')),
-        );
-        return;
-      }
-
+      if (subscriptions.isEmpty) return;
       final csv = _csvExportService.buildCsv(subscriptions: subscriptions);
-      final stamp = DateFormat('yyyy-MM-dd_HH-mm').format(DateTime.now());
-      final filename = 'vaultspend_subscriptions_$stamp.csv';
+      final stamp = DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
       final bytes = Uint8List.fromList(utf8.encode(csv));
-
       await SharePlus.instance.share(
         ShareParams(
-          subject: 'VaultSpend subscriptions export',
-          text: 'VaultSpend subscriptions CSV export',
-          files: [XFile.fromData(bytes, mimeType: 'text/csv', name: filename)],
+          subject: 'Subscriptions Export',
+          text: 'VaultSpend CSV Export',
+          files: [
+            XFile.fromData(
+              bytes,
+              mimeType: 'text/csv',
+              name: 'subs_$stamp.csv',
+            ),
+          ],
         ),
       );
-
       logger.info('subscription_csv_export_succeeded');
-
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('CSV export prepared: $filename')));
-    } catch (error, stack) {
-      logger.warning('subscription_csv_export_failed', error, stack);
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('CSV export failed: $error')));
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Export failed: $e')));
+      }
     }
   }
 
-  Future<void> _exportSubscriptionsPdf(
-    BuildContext context,
-    WidgetRef ref,
-  ) async {
+  Future<void> _exportPdf(BuildContext context) async {
     final logger = ref.read(appLoggerProvider);
     logger.info('subscription_pdf_export_started');
     try {
       final subscriptions = await ref.read(subscriptionListProvider.future);
-      if (subscriptions.isEmpty) {
-        logger.info('subscription_pdf_export_skipped_no_data');
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No subscriptions to export yet.')),
-        );
-        return;
-      }
-
+      if (subscriptions.isEmpty) return;
       final pdfDoc = await _pdfExportService.buildPdf(
         subscriptions: subscriptions,
       );
-      final stamp = DateFormat('yyyy-MM-dd_HH-mm').format(DateTime.now());
-      final filename = 'vaultspend_subscriptions_$stamp.pdf';
+      final stamp = DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
       final bytes = await pdfDoc.save();
-
       await SharePlus.instance.share(
         ShareParams(
-          subject: 'VaultSpend subscriptions report',
-          text: 'VaultSpend subscriptions PDF report',
+          subject: 'Subscriptions Report',
+          text: 'VaultSpend PDF Export',
           files: [
-            XFile.fromData(bytes, mimeType: 'application/pdf', name: filename),
+            XFile.fromData(
+              bytes,
+              mimeType: 'application/pdf',
+              name: 'subs_$stamp.pdf',
+            ),
           ],
         ),
       );
-
       logger.info('subscription_pdf_export_succeeded');
-
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('PDF export prepared: $filename')));
-    } catch (error, stack) {
-      logger.warning('subscription_pdf_export_failed', error, stack);
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('PDF export failed: $error')));
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Export failed: $e')));
+      }
     }
   }
 
@@ -155,49 +138,88 @@ class _SubscriptionListScreenState
   Widget build(BuildContext context) {
     final async = ref.watch(subscriptionListProvider);
     final currencyFormat = NumberFormat.currency(symbol: '');
-    final dateFmt = DateFormat('MMM d, yyyy h:mm a');
-    final now = DateTime.now();
     final preferredCurrency = ref.watch(preferredCurrencyProvider);
     final fxSnapshot = ref
         .watch(fxRatesProvider)
-        .maybeWhen(data: (value) => value, orElse: () => null);
+        .maybeWhen(data: (v) => v, orElse: () => null);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final ext = theme.vaultSpend;
+    final topPadding = MediaQuery.paddingOf(context).top;
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    final shellBottomNavReservedHeight = 80.0 + bottomInset;
 
     return Scaffold(
-      appBar: AppBar(
+      backgroundColor: Colors.transparent,
+      extendBodyBehindAppBar: true,
+      appBar: ObsidianAppBar(
+        centerTitle: false,
         leading: widget.onOpenDrawer != null
             ? IconButton(
                 icon: const Icon(Icons.menu),
                 onPressed: widget.onOpenDrawer,
               )
             : null,
-        title: const Text('Subscriptions'),
+        title: _isSearching
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Search subscriptions...',
+                  border: InputBorder.none,
+                  hintStyle: theme.textTheme.titleMedium?.copyWith(
+                    color: scheme.onSurfaceVariant.withValues(alpha: 0.5),
+                  ),
+                ),
+                onChanged: (_) => setState(() {}),
+              )
+            : Text(
+                'Subscriptions',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.2,
+                ),
+              ),
         actions: [
+          IconButton(
+            icon: Icon(
+              _isSearching ? Icons.close_rounded : Icons.search_rounded,
+            ),
+            onPressed: () {
+              setState(() {
+                if (_isSearching) {
+                  _searchController.clear();
+                }
+                _isSearching = !_isSearching;
+              });
+            },
+          ),
           PopupMenuButton<String>(
             tooltip: 'Export',
-            icon: const Icon(Icons.download_outlined),
-            onSelected: (value) {
-              if (value == 'csv') {
-                _exportSubscriptionsCsv(context, ref);
-              } else if (value == 'pdf') {
-                _exportSubscriptionsPdf(context, ref);
-              }
+            icon: const Icon(Icons.ios_share_rounded),
+            onSelected: (v) {
+              if (v == 'csv') _exportCsv(context);
+              if (v == 'pdf') _exportPdf(context);
             },
-            itemBuilder: (BuildContext context) => [
-              const PopupMenuItem<String>(
+            itemBuilder: (ctx) => [
+              const PopupMenuItem(
                 value: 'csv',
                 child: Row(
                   children: [
-                    Icon(Icons.table_chart, size: 18),
+                    Icon(Icons.table_chart_rounded, size: 18),
                     SizedBox(width: 8),
                     Text('Export as CSV'),
                   ],
                 ),
               ),
-              const PopupMenuItem<String>(
+              const PopupMenuItem(
                 value: 'pdf',
                 child: Row(
                   children: [
-                    Icon(Icons.picture_as_pdf, size: 18),
+                    Icon(Icons.picture_as_pdf_rounded, size: 18),
                     SizedBox(width: 8),
                     Text('Export as PDF'),
                   ],
@@ -205,102 +227,104 @@ class _SubscriptionListScreenState
               ),
             ],
           ),
+          const UserProfileAvatar(margin: EdgeInsets.only(right: 16)),
         ],
       ),
       body: ResponsiveBody(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            SizedBox(height: 64 + topPadding),
             const FxReferenceStrip(),
             Expanded(
               child: async.when(
                 data: (items) {
-                  if (items.isEmpty) {
+                  final categoriesAsync = ref.watch(categoryListProvider);
+                  final Map<int, String> categoryMap = {};
+                  if (categoriesAsync.value != null) {
+                    for (final c in categoriesAsync.value!) {
+                      categoryMap[c.id] = c.name.toLowerCase();
+                    }
+                  }
+
+                  final query = _searchController.text.trim().toLowerCase();
+                  final filteredItems = query.isEmpty
+                      ? items
+                      : items.where((s) {
+                          final nameMatch = s.name.toLowerCase().contains(query);
+                          return nameMatch;
+                        }).toList();
+
+                  if (filteredItems.isEmpty) {
                     return RefreshIndicator(
-                      onRefresh: () => _onRefresh(ref),
+                      onRefresh: _onRefresh,
                       child: ListView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        children: [
-                          SizedBox(
-                            height: MediaQuery.sizeOf(context).height * 0.25,
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 24),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.subscriptions_outlined,
-                                  size: 40,
-                                  color: Theme.of(context).colorScheme.outline,
-                                ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  'No subscriptions yet.\nTap + to track one.\nPull down to refresh.',
-                                  textAlign: TextAlign.center,
-                                  style: Theme.of(context).textTheme.bodyLarge
-                                      ?.copyWith(
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.onSurfaceVariant,
-                                      ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                        children: [_buildEmptyState(theme, scheme, ext)],
                       ),
                     );
                   }
 
-                  final sortedItems = [...items]
-                    ..sort((left, right) {
-                      if (left.isTrial != right.isTrial) {
-                        return left.isTrial ? -1 : 1;
-                      }
-
-                      final leftEnds = left.trialEndsAt;
-                      final rightEnds = right.trialEndsAt;
-                      if (left.isTrial && right.isTrial) {
-                        if (leftEnds == null && rightEnds == null) return 0;
-                        if (leftEnds == null) return 1;
-                        if (rightEnds == null) return -1;
-                        return leftEnds.compareTo(rightEnds);
-                      }
-
-                      return left.nextBillingDate.compareTo(
-                        right.nextBillingDate,
-                      );
-                    });
-                  final trialItems = sortedItems
-                      .where((s) => s.isTrial)
-                      .toList();
-                  final trialSummary = _buildTrialSummary(trialItems);
+                  final trialItems = filteredItems.where((s) => s.isTrial).toList();
+                  final sortedItems = [...filteredItems]
+                    ..sort(
+                      (a, b) => a.isTrial == b.isTrial
+                          ? a.nextBillingDate.compareTo(b.nextBillingDate)
+                          : (a.isTrial ? -1 : 1),
+                    );
 
                   return RefreshIndicator(
-                    onRefresh: () => _onRefresh(ref),
+                    onRefresh: _onRefresh,
                     child: ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      padding: EdgeInsets.fromLTRB(
+                        16,
+                        24,
+                        16,
+                        120 + bottomInset,
+                      ),
                       children: [
-                        if (trialSummary != null)
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                            child: _TrialSummaryCard(summary: trialSummary),
+                        if (!_isSearching && trialItems.isNotEmpty)
+                          _TrialHeroCard(trialItems: trialItems),
+
+                        if (!_isSearching && trialItems.isNotEmpty) const SizedBox(height: 24),
+
+                        Row(
+                          children: [
+                            Text(
+                              _isSearching && query.isNotEmpty ? 'SEARCH RESULTS' : 'ACTIVE PIPELINE',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: scheme.outline,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.8,
+                              ),
+                            ),
+                            const Spacer(),
+                            if (!_isSearching)
+                              Text(
+                                'Filter by: Date',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: scheme.primary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        ...sortedItems.map(
+                          (s) => Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _SubscriptionCard(
+                              subscription: s,
+                              currencyFormat: currencyFormat,
+                              preferredCurrency: preferredCurrency,
+                              fxSnapshot: fxSnapshot,
+                              onEdit: () =>
+                                  _openEditor(context, subscription: s),
+                              onDelete: () => _confirmDelete(context, s),
+                              surfaceContainerLow: ext.surfaceContainerLow,
+                              surfaceContainerHigh: ext.surfaceContainerHigh,
+                            ),
                           ),
-                        for (var i = 0; i < sortedItems.length; i++) ...[
-                          if (i > 0) const Divider(height: 1),
-                          _buildSubscriptionListTile(
-                            context: context,
-                            ref: ref,
-                            subscription: sortedItems[i],
-                            currencyFormat: currencyFormat,
-                            dateFmt: dateFmt,
-                            now: now,
-                            preferredCurrency: preferredCurrency,
-                            fxSnapshot: fxSnapshot,
-                          ),
-                        ],
+                        ),
                       ],
                     ),
                   );
@@ -313,27 +337,251 @@ class _SubscriptionListScreenState
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          await _openEditor(context);
-          ref.invalidate(subscriptionListProvider);
-        },
-        child: const Icon(Icons.add),
+        onPressed: () => _openEditor(context),
+        backgroundColor: scheme.primary,
+        foregroundColor: const Color(0xFF003732),
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: const Icon(Icons.add, size: 28),
+      ),
+      bottomNavigationBar: SizedBox(height: shellBottomNavReservedHeight),
+    );
+  }
+
+  Widget _buildEmptyState(ThemeData theme, ColorScheme scheme, dynamic ext) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.subscriptions_outlined,
+            size: 64,
+            color: scheme.outline.withValues(alpha: 0.3),
+          ),
+          const SizedBox(height: 16),
+          Text('No subscriptions found', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Text(
+            'Track your trials and monthly billing.',
+            style: theme.textTheme.bodyMedium?.copyWith(color: scheme.outline),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildSubscriptionListTile({
-    required BuildContext context,
-    required WidgetRef ref,
-    required Subscription subscription,
-    required NumberFormat currencyFormat,
-    required DateFormat dateFmt,
-    required DateTime now,
-    required String preferredCurrency,
-    required FxSnapshot? fxSnapshot,
-  }) {
-    final next = dateFmt.format(subscription.nextBillingDate);
+  Future<void> _confirmDelete(
+    BuildContext context,
+    Subscription subscription,
+  ) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Subscription?'),
+        content: const Text('This will permanently remove this subscription.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok == true) {
+      await ref.read(subscriptionRepositoryProvider).delete(subscription.id);
+      ref.invalidate(subscriptionListProvider);
+    }
+  }
+}
+
+class _TrialHeroCard extends StatelessWidget {
+  final List<Subscription> trialItems;
+  const _TrialHeroCard({required this.trialItems});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final activeTrials = trialItems.length;
+
+    final endingSoon = trialItems
+      ..sort((a, b) => a.nextBillingDate.compareTo(b.nextBillingDate));
+    final first = endingSoon.first;
+    final second = endingSoon.length > 1 ? endingSoon[1] : null;
+    final now = DateTime.now();
+
+    String trialEndLabel(Subscription s) {
+      final days = s.nextBillingDate.difference(now).inDays;
+      if (days <= 0) return 'Review today';
+      if (days == 1) return 'Ends in 1 day';
+      return 'Ends in $days days';
+    }
+
+    return ObsidianCard(
+      level: ObsidianCardTonalLevel.high,
+      padding: EdgeInsets.zero,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Trial monitoring',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$activeTrials trial subscription(s) tracked',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: scheme.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.hourglass_top_rounded,
+                    size: 20,
+                    color: scheme.primary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Container(
+              height: 1,
+              color: scheme.outlineVariant.withValues(alpha: 0.15),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: _TrialColumn(
+                    heading: 'Ending Soon',
+                    title: first.name,
+                    subtitle: trialEndLabel(first),
+                  ),
+                ),
+                if (second != null) ...[
+                  Container(
+                    width: 1,
+                    height: 48,
+                    color: scheme.outlineVariant.withValues(alpha: 0.15),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: _TrialColumn(
+                      heading: 'Action Required',
+                      title: second.name,
+                      subtitle: trialEndLabel(second),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TrialColumn extends StatelessWidget {
+  const _TrialColumn({
+    required this.heading,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final String heading;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          heading.toUpperCase(),
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: scheme.outline,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.2,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          subtitle,
+          style: theme.textTheme.bodySmall?.copyWith(color: scheme.tertiary),
+        ),
+      ],
+    );
+  }
+}
+
+class _SubscriptionCard extends StatelessWidget {
+  final Subscription subscription;
+  final NumberFormat currencyFormat;
+  final String preferredCurrency;
+  final FxSnapshot? fxSnapshot;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+  final Color surfaceContainerLow;
+  final Color surfaceContainerHigh;
+
+  const _SubscriptionCard({
+    required this.subscription,
+    required this.currencyFormat,
+    required this.preferredCurrency,
+    required this.fxSnapshot,
+    required this.onEdit,
+    required this.onDelete,
+    required this.surfaceContainerLow,
+    required this.surfaceContainerHigh,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final isTrial = subscription.isTrial;
+
     final converted = convertCurrencyAmount(
       amount: subscription.amount,
       from: subscription.currency,
@@ -345,271 +593,178 @@ class _SubscriptionListScreenState
     final amountText = showBase
         ? '$preferredCurrency ${currencyFormat.format(converted).trim()}'
         : '${subscription.currency} ${currencyFormat.format(subscription.amount).trim()}';
+    final cycleText = subscription.cycle.toUpperCase();
 
-    return ListTile(
-      leading: Icon(
-        isTrial ? Icons.hourglass_bottom : Icons.subscriptions_outlined,
-      ),
-      title: Text(subscription.name),
-      subtitle: Text(
-        [
-          '$amountText · ${subscription.cycle}',
-          'Next: $next',
-          if (isTrial) _trialStatusLabel(subscription, now),
-        ].join(' · '),
-      ),
-      trailing: PopupMenuButton<String>(
-        onSelected: (v) async {
-          if (v == 'edit') {
-            await _openEditor(context, subscription: subscription);
-            ref.invalidate(subscriptionListProvider);
-          } else if (v == 'delete') {
-            final ok = await showDialog<bool>(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                title: const Text('Delete subscription?'),
-                content: const Text('This cannot be undone.'),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx, false),
-                    child: const Text('Cancel'),
-                  ),
-                  FilledButton(
-                    onPressed: () => Navigator.pop(ctx, true),
-                    child: const Text('Delete'),
-                  ),
-                ],
-              ),
-            );
-            if (ok == true && context.mounted) {
-              await ref
-                  .read(subscriptionRepositoryProvider)
-                  .delete(subscription.id);
-              await ref
-                  .read(activityLogServiceProvider)
-                  .add(
-                    action: 'Subscription deleted',
-                    details:
-                        '${subscription.name} · ${subscription.currency} ${subscription.amount.toStringAsFixed(2)} · ${subscription.cycle} · ${subscription.isTrial ? 'trial' : 'paid'}${subscription.trialEndsAt == null ? '' : ' · trial ends ${DateFormat('MMM d, yyyy').format(subscription.trialEndsAt!.toLocal())}'}',
-                  );
-              await syncRemindersNow(ref, reason: 'subscription_deleted');
-              ref.invalidate(subscriptionListProvider);
-            }
-          } else if (v == 'mark_paid') {
-            await _markTrialAsPaid(
-              context: context,
-              ref: ref,
-              subscription: subscription,
-            );
-          }
-        },
-        itemBuilder: (context) => [
-          const PopupMenuItem(value: 'edit', child: Text('Edit')),
-          if (isTrial)
-            const PopupMenuItem(
-              value: 'mark_paid',
-              child: Text('Mark as paid'),
+    final subtitle = isTrial
+        ? 'Trial ends ${DateFormat.yMMMd().format(subscription.nextBillingDate)}'
+        : 'Next billing ${DateFormat.yMMMd().format(subscription.nextBillingDate)}';
+
+    return GestureDetector(
+      onLongPress: () => _showOptions(context),
+      child: Material(
+        color: isTrial ? surfaceContainerLow : scheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onEdit,
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: isTrial
+                  ? null
+                  : Border.all(
+                      color: scheme.outlineVariant.withValues(alpha: 0.08),
+                      width: 1,
+                    ),
             ),
-          const PopupMenuItem(value: 'delete', child: Text('Delete')),
-        ],
-      ),
-      onTap: () async {
-        await _openEditor(context, subscription: subscription);
-        ref.invalidate(subscriptionListProvider);
-      },
-    );
-  }
-
-  Future<void> _markTrialAsPaid({
-    required BuildContext context,
-    required WidgetRef ref,
-    required Subscription subscription,
-  }) async {
-    final logger = ref.read(appLoggerProvider);
-    final trialEndsAtIso =
-        subscription.trialEndsAt?.toIso8601String() ?? 'none';
-    final nextBillingIso = subscription.nextBillingDate.toIso8601String();
-    if (!subscription.isTrial) {
-      logger.info(
-        'subscription_trial_mark_paid_skipped_not_trial id=${subscription.id} name=${subscription.name} next_billing_at=$nextBillingIso',
-      );
-      return;
-    }
-
-    logger.info(
-      'subscription_trial_mark_paid_started id=${subscription.id} name=${subscription.name} trial_ends_at=$trialEndsAtIso next_billing_at=$nextBillingIso',
-    );
-
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Convert trial to paid?'),
-        content: Text(
-          'This will mark ${subscription.name} as a paid subscription and clear trial fields.',
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: isTrial
+                        ? surfaceContainerHigh
+                        : scheme.surfaceContainer,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: scheme.outlineVariant.withValues(alpha: 0.12),
+                    ),
+                  ),
+                  child: Icon(
+                    isTrial
+                        ? Icons.hourglass_empty_rounded
+                        : Icons.subscriptions_rounded,
+                    color: isTrial ? scheme.primary : scheme.onSurfaceVariant,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              subscription.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          if (isTrial)
+                            Container(
+                              margin: const EdgeInsets.only(left: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: scheme.tertiaryContainer.withValues(
+                                  alpha: 0.20,
+                                ),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                'TRIAL',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: scheme.tertiary,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.3,
+                                  fontSize: 9,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      amountText.trim(),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      cycleText,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: scheme.outline,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Confirm'),
-          ),
-        ],
       ),
     );
-
-    if (ok != true) {
-      logger.info(
-        'subscription_trial_mark_paid_cancelled id=${subscription.id} name=${subscription.name} trial_ends_at=$trialEndsAtIso next_billing_at=$nextBillingIso',
-      );
-      await ref
-          .read(activityLogServiceProvider)
-          .add(
-            action: 'Trial conversion cancelled',
-            details:
-                '${subscription.name} · ${subscription.currency} ${subscription.amount.toStringAsFixed(2)} · ${subscription.cycle} · trial ends $trialEndsAtIso',
-          );
-      return;
-    }
-
-    final updated = Subscription()
-      ..id = subscription.id
-      ..remoteId = subscription.remoteId
-      ..userId = subscription.userId
-      ..name = subscription.name
-      ..amount = subscription.amount
-      ..currency = subscription.currency
-      ..cycle = subscription.cycle
-      ..nextBillingDate = subscription.nextBillingDate
-      ..isTrial = false
-      ..trialEndsAt = null;
-
-    try {
-      await ref.read(subscriptionRepositoryProvider).put(updated);
-      await syncRemindersNow(ref, reason: 'subscription_trial_marked_paid');
-      ref.invalidate(subscriptionListProvider);
-      logger.info(
-        'subscription_trial_mark_paid_succeeded id=${subscription.id} name=${subscription.name} previous_trial_ends_at=$trialEndsAtIso next_billing_at=$nextBillingIso',
-      );
-      await ref
-          .read(activityLogServiceProvider)
-          .add(
-            action: 'Trial marked as paid',
-            details:
-                '${subscription.name} · ${subscription.currency} ${subscription.amount.toStringAsFixed(2)} · ${subscription.cycle} · previous trial $trialEndsAtIso',
-          );
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${subscription.name} marked as paid.')),
-      );
-    } catch (error, stack) {
-      logger.warning(
-        'subscription_trial_mark_paid_failed id=${subscription.id} name=${subscription.name} trial_ends_at=$trialEndsAtIso next_billing_at=$nextBillingIso',
-        error,
-        stack,
-      );
-      await ref
-          .read(activityLogServiceProvider)
-          .add(
-            action: 'Trial conversion failed',
-            details:
-                '${subscription.name} · ${subscription.currency} ${subscription.amount.toStringAsFixed(2)} · ${subscription.cycle} · ${error.toString()}',
-          );
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not mark ${subscription.name} as paid.')),
-      );
-    }
   }
 
-  _TrialSummary? _buildTrialSummary(List<Subscription> trialItems) {
-    if (trialItems.isEmpty) {
-      return null;
-    }
-
-    final now = DateTime.now();
-    final expired = trialItems.where((s) {
-      final endsAt = s.trialEndsAt;
-      return s.isTrial && endsAt != null && endsAt.isBefore(now);
-    }).length;
-    final endingSoon = trialItems.where((s) {
-      final endsAt = s.trialEndsAt;
-      if (endsAt == null) return false;
-      final remaining = endsAt.difference(now);
-      return !remaining.isNegative && remaining <= const Duration(days: 7);
-    }).length;
-    final missingEndDate = trialItems
-        .where((s) => s.trialEndsAt == null)
-        .length;
-
-    return _TrialSummary(
-      total: trialItems.length,
-      expired: expired,
-      endingSoon: endingSoon,
-      missingEndDate: missingEndDate,
-    );
-  }
-
-  String _trialStatusLabel(Subscription subscription, DateTime now) {
-    return formatTrialStatusLabel(
-      subscription.trialEndsAt,
-      now: now,
-      noEndLabel: 'Trial active',
-    );
-  }
-}
-
-class _TrialSummary {
-  const _TrialSummary({
-    required this.total,
-    required this.expired,
-    required this.endingSoon,
-    required this.missingEndDate,
-  });
-
-  final int total;
-  final int expired;
-  final int endingSoon;
-  final int missingEndDate;
-}
-
-class _TrialSummaryCard extends StatelessWidget {
-  const _TrialSummaryCard({required this.summary});
-
-  final _TrialSummary summary;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Card(
-      color: scheme.secondaryContainer,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+  void _showOptions(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              'Trial monitoring',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: scheme.onSecondaryContainer,
-              ),
-            ),
             const SizedBox(height: 8),
-            Text(
-              '${summary.total} trial subscription${summary.total == 1 ? '' : 's'} tracked',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: scheme.onSecondaryContainer,
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              '${summary.endingSoon} ending soon · ${summary.expired} expired · ${summary.missingEndDate} without end date',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: scheme.onSecondaryContainer,
-              ),
+            ListTile(
+              leading: const Icon(Icons.edit_rounded),
+              title: const Text('Edit Subscription'),
+              onTap: () {
+                Navigator.pop(ctx);
+                onEdit();
+              },
             ),
+            ListTile(
+              leading: const Icon(
+                Icons.delete_rounded,
+                color: Colors.redAccent,
+              ),
+              title: const Text(
+                'Delete Subscription',
+                style: TextStyle(color: Colors.redAccent),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                onDelete();
+              },
+            ),
+            const SizedBox(height: 16),
           ],
         ),
       ),

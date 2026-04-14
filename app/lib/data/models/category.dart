@@ -17,4 +17,6 @@ class Category {
   String? description;
   String? iconKey;
   String? color;
+
+  bool isVisible = true;
 }

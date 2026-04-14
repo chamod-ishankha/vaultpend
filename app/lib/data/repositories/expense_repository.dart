@@ -70,11 +70,28 @@ class ExpenseRepository {
           .filter()
           .userIdEqualTo(_userId)
           .findAll();
+
+      final duplicateLocalIds = <int>{};
       final localByRemoteId = <String, Expense>{
         for (final item in local)
           if (item.remoteId != null && item.remoteId!.isNotEmpty)
             item.remoteId!: item,
       };
+
+      // Resolve accidental local duplicates by remote id (keep the latest local id).
+      for (final item in local) {
+        final remoteId = item.remoteId;
+        if (remoteId == null || remoteId.isEmpty) continue;
+        final canonical = localByRemoteId[remoteId];
+        if (canonical == null || canonical.id == item.id) continue;
+        final keepCurrent = item.id > canonical.id;
+        if (keepCurrent) {
+          duplicateLocalIds.add(canonical.id);
+          localByRemoteId[remoteId] = item;
+        } else {
+          duplicateLocalIds.add(item.id);
+        }
+      }
 
       final categories = await _isar.categorys
           .filter()
@@ -118,12 +135,14 @@ class ExpenseRepository {
           .map((item) => item.id)
           .toList();
 
+      final idsToDelete = <int>{...staleIds, ...duplicateLocalIds};
+
       await _isar.writeTxn(() async {
         if (upserts.isNotEmpty) {
           await _isar.expenses.putAll(upserts);
         }
-        if (staleIds.isNotEmpty) {
-          await _isar.expenses.deleteAll(staleIds);
+        if (idsToDelete.isNotEmpty) {
+          await _isar.expenses.deleteAll(idsToDelete.toList());
         }
       });
       markCloudSyncSuccess();
